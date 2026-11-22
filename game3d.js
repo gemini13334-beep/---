@@ -82,4 +82,41 @@ function showRestart(){
  Object.assign(btn.style,{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:'4',padding:'18px 24px',background:'#d5a25d',color:'#15202a',border:'2px solid #fbe3b1',fontWeight:'bold',fontSize:'17px'});
  btn.onclick=()=>location.reload();document.body.append(btn)
 }
-function frame(){requestAnimationFrame(frame);update();renderer.render(scene,camera)}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'54px',right:'12px',zIndex:'3',background:'#172838d9',color:'#f4d49d',border:'1px solid #b6c7d2',padding:'8px',fontSize:'11px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);loading.remove();frame();
+let running3d=true,frames=0,slowFrames=0,fpsSeconds=0;
+function frame(){
+ if(!running3d)return;
+ requestAnimationFrame(frame);
+ try{
+  update();
+  renderer.render(scene,camera);
+  frames++;fpsSeconds+=clock.getDelta();
+  if(frames>=90){
+   const fps=frames/Math.max(fpsSeconds,.001);
+   slowFrames=fps<23?slowFrames+1:Math.max(0,slowFrames-1);
+   if(slowFrames>=2&&quality!=='low'){
+    quality=quality==='high'?'balanced':'low';applyQuality();
+    qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()+' (АВТО)';
+    slowFrames=0;
+  }
+  frames=0;fpsSeconds=0;
+  }
+ }catch(error){
+  running3d=false;
+  console.error('3D runtime failure',error);
+  const failure=document.createElement('div');
+  failure.style.cssText='position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;background:#101923;color:#f4e6c7;padding:20px;text-align:center;font:15px Arial';
+  const panel=document.createElement('div');
+  const title=document.createElement('h2');title.textContent='ОШИБКА 3D-ИГРЫ';
+  const details=document.createElement('p');details.textContent=String(error&&error.message||error);
+  const button=document.createElement('button');button.textContent='ПОВТОРИТЬ ЗАПУСК';button.style.cssText='padding:14px;background:#e4b369;color:#101923';button.onclick=()=>location.reload();
+  panel.append(title,details,button);failure.append(panel);document.body.append(failure);
+ }
+}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'54px',right:'12px',zIndex:'3',background:'#172838d9',color:'#f4d49d',border:'1px solid #b6c7d2',padding:'8px',fontSize:'11px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
+renderer.domElement.addEventListener('webglcontextlost',event=>{
+ event.preventDefault();running3d=false;
+ loading.textContent='Потеряно соединение с 3D-видеоускорителем. Перезапусти игру.';
+ document.body.append(loading);
+});
+renderer.domElement.addEventListener('webglcontextrestored',()=>location.reload());
+frame();
+if(running3d)loading.remove();
