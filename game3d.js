@@ -82,23 +82,23 @@ function showRestart(){
  Object.assign(btn.style,{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:'4',padding:'18px 24px',background:'#d5a25d',color:'#15202a',border:'2px solid #fbe3b1',fontWeight:'bold',fontSize:'17px'});
  btn.onclick=()=>location.reload();document.body.append(btn)
 }
-let running3d=true,frames=0,slowFrames=0,fpsSeconds=0;
+let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();
 function frame(){
  if(!running3d)return;
  requestAnimationFrame(frame);
  try{
   update();
   renderer.render(scene,camera);
-  frames++;fpsSeconds+=clock.getDelta();
+  frames++;
   if(frames>=90){
-   const fps=frames/Math.max(fpsSeconds,.001);
+   const now=performance.now();const fps=frames/Math.max((now-fpsWindowStart)/1000,.001);
    slowFrames=fps<23?slowFrames+1:Math.max(0,slowFrames-1);
    if(slowFrames>=2&&quality!=='low'){
     quality=quality==='high'?'balanced':'low';applyQuality();
     qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()+' (АВТО)';
     slowFrames=0;
   }
-  frames=0;fpsSeconds=0;
+  frames=0;fpsWindowStart=now;
   }
  }catch(error){
   running3d=false;
