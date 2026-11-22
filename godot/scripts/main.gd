@@ -19,6 +19,8 @@ var inventory: Array[int] = []
 var loot_misses := 0
 var cases_opened := 0
 var last_drop := -1
+var equipped_skins := [-1,-1,-1]
+var last_drop_duplicate := false
 var loot_rng := RandomNumberGenerator.new()
 var playing := false
 var enemies: Array[Node3D] = []
@@ -598,7 +600,58 @@ func _open_case(index:int)->void:
  else:
   inventory.append(item_id)
  _save()
- _show_cases()
+ _show_drop_reveal(item_id)
+
+func _show_drop_reveal(item_id:int)->void:
+ _show_menu()
+ var item:Dictionary=Loot.ITEMS[item_id]
+ var rarity:int=int(item["rarity"])
+ var color:=Color(str(Loot.RARITY_COLORS[rarity]))
+ var panel:=_panel(Vector2(470,202),Vector2(530,385),Color(0.035,0.075,0.095,0.98))
+ panel.add_theme_stylebox_override("panel",_rarity_panel_style(color))
+ menu_layer.add_child(panel)
+ var header:=_label("ПОЛУЧЕН ПРЕДМЕТ",23)
+ header.position=Vector2(502,225)
+ menu_layer.add_child(header)
+ var rarity_text:=_label(str(Loot.RARITY_NAMES[rarity]),17)
+ rarity_text.position=Vector2(502,273)
+ rarity_text.add_theme_color_override("font_color",color)
+ menu_layer.add_child(rarity_text)
+ var item_name:=_label(str(item["name"]),29)
+ item_name.position=Vector2(502,320)
+ item_name.add_theme_color_override("font_color",color)
+ menu_layer.add_child(item_name)
+ var weapon_name:=_label("ОРУЖИЕ: "+str(WEAPONS[int(item["weapon"])]["name"]),17)
+ weapon_name.position=Vector2(502,375)
+ menu_layer.add_child(weapon_name)
+ var equip:=_button("ЭКИПИРОВАТЬ")
+ equip.position=Vector2(502,444)
+ equip.custom_minimum_size=Vector2(215,50)
+ equip.pressed.connect(_equip_skin.bind(item_id))
+ menu_layer.add_child(equip)
+ var again:=_button("К КЕЙСАМ")
+ again.position=Vector2(734,444)
+ again.custom_minimum_size=Vector2(215,50)
+ again.pressed.connect(_show_cases)
+ menu_layer.add_child(again)
+ var hint:=_label("Предмет сохранён в коллекции. Дубликаты возвращают часть кредитов.",14)
+ hint.position=Vector2(502,524)
+ menu_layer.add_child(hint)
+
+func _rarity_panel_style(color:Color)->StyleBoxFlat:
+ var style:=StyleBoxFlat.new()
+ style.bg_color=Color("#10232d")
+ style.set_corner_radius_all(12)
+ style.set_border_width_all(3)
+ style.border_color=color
+ return style
+
+func _equip_skin(item_id:int)->void:
+ if not inventory.has(item_id): return
+ var weapon:int=int(Loot.ITEMS[item_id]["weapon"])
+ equipped_skins[weapon]=item_id
+ _save()
+ _show_collection()
 
 func _show_collection()->void:
  _show_menu()
@@ -610,19 +663,35 @@ func _show_collection()->void:
  back.custom_minimum_size=Vector2(470,45)
  back.pressed.connect(_show_cases)
  menu_layer.add_child(back)
- for i in range(min(inventory.size(),9)):
-  var item:Dictionary=Loot.ITEMS[inventory[i]]
-  var row_label:=_label("◈ "+str(item["name"])+"   /   "+str(Loot.RARITY_NAMES[int(item["rarity"])]),15)
-  row_label.position=Vector2(475,310+i*32)
-  row_label.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
-  menu_layer.add_child(row_label)
+ for i in range(inventory.size()):
+  var item_id:int=inventory[i]
+  var item:Dictionary=Loot.ITEMS[item_id]
+  var col:int=i/8
+  var row_index:int=i%8
+  var equipped:bool=equipped_skins[int(item["weapon"])]==item_id
+  var entry:=_button(("✓ " if equipped else "◈ ")+str(item["name"]))
+  entry.position=Vector2(475+col*250,310+row_index*38)
+  entry.custom_minimum_size=Vector2(238,34)
+  entry.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
+  entry.pressed.connect(_equip_skin.bind(item_id))
+  menu_layer.add_child(entry)
 
 func _show_loadout()->void:
  _show_menu()
  var b:=_button("ОРУЖИЕ: "+str(WEAPONS[weapon_index]["name"]))
  b.position=Vector2(475,370)
  b.custom_minimum_size=Vector2(450,50)
- b.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();_show_loadout())
+ b.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();_refresh_weapon_button();_show_loadout())
+ menu_layer.add_child(b)
+ var skin_id:int=equipped_skins[weapon_index]
+ var skin_text:="СТАНДАРТ" if skin_id<0 else str(Loot.ITEMS[skin_id]["name"])
+ var equipped_label:=_label("СКИН: "+skin_text,17)
+ equipped_label.position=Vector2(475,432)
+ menu_layer.add_child(equipped_label)
+ var collection_button:=_button("ВЫБРАТЬ СКИН ИЗ КОЛЛЕКЦИИ")
+ collection_button.position=Vector2(475,485)
+ collection_button.custom_minimum_size=Vector2(450,47)
+ collection_button.pressed.connect(_show_collection)
  menu_layer.add_child(b)
 
 func _show_file()->void:
@@ -750,12 +819,20 @@ func _load()->void:
   loot_misses=clampi(int(data.get("loot_misses",0)),0,19)
   cases_opened=max(0,int(data.get("cases_opened",0)))
   last_drop=clampi(int(data.get("last_drop",-1)),-1,Loot.ITEMS.size()-1)
+  equipped_skins=[-1,-1,-1]
+  var saved_skins=data.get("equipped_skins",[-1,-1,-1])
+  if saved_skins is Array and saved_skins.size()==3:
+   for slot in range(3):
+    equipped_skins[slot]=clampi(int(saved_skins[slot]),-1,Loot.ITEMS.size()-1)
   inventory.clear()
   for value in data.get("inventory",[]):
    var item_id:int=int(value)
    if item_id>=0 and item_id<Loot.ITEMS.size() and not inventory.has(item_id):
     inventory.append(item_id)
+  for slot in range(3):
+   if equipped_skins[slot]>=0 and (not inventory.has(equipped_skins[slot]) or int(Loot.ITEMS[equipped_skins[slot]]["weapon"])!=slot):
+    equipped_skins[slot]=-1
 
 func _save()->void:
  var file:=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
- file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete,"credits":credits,"loot_misses":loot_misses,"cases_opened":cases_opened,"last_drop":last_drop,"inventory":inventory}))
+ file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete,"credits":credits,"loot_misses":loot_misses,"cases_opened":cases_opened,"last_drop":last_drop,"inventory":inventory,"equipped_skins":equipped_skins}))
