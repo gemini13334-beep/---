@@ -227,11 +227,12 @@ const menuTitle=document.createElement('h1');menuTitle.textContent='ОТПУСК
 const menuSubtitle=document.createElement('p');menuSubtitle.textContent='ОПЕРАЦИИ · СЕКТОР A · ЭТАП '+stage;menuSubtitle.style.cssText='color:#a7b8c6;letter-spacing:2px;margin:0 0 12px';
 function menuButton(label,click,primary=false){const b=document.createElement('button');b.textContent=label;b.style.cssText='text-align:left;padding:16px;background:'+(primary?'#dda75b':'#263846dd')+';border:1px solid #7c8c96;color:'+(primary?'#13212b':'#eee6da')+';font-weight:800;letter-spacing:1px';b.onclick=click;menuPanel.append(b)}
 menuPanel.append(menuTitle,menuSubtitle);
-menuButton('▶  ПРОДОЛЖИТЬ КАМПАНИЮ',()=>{mode='campaign';saveSetting('mode',mode);mainMenu.remove();pausedByPlayer=false;clock.getDelta()},true);
+menuButton('▶  ПРОДОЛЖИТЬ КАМПАНИЮ',()=>{saveSetting('mode','campaign');saveSetting('menu','false');location.reload()},true);
 menuButton('∞  БЕСКОНЕЧНЫЙ РЕЖИМ',()=>{saveSetting('mode','endless');saveSetting('menu','false');location.reload()});
 menuButton('↻  НАЧАТЬ КАМПАНИЮ СНАЧАЛА',()=>{saveSetting('stage','1');saveSetting('mode','campaign');saveSetting('menu','false');location.reload()});
 const story=document.createElement('p');story.textContent='ЗАДАНИЕ: ликвидировать вооружённые группы в заброшенном секторе. После зачистки открывается следующий этап с большим числом противников.';story.style.cssText='color:#bac5cd;line-height:1.5;max-width:440px';
 menuPanel.append(story);mainMenu.append(menuPanel);document.body.append(mainMenu);
 pausedByPlayer=true;
+killsEl.textContent='0 / '+targetLabel();document.getElementById('mission').textContent=mode==='endless'?'БЕСКОНЕЧНАЯ ОПЕРАЦИЯ':'ОПЕРАЦИЯ · ЭТАП '+stage;
 if(readSetting('menu','true')==='false'){mainMenu.remove();pausedByPlayer=false}else saveSetting('menu','false');
 
