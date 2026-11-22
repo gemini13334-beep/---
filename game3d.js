@@ -18,7 +18,7 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
 const animationMixers=[];
 
 const loading=document.getElementById('loading'),hpEl=document.getElementById('hp'),killsEl=document.getElementById('kills'),msg=document.getElementById('msg');
-let renderer;try{renderer=new THREE.WebGLRenderer({antialias:!/Android|iPhone|iPad/i.test(navigator.userAgent),powerPreference:'high-performance',alpha:false});}catch(e){loading.textContent="WebGL недоступен на этом устройстве. Требуется поддержка 3D.";throw e}
+let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance',alpha:false});}catch(e){loading.textContent="WebGL недоступен на этом устройстве. Требуется поддержка 3D.";throw e}
 const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
 function readSetting(name,fallback){try{const v=localStorage.getItem('tactical3d_'+name);return v===null?fallback:v}catch{return fallback}}
 function saveSetting(name,value){try{localStorage.setItem('tactical3d_'+name,String(value))}catch{}}
