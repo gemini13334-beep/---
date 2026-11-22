@@ -100,12 +100,12 @@ func _box(parent: Node3D, name: String, pos: Vector3, size: Vector3, color: Colo
   texture_name = "sandstone_wall"
  elif name.contains("floor"):
   texture_name = "concrete_tiles"
+ elif name.contains("Barricade marking") or name.contains("Facade stripe"):
+  texture_name = "yellow_warning"
  elif name.contains("Concrete cover") or name.contains("Barricade"):
   texture_name = "concrete_floor"
  elif name.contains("Crate") or name.contains("crate"):
   texture_name = "crate_wood"
- elif name.contains("Barricade marking") or name.contains("Facade stripe"):
-  texture_name = "yellow_warning"
  elif name.contains("Boots") or name.contains("glove"):
   texture_name = "dark_rubber"
  elif name.contains("Vest") or name.contains("Legs") or name.contains("arm"):
