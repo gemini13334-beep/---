@@ -97,10 +97,10 @@ const bullets=[];let health=100,kills=0,fire=0,invuln=0,ended=false;const damage
 function showDamageDirection(enemy){const dx=enemy.position.x-hero.position.x,dz=enemy.position.z-hero.position.z;damageDirection.style.transform='translate(-50%,-50%) rotate('+Math.atan2(dx,-dz)+'rad)';damageDirection.classList.add('active');damageDirectionTime=.55}
 const damageOverlay=document.createElement('div');damageOverlay.style.cssText='position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,#c71928 100%);opacity:0;transition:opacity 90ms';document.body.append(damageOverlay);const move={x:0,y:0},stick=document.getElementById('stick'),knob=document.getElementById('knob');let pointer=null;
 function joystick(e){let r=stick.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),len=Math.hypot(x,y),v=Math.min(1,len/47);move.x=len?x/len*v:0;move.y=len?y/len*v:0;knob.style.transform='translate('+move.x*39+'px,'+move.y*39+'px)'}
-stick.addEventListener('pointerdown',e=>{pointer=e.pointerId;stick.setPointerCapture(pointer);joystick(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===pointer)joystick(e)});function release(e){if(e.pointerId===pointer){pointer=null;move.x=move.y=0;knob.style.transform=''}}stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
+stick.addEventListener('pointerdown',e=>{if(pausedByPlayer||ended||pointer!==null)return;e.preventDefault();pointer=e.pointerId;stick.setPointerCapture(pointer);joystick(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===pointer&&!pausedByPlayer){e.preventDefault();joystick(e)}});function release(e){if(e.pointerId===pointer){pointer=null;move.x=move.y=0;knob.style.transform=''}}stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
 const keys=new Set();addEventListener('keydown',e=>keys.add(e.key.toLowerCase()));addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
 let dash=0,dashCooldown=0;const dashButton=document.getElementById('dash');
-function triggerDash(){if(ended||dashCooldown>0||dash>0)return;dash=.22;dashCooldown=2.8;dashButton.textContent='РЫВОК';dashButton.style.opacity='0.55'}
+function triggerDash(){if(ended||pausedByPlayer||document.hidden||dashCooldown>0||dash>0)return;dash=.22;dashCooldown=2.8;dashButton.textContent='РЫВОК';dashButton.style.opacity='0.55'}
 dashButton.addEventListener('pointerdown',triggerDash);
 addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(!e.repeat)triggerDash()}});
 function canMove(x,z){return Math.abs(x)<15.1&&Math.abs(z)<16.1&&!obstacles.some(o=>Math.abs(x-o.x)<o.w/2+.55&&Math.abs(z-o.z)<o.d/2+.55)}
@@ -164,7 +164,7 @@ hudSettings.append(radarToggle,crosshairToggle);syncHudToggles();
 const pauseRestart=document.createElement('button');pauseRestart.textContent='НАЧАТЬ ЗАНОВО';pauseRestart.style.cssText='padding:13px;background:#24313a;color:#d4c9ba;border:1px solid #566977;font-weight:bold';pauseRestart.onclick=()=>location.reload();
 resumeButton.style.cssText='padding:15px;background:#dcae62;color:#15202a;border:0;font-weight:900;letter-spacing:1px';
 pausePanel.append(pauseTitle,pauseDetails,pauseStats,resumeButton,pauseQuality,hudSettings,pauseRestart);pauseOverlay.append(pausePanel);document.body.append(pauseOverlay);
-function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';if(pausedByPlayer){pauseStats.textContent='ЗДОРОВЬЕ '+health+'  |  БРОНЯ '+armor+'  |  ЦЕЛИ '+kills+'/12';pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase()}pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
+function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';if(pausedByPlayer){pauseStats.textContent='ЗДОРОВЬЕ '+health+'  |  БРОНЯ '+armor+'  |  ЦЕЛИ '+kills+'/12';pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase()}pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;pointer=null;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
 pauseButton.addEventListener('click',togglePause);resumeButton.addEventListener('click',togglePause);
 function frame(){
  if(!running3d)return;
@@ -204,6 +204,6 @@ renderer.domElement.addEventListener('webglcontextlost',event=>{
  document.body.append(loading);
 });
 renderer.domElement.addEventListener('webglcontextrestored',()=>location.reload());
-document.addEventListener('visibilitychange',()=>{if(document.hidden){move.x=move.y=0;knob.style.transform='';keys.clear();pausedBySystem=true}});
+document.addEventListener('visibilitychange',()=>{if(document.hidden){move.x=move.y=0;pointer=null;knob.style.transform='';keys.clear();pausedBySystem=true}});
 frame();
 if(running3d)loading.remove();
