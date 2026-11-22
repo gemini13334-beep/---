@@ -108,8 +108,12 @@ function updateWeapon(){if(weaponLabel)weaponLabel.textContent=weaponTypes[weapo
 function cycleWeapon(){weaponIndex=(weaponIndex+1)%weaponTypes.length;updateWeapon();shot=0}
 const weaponButton=document.getElementById('weaponSwitch');if(weaponButton)weaponButton.onclick=()=>{if(playing)cycleWeapon()};
 updateWeapon();
-function fire(from,to){player.recoil=.22;const mesh=B.MeshBuilder.CreateSphere('shot',{diameter:.12,segments:6},scene);mesh.material=tracerMaterial;mesh.position.copyFrom(from);const v=to.subtract(from).normalize();projectiles.push({mesh,v,ttl:1,damage:weaponTypes[weaponIndex].damage,speed:weaponTypes[weaponIndex].speed})}
-engine.runRenderLoop(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;hitTimer=Math.max(0,hitTimer-dt);damageTimer=Math.max(0,damageTimer-dt);if(hitMarker)hitMarker.style.opacity=hitTimer>0?'1':'0';if(damageFlash)damageFlash.style.opacity=String(damageTimer*1.8);
+const muzzleMaterial=material('muzzle flash','#ffb54d');muzzleMaterial.emissiveColor=new B.Color3(1,.57,.12);
+const muzzle=B.MeshBuilder.CreateSphere('muzzle flash',{diameter:.34,segments:8},scene);muzzle.material=muzzleMaterial;muzzle.isVisible=false;
+let flashTime=0;
+function updateFlash(dt){flashTime=Math.max(0,flashTime-dt);muzzle.isVisible=flashTime>0}
+function fire(from,to){player.recoil=.22;flashTime=.065;muzzle.position.copyFrom(from);muzzle.position.addInPlace(to.subtract(from).normalize().scale(.9));muzzle.isVisible=true;const mesh=B.MeshBuilder.CreateSphere('shot',{diameter:.12,segments:6},scene);mesh.material=tracerMaterial;mesh.position.copyFrom(from);const v=to.subtract(from).normalize();projectiles.push({mesh,v,ttl:1,damage:weaponTypes[weaponIndex].damage,speed:weaponTypes[weaponIndex].speed})}
+engine.runRenderLoop(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;updateFlash(dt);hitTimer=Math.max(0,hitTimer-dt);damageTimer=Math.max(0,damageTimer-dt);if(hitMarker)hitMarker.style.opacity=hitTimer>0?'1':'0';if(damageFlash)damageFlash.style.opacity=String(damageTimer*1.8);
 if(playing){let x=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),z=move.z+(keys.has('s')?1:0)-(keys.has('w')?1:0),len=Math.hypot(x,z);if(len>1){x/=len;z/=len}
 const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p.x,p.z+z*dt*5))p.z+=z*dt*5;animateAgent(player,dt);
 let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8){const vx=(p.x-ep.x)/d,vz=(p.z-ep.z)/d;if(canMove(ep.x+vx*dt*1.65,ep.z+vz*dt*1.65))ep.x+=vx*dt*1.65;if(canMove(ep.x,ep.z+vz*dt*1.65))ep.z+=vz*dt*1.65}e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;registerDamage();updateHUD();if(player.hp<=0)result(false)}}
