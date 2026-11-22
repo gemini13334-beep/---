@@ -2,6 +2,11 @@ extends Node3D
 
 const Story = preload("res://scripts/story.gd")
 const SAVE_PATH := "user://vacation_save.json"
+const SETTINGS_PATH := "user://tactical_settings.json"
+var graphics_level := 1
+var fps_limit := 60
+var auto_fire := true
+var camera_shake := false
 var stage := 0
 var campaign_complete := false
 var endless := false
@@ -32,6 +37,8 @@ const WEAPONS := [
 
 func _ready() -> void:
  _load()
+ _load_settings()
+ _apply_settings()
  _build_world()
  _build_ui()
  _show_menu()
@@ -96,6 +103,7 @@ func _build_world() -> void:
  cam.fov = 52
  add_child(cam)
  _update_camera(1.0)
+ _apply_settings()
 
 func _make_operator(root: Node3D, uniform: Color, player: bool) -> void:
  _box(root,"Boots",Vector3(0,0.18,0),Vector3(0.55,0.35,0.37),Color("#222b2b"))
@@ -148,7 +156,7 @@ func _process(delta: float) -> void:
    hp -= delta*12.0
   e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
  fire_timer -= delta
- if fire_timer<=0:
+ if auto_fire and fire_timer<=0:
   var nearest: Node3D = null
   var distance: float = float(WEAPONS[weapon_index]["range"])
   for e in enemies:
@@ -287,9 +295,49 @@ func _show_file()->void:
 
 func _show_settings()->void:
  _show_menu()
- var l:=_label("ГРАФИКА: COMPATIBILITY / ANDROID\nУПРАВЛЕНИЕ: СЕНСОРНЫЙ ДЖОЙСТИК + АВТОСТРЕЛЬБА",17)
- l.position=Vector2(475,360)
- menu_layer.add_child(l)
+ var title:=_label("⚙ НАСТРОЙКИ / ANDROID",24)
+ title.position=Vector2(475,290)
+ menu_layer.add_child(title)
+ var quality_names:=["ЭКОНОМИЯ","БАЛАНС","КАЧЕСТВО"]
+ var quality:=_button("ГРАФИКА: "+quality_names[graphics_level])
+ quality.position=Vector2(475,345)
+ quality.custom_minimum_size=Vector2(470,48)
+ quality.pressed.connect(func(): graphics_level=(graphics_level+1)%3;_apply_settings();_save_settings();_show_settings())
+ menu_layer.add_child(quality)
+ var frames:=_button("ЧАСТОТА КАДРОВ: %d FPS"%fps_limit)
+ frames.position=Vector2(475,400)
+ frames.custom_minimum_size=Vector2(470,48)
+ frames.pressed.connect(func(): fps_limit=60 if fps_limit==30 else (90 if fps_limit==60 else 30);_apply_settings();_save_settings();_show_settings())
+ menu_layer.add_child(frames)
+ var shooting:=_button("АВТОСТРЕЛЬБА: "+("ВКЛ" if auto_fire else "ВЫКЛ"))
+ shooting.position=Vector2(475,455)
+ shooting.custom_minimum_size=Vector2(470,48)
+ shooting.pressed.connect(func(): auto_fire=not auto_fire;_save_settings();_show_settings())
+ menu_layer.add_child(shooting)
+ var note:=_label("Настройки сохраняются автоматически.\n90 FPS зависит от экрана и мощности телефона.",15)
+ note.position=Vector2(475,515)
+ menu_layer.add_child(note)
+
+func _apply_settings()->void:
+ Engine.max_fps=fps_limit
+ var scale_values:=[0.65,0.85,1.0]
+ get_viewport().scaling_3d_scale=scale_values[graphics_level]
+ if is_instance_valid(cam):
+  cam.far=32.0 if graphics_level==0 else (48.0 if graphics_level==1 else 65.0)
+
+func _load_settings()->void:
+ if not FileAccess.file_exists(SETTINGS_PATH): return
+ var file:=FileAccess.open(SETTINGS_PATH,FileAccess.READ)
+ var data=JSON.parse_string(file.get_as_text())
+ if data is Dictionary:
+  graphics_level=clampi(int(data.get("graphics",1)),0,2)
+  fps_limit=int(data.get("fps",60))
+  if fps_limit not in [30,60,90]: fps_limit=60
+  auto_fire=bool(data.get("auto_fire",true))
+
+func _save_settings()->void:
+ var file:=FileAccess.open(SETTINGS_PATH,FileAccess.WRITE)
+ file.store_string(JSON.stringify({"graphics":graphics_level,"fps":fps_limit,"auto_fire":auto_fire}))
 
 func _start(is_endless:bool)->void:
  endless=is_endless
