@@ -94,6 +94,23 @@ func _build_world() -> void:
    continue
   _box(world_root,"Filing cabinet %d"%i,Vector3(x,0.9,z),Vector3(2.1,1.8,1.2),Color("#52616a") if i%3==0 else Color("#aa9c80"),true)
   _box(world_root,"Cabinet trim %d"%i,Vector3(x,1.75,z),Vector3(2.15,0.1,1.25),Color("#303f47"))
+ # Lightweight environmental dressing: checkpoint, lane markings and warning lights.
+ for i in range(11):
+  var lane_z:float=-17.0+float(i)*3.3
+  _box(world_root,"Road stripe %d"%i,Vector3(0,-0.005,lane_z),Vector3(0.17,0.012,1.45),Color("#d9c38d"))
+ for side in [-1.0,1.0]:
+  _box(world_root,"Checkpoint post",Vector3(side*6.0,1.65,-12.0),Vector3(0.45,3.3,0.45),Color("#414b4d"),true)
+  _box(world_root,"Warning lamp",Vector3(side*6.0,3.4,-12.0),Vector3(0.65,0.35,0.65),Color("#e6a24e"))
+  _box(world_root,"Barricade",Vector3(side*10.0,0.55,-8.0),Vector3(3.3,1.1,0.55),Color("#b1a28a"),true)
+  for stripe in range(3):
+   _box(world_root,"Barricade marking",Vector3(side*10.0-1.0+stripe*1.0,0.8,-8.29),Vector3(0.38,0.23,0.035),Color("#d7ad52"))
+ _box(world_root,"Checkpoint gate",Vector3(0,3.2,-12.0),Vector3(12.4,0.5,0.6),Color("#394a4f"))
+ _box(world_root,"Checkpoint sign",Vector3(0,3.24,-12.34),Vector3(4.7,0.32,0.06),Color("#d7b667"))
+ for i in range(8):
+  var ix:float=-15.0+float(i%4)*10.0
+  var iz:float=-13.0+float(i/4)*26.0
+  _box(world_root,"Supply crate %d"%i,Vector3(ix,0.48,iz),Vector3(1.1,0.95,1.0),Color("#52625b"),true)
+  _box(world_root,"Crate lid %d"%i,Vector3(ix,0.98,iz),Vector3(1.18,0.12,1.08),Color("#293c39"))
  hero = Node3D.new()
  hero.name = "Player"
  add_child(hero)
