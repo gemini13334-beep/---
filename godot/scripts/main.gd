@@ -774,7 +774,7 @@ func _show_menu()->void:
  menu_layer.add_child(footer)
 
 func _show_cases()->void:
- _show_menu()
+ _show_subpage("МАГАЗИН / КЕЙСЫ")
  var title:=_label("МАГАЗИН / КЕЙСЫ",24)
  title.position=Vector2(475,197)
  menu_layer.add_child(title)
@@ -1119,8 +1119,23 @@ func _show_collection()->void:
  next.pressed.connect(_set_collection_page.bind(collection_page+1))
  menu_layer.add_child(next)
 
-func _show_loadout()->void:
+func _show_subpage(title_text:String)->void:
  _show_menu()
+ # Replace the mission card with a dedicated opaque subpage.
+ var content:=_panel(Vector2(356,100),Vector2(897,548),Color("#0c1a24"))
+ content.add_theme_stylebox_override("panel",_rarity_panel_style(Color("#327f89")))
+ menu_layer.add_child(content)
+ var heading:=_label(title_text,27)
+ heading.position=Vector2(385,124)
+ menu_layer.add_child(heading)
+ var back:=_button("←  НАЗАД")
+ back.position=Vector2(1050,116)
+ back.custom_minimum_size=Vector2(170,44)
+ back.pressed.connect(_show_menu)
+ menu_layer.add_child(back)
+
+func _show_loadout()->void:
+ _show_subpage("АРСЕНАЛ / СНАРЯЖЕНИЕ")
  var b:=_button("ОРУЖИЕ: "+str(WEAPONS[weapon_index]["name"]))
  b.position=Vector2(475,370)
  b.custom_minimum_size=Vector2(450,50)
@@ -1138,13 +1153,13 @@ func _show_loadout()->void:
  menu_layer.add_child(collection_button)
 
 func _show_file()->void:
- _show_menu()
+ _show_subpage("ПРОФИЛЬ / ЛИЧНОЕ ДЕЛО")
  var l:=_label("ЛИЧНОЕ ДЕЛО  ·  ОПЫТ: %d  ·  ЭТАП: %d\n%s"%[xp,stage+1,Story.BASE],18)
  l.position=Vector2(475,360)
  menu_layer.add_child(l)
 
 func _show_settings()->void:
- _show_menu()
+ _show_subpage("ПАРАМЕТРЫ / ANDROID")
  var title:=_label("⚙ НАСТРОЙКИ / ANDROID",24)
  title.position=Vector2(475,290)
  menu_layer.add_child(title)
