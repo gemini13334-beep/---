@@ -4,6 +4,8 @@ on:
   push:
     paths:
       - ".github/workflows/godot-apk.yml"
+      - "godot/scripts/main.gd"
+      - "godot/assets/textures/**"
 permissions:
   contents: write
 
