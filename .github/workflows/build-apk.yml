@@ -35,6 +35,10 @@ jobs:
           cp models/*.gltf app/src/main/assets/models/
           test -s app/src/main/assets/vendor/GLTFLoader.js
           test -s app/src/main/assets/models/hero.gltf
+          node -e "for(const f of ['hero','enemy','crate']) {const p=JSON.parse(require('fs').readFileSync('app/src/main/assets/models/'+f+'.gltf','utf8'));if(p.asset.version!=='2.0'||!p.buffers[0].uri.startsWith('data:'))throw Error('Invalid embedded glTF '+f)}"
+          node -e "const fs=require('fs');const js=fs.readFileSync('app/src/main/assets/vendor/GLTFLoader.js','utf8');if(/from ['\"]three['\"]/.test(js))throw Error('GLTFLoader has unresolved bare imports');if(!js.includes('./three.module.js'))throw Error('GLTFLoader local import missing')"
+          test -s app/src/main/assets/game3d.js
+          ! grep -R -q 'classic.html' app/src/main/assets/3d.html app/src/main/assets/game3d.js
           if [ -d assets ]; then cp -R assets app/src/main/assets/; fi
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
