@@ -36,5 +36,11 @@ public class MainActivity extends Activity {
   setContentView(web);
   web.loadUrl(ORIGIN+"index.html");
  }
- @Override protected void onDestroy(){if(web!=null)web.destroy();super.onDestroy();}
+ @Override protected void onPause(){if(web!=null)web.onPause();super.onPause();}
+ @Override protected void onResume(){super.onResume();if(web!=null)web.onResume();}
+ @Override public void onBackPressed(){
+  if(web!=null){web.evaluateJavascript("(function(){var b=document.getElementById('pause3d');if(b&&b.isConnected){b.click();return true}return false})()",null);}
+  else super.onBackPressed();
+ }
+ @Override protected void onDestroy(){if(web!=null){web.loadUrl("about:blank");web.destroy();web=null;}super.onDestroy();}
 }
