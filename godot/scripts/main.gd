@@ -106,28 +106,42 @@ func _build_world() -> void:
  var env := WorldEnvironment.new()
  var environment := Environment.new()
  environment.background_mode = Environment.BG_COLOR
- environment.background_color = Color("#9cabb1")
+ environment.background_color = Color("#697e8c")
  environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
- environment.ambient_light_color = Color("#f1e4ce")
- environment.ambient_light_energy = 0.65
+ environment.ambient_light_color = Color("#b9cad1")
+ environment.ambient_light_energy = 0.48
  env.environment = environment
  add_child(env)
  var sun := DirectionalLight3D.new()
  sun.rotation_degrees = Vector3(-55,-35,0)
- sun.light_energy = 1.1
+ sun.light_energy = 1.35
+ sun.shadow_enabled = true
  add_child(sun)
- _box(world_root,"Concrete floor",Vector3(0,-0.2,0),Vector3(40,0.4,42),Color("#ab9b82"),true)
+ _box(world_root,"Concrete floor",Vector3(0,-0.2,0),Vector3(40,0.4,42),Color("#56646c"),true)
  for z in [-20.0,20.0]:
-  _box(world_root,"Outer wall",Vector3(0,2.1,z),Vector3(40,4.2,0.65),Color("#b5aa94"),true)
+  _box(world_root,"Outer wall",Vector3(0,2.1,z),Vector3(40,4.2,0.65),Color("#79858a"),true)
  for x in [-19.7,19.7]:
   _box(world_root,"Outer wall",Vector3(x,2.1,0),Vector3(0.65,4.2,42),Color("#b5aa94"),true)
- for i in range(18):
-  var x: float = float((i*13)%31)-15.0
-  var z: float = float((i*17)%33)-16.0
-  if Vector2(x,z).length() < 5.0:
-   continue
-  _box(world_root,"Filing cabinet %d"%i,Vector3(x,0.9,z),Vector3(2.1,1.8,1.2),Color("#52616a") if i%3==0 else Color("#aa9c80"),true)
-  _box(world_root,"Cabinet trim %d"%i,Vector3(x,1.75,z),Vector3(2.15,0.1,1.25),Color("#303f47"))
+ # Structured industrial courtyard: readable lanes and recognizable buildings.
+ for side in [-1.0,1.0]:
+  var bx:float=side*14.0
+  for row in range(3):
+   var bz:float=-13.0+float(row)*12.0
+   _box(world_root,"Industrial block",Vector3(bx,3.0,bz),Vector3(6.5,6.0,8.2),Color("#465660"),true)
+   _box(world_root,"Roof parapet",Vector3(bx,6.1,bz),Vector3(7.0,0.35,8.6),Color("#293943"))
+   _box(world_root,"Concrete foundation",Vector3(bx,0.24,bz),Vector3(7.2,0.48,9.0),Color("#35434a"))
+   for level in range(2):
+    for col in range(2):
+     var wz:float=bz-2.1+float(col)*4.2
+     _box(world_root,"Window frame",Vector3(bx-side*3.31,2.0+level*2.5,wz),Vector3(0.09,1.45,2.1),Color("#172a34"))
+     _box(world_root,"Window glass",Vector3(bx-side*3.37,2.0+level*2.5,wz),Vector3(0.035,1.16,1.7),Color("#477585"))
+   _box(world_root,"Facade stripe",Vector3(bx-side*3.37,4.8,bz),Vector3(0.07,0.18,8.0),Color("#d3a955"))
+ for i in range(8):
+  var x:float=-8.0+float(i%2)*16.0
+  var z:float=-15.0+float(i/2)*9.5
+  if Vector2(x,z).length()<5.0: continue
+  _box(world_root,"Concrete cover",Vector3(x,0.75,z),Vector3(2.8,1.5,0.65),Color("#7b8586"),true)
+  _box(world_root,"Cover edge",Vector3(x,1.54,z),Vector3(2.95,0.12,0.8),Color("#c5aa70"))
  # Lightweight environmental dressing: checkpoint, lane markings and warning lights.
  for i in range(11):
   var lane_z:float=-17.0+float(i)*3.3
