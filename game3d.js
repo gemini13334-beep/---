@@ -1,4 +1,4 @@
-import * as THREE from 'https://esm.sh/three@0.170.0';
+import * as THREE from './vendor/three.module.js';
 const loading=document.getElementById('loading'),hpEl=document.getElementById('hp'),killsEl=document.getElementById('kills'),msg=document.getElementById('msg');
 let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});}catch(e){loading.innerHTML='WebGL недоступен. <a href="./index.html">Открыть 2D-версию</a>';throw e}
 renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
