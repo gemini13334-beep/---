@@ -381,6 +381,31 @@ func _show_hit_feedback(target:Node3D)->void:
  var tween:=create_tween()
  tween.tween_property(flash,"scale",Vector3(0.1,0.1,0.1),0.18)
  tween.tween_callback(flash.queue_free)
+ # Floating damage is attached to the arena, so a defeated enemy can disappear.
+ var popup:=Label3D.new()
+ popup.text="-%d"%int(WEAPONS[weapon_index]["damage"])
+ popup.font_size=44
+ popup.pixel_size=0.007
+ popup.modulate=Color("#ffe2a0")
+ popup.billboard=BaseMaterial3D.BILLBOARD_ENABLED
+ popup.no_depth_test=true
+ popup.position=target.global_position+Vector3(0.0,2.45,0.0)
+ world_root.add_child(popup)
+ var float_tween:=create_tween()
+ float_tween.set_parallel(true)
+ float_tween.tween_property(popup,"position:y",popup.position.y+0.85,0.52)
+ float_tween.tween_property(popup,"modulate:a",0.0,0.52)
+ float_tween.chain().tween_callback(popup.queue_free)
+ # Brief body impact without a skeleton or extra textures.
+ if not target.has_meta("staggering"):
+  target.set_meta("staggering",true)
+  var base_scale:Vector3=target.scale
+  var impact:=create_tween()
+  impact.tween_property(target,"scale",base_scale*Vector3(1.08,0.92,1.08),0.065)
+  impact.tween_property(target,"scale",base_scale,0.14)
+  impact.tween_callback(func():
+   if is_instance_valid(target): target.remove_meta("staggering")
+  )
 
 func _target()->int:
  return int(Story.mission(stage)["kills"])
