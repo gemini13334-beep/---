@@ -6,7 +6,12 @@ const engine=new B.Engine(canvas,true,{preserveDrawingBuffer:false,stencil:true,
 engine.setHardwareScalingLevel(Math.max(1,Math.min(1.5,window.devicePixelRatio/1.5)));
 const scene=new B.Scene(engine);scene.clearColor=new B.Color4(.55,.69,.77,1);
 scene.collisionsEnabled=true;
-const camera=new B.ArcRotateCamera('camera',-Math.PI/2,1.02,20,new B.Vector3(0,1,0),scene);camera.attachControl(canvas,false);camera.inputs.clear();camera.lowerRadiusLimit=14;camera.upperRadiusLimit=23;
+const camera=new B.ArcRotateCamera('camera',-Math.PI/2,1.02,18,new B.Vector3(0,1,0),scene);
+camera.inputs.clear();camera.lowerRadiusLimit=11;camera.upperRadiusLimit=23;
+let cameraZoom=18,cameraAngle=-Math.PI/2,cameraPitch=1.02;
+const viewButton=document.getElementById('viewSwitch');
+function changeView(){cameraZoom=cameraZoom===18?12:18;if(viewButton)viewButton.textContent=cameraZoom===12?'КАМЕРА: БЛИЖЕ':'КАМЕРА: ДАЛЬШЕ'}
+if(viewButton)viewButton.onclick=changeView;
 const light=new B.HemisphericLight('ambient',new B.Vector3(0,1,0),scene);light.intensity=.9;
 const sun=new B.DirectionalLight('sun',new B.Vector3(-.5,-1,.35),scene);sun.position=new B.Vector3(12,23,-10);sun.intensity=1.9;
 const shadow=new B.ShadowGenerator(1024,sun);shadow.useBlurExponentialShadowMap=true;shadow.blurKernel=12;
@@ -81,6 +86,11 @@ document.getElementById('pause').onclick=()=>{if(over)return;if(playing)menu();e
 const stick=document.getElementById('stick'),knob=document.getElementById('knob'),move={x:0,z:0};let pointer=null;
 function drag(e){const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,l=Math.max(1,Math.hypot(x,y)),m=Math.min(1,l/(r.width*.37));move.x=x/l*m;move.z=y/l*m;knob.style.transform='translate('+move.x*38+'px,'+move.z*38+'px)'}
 stick.onpointerdown=e=>{if(!playing)return;pointer=e.pointerId;stick.setPointerCapture(pointer);drag(e)};stick.onpointermove=e=>{if(e.pointerId===pointer)drag(e)};function release(e){if(e.pointerId!==pointer)return;pointer=null;move.x=move.z=0;knob.style.transform=''}stick.onpointerup=release;stick.onpointercancel=release;
+let lookPointer=null,lookX=0,lookY=0;
+canvas.addEventListener('pointerdown',e=>{if(!playing||lookPointer!==null)return;lookPointer=e.pointerId;lookX=e.clientX;lookY=e.clientY;canvas.setPointerCapture(e.pointerId)});
+canvas.addEventListener('pointermove',e=>{if(e.pointerId!==lookPointer||!playing)return;const dx=e.clientX-lookX,dy=e.clientY-lookY;lookX=e.clientX;lookY=e.clientY;cameraAngle=Math.max(-Math.PI*1.25,Math.min(-Math.PI*.10,cameraAngle-dx*.004));cameraPitch=Math.max(.58,Math.min(1.33,cameraPitch+dy*.003))});
+function releaseLook(e){if(e.pointerId===lookPointer)lookPointer=null}
+canvas.addEventListener('pointerup',releaseLook);canvas.addEventListener('pointercancel',releaseLook);
 const keys=new Set();window.onkeydown=e=>keys.add(e.key.toLowerCase());window.onkeyup=e=>keys.delete(e.key.toLowerCase());
 let last=performance.now(),shot=0;const projectiles=[];const tracerMaterial=material('tracer','#f5b75c');tracerMaterial.emissiveColor=new B.Color3(1,.47,.12);
 const hitMarker=document.getElementById('hitMarker'),damageFlash=document.getElementById('damageFlash');
@@ -105,7 +115,7 @@ const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p
 let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8){const vx=(p.x-ep.x)/d,vz=(p.z-ep.z)/d;if(canMove(ep.x+vx*dt*1.65,ep.z+vz*dt*1.65))ep.x+=vx*dt*1.65;if(canMove(ep.x,ep.z+vz*dt*1.65))ep.z+=vz*dt*1.65}e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;registerDamage();updateHUD();if(player.hp<=0)result(false)}}
 shot-=dt;if(closest&&dist<weaponTypes[weaponIndex].range&&shot<=0){shot=weaponTypes[weaponIndex].delay;player.root.rotation.y=Math.atan2(closest.root.position.x-p.x,-(closest.root.position.z-p.z));fire(p.add(new B.Vector3(0,1.4,0)),closest.root.position.add(new B.Vector3(0,1.3,0)))}
 for(let i=projectiles.length-1;i>=0;i--){const b=projectiles[i],prev=b.mesh.position.clone();b.mesh.position.addInPlace(b.v.scale(dt*b.speed));b.ttl-=dt;const hit=enemies.find(e=>{const center=e.root.position.add(new B.Vector3(0,1.3,0));const segment=b.mesh.position.subtract(prev),len2=segment.lengthSquared();const t=len2>0?Math.max(0,Math.min(1,B.Vector3.Dot(center.subtract(prev),segment)/len2)):0;return B.Vector3.DistanceSquared(center,prev.add(segment.scale(t)))<.58});if(hit){registerHit();hit.hp-=b.damage;b.ttl=0;if(hit.hp<=0){hit.root.getChildMeshes().forEach(m=>m.dispose());hit.root.dispose();enemies.splice(enemies.indexOf(hit),1);kills++;updateHUD();if(kills>=objective())result(true);else if(enemies.length<5)spawn()}}if(b.ttl<=0){b.mesh.dispose();projectiles.splice(i,1)}}
-camera.target=B.Vector3.Lerp(camera.target,p.add(new B.Vector3(0,1,0)),Math.min(1,dt*5));camera.alpha=-Math.PI/2;camera.beta=1.02}
+camera.target=B.Vector3.Lerp(camera.target,p.add(new B.Vector3(0,1,0)),Math.min(1,dt*5));camera.alpha+=(cameraAngle-camera.alpha)*Math.min(1,dt*6);camera.beta+=(cameraPitch-camera.beta)*Math.min(1,dt*6);camera.radius+=(cameraZoom-camera.radius)*Math.min(1,dt*6)}
 scene.render()});
 window.addEventListener('resize',()=>engine.resize());updateHUD();menu();status.textContent='BABYLON.JS · ГОТОВО';
 })();
