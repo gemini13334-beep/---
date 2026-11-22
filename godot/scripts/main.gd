@@ -21,6 +21,7 @@ var cases_opened := 0
 var last_drop := -1
 var equipped_skins := [-1,-1,-1]
 var last_drop_duplicate := false
+const SKIN_PALETTE := ["#71818b","#b8a17a","#a3b4bd","#a5e5ee","#36e5ca","#ff9d43","#6178ba","#a07be8","#e1bc6d","#ffca59","#d7515e","#f6d8fa"]
 var loot_rng := RandomNumberGenerator.new()
 var playing := false
 var enemies: Array[Node3D] = []
@@ -135,6 +136,7 @@ func _build_world() -> void:
  hero.name = "Player"
  add_child(hero)
  _make_operator(hero,Color("#475c63"),true)
+ _apply_weapon_skin()
  cam = Camera3D.new()
  cam.current = true
  cam.fov = 52
@@ -422,6 +424,20 @@ func _build_ui()->void:
 func _cycle_weapon()->void:
  weapon_index=(weapon_index+1)%WEAPONS.size()
  _refresh_weapon_button()
+ _apply_weapon_skin()
+
+func _apply_weapon_skin()->void:
+ if not is_instance_valid(hero): return
+ var skin_id:int=equipped_skins[weapon_index]
+ var tint:=Color("#1d252b") if skin_id<0 else Color(SKIN_PALETTE[skin_id])
+ for part_name in ["Weapon","Weapon sight","Weapon magazine"]:
+  var part:=hero.get_node_or_null(part_name) as MeshInstance3D
+  if part==null: continue
+  var material:=StandardMaterial3D.new()
+  material.albedo_color=tint if part_name=="Weapon" else tint.darkened(0.28)
+  material.metallic=0.38 if skin_id>=0 else 0.0
+  material.roughness=0.38 if skin_id>=0 else 0.9
+  part.material_override=material
 
 func _refresh_weapon_button()->void:
  if is_instance_valid(weapon_button):
@@ -621,6 +637,11 @@ func _show_drop_reveal(item_id:int)->void:
  item_name.position=Vector2(502,320)
  item_name.add_theme_color_override("font_color",color)
  menu_layer.add_child(item_name)
+ item_name.modulate.a=0.0
+ item_name.position.y+=16.0
+ var reveal:=create_tween().set_parallel(true)
+ reveal.tween_property(item_name,"modulate:a",1.0,0.35).set_delay(0.18)
+ reveal.tween_property(item_name,"position:y",320.0,0.42).set_delay(0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
  var weapon_name:=_label("ОРУЖИЕ: "+str(WEAPONS[int(item["weapon"])]["name"]),17)
  weapon_name.position=Vector2(502,375)
  menu_layer.add_child(weapon_name)
@@ -650,6 +671,7 @@ func _equip_skin(item_id:int)->void:
  if not inventory.has(item_id): return
  var weapon:int=int(Loot.ITEMS[item_id]["weapon"])
  equipped_skins[weapon]=item_id
+ if weapon_index==weapon: _apply_weapon_skin()
  _save()
  _show_collection()
 
@@ -681,7 +703,7 @@ func _show_loadout()->void:
  var b:=_button("ОРУЖИЕ: "+str(WEAPONS[weapon_index]["name"]))
  b.position=Vector2(475,370)
  b.custom_minimum_size=Vector2(450,50)
- b.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();_refresh_weapon_button();_show_loadout())
+ b.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();_refresh_weapon_button();_apply_weapon_skin();_show_loadout())
  menu_layer.add_child(b)
  var skin_id:int=equipped_skins[weapon_index]
  var skin_text:="СТАНДАРТ" if skin_id<0 else str(Loot.ITEMS[skin_id]["name"])
@@ -763,6 +785,7 @@ func _start(is_endless:bool)->void:
  _update_joystick_visual()
  weapon_index=0
  _refresh_weapon_button()
+ _apply_weapon_skin()
  status_label.text="∞ БЕСКОНЕЧНЫЙ" if endless else str(Story.mission(stage)["name"])
  kills_label.text="0 / ∞" if endless else "0 / %d"%_target()
 
