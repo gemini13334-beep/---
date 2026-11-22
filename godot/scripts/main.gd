@@ -260,7 +260,7 @@ func _process(delta: float) -> void:
     var next_position:Vector3=e.position+steering.normalized()*delta*float(e.get_meta("speed",1.6))
     next_position.x=clampf(next_position.x,-18.7,18.7)
     next_position.z=clampf(next_position.z,-18.7,18.7)
-    e.position=next_position
+    e.position=_enemy_navigate(e,next_position,steering.normalized(),delta)
   else:
    hp-=delta*float(e.get_meta("damage",12.0))
   if distance_to_hero>0.01:
@@ -320,6 +320,27 @@ func _process(delta: float) -> void:
   health_bar.value=clampf(hp,0.0,100.0)
   health_bar.modulate=Color("#e96c62") if hp<=30.0 else Color("#68e0c1")
  _update_camera(delta)
+
+func _enemy_navigate(enemy:Node3D, desired_position:Vector3, direction:Vector3, delta:float)->Vector3:
+ # Cheap wall/cover avoidance for the low-poly arena, no navigation bake required.
+ var origin:Vector3=enemy.global_position+Vector3(0.0,0.85,0.0)
+ var travel:float=enemy.global_position.distance_to(desired_position)
+ if travel<0.001: return desired_position
+ var query:=PhysicsRayQueryParameters3D.create(origin,origin+direction*(travel+0.65))
+ query.collide_with_areas=false
+ if get_world_3d().direct_space_state.intersect_ray(query).is_empty():
+  return desired_position
+ # Try either tangent around an obstacle. Keep the actor away from solid props.
+ var side:=Vector3(-direction.z,0.0,direction.x)
+ for candidate in [side,-side]:
+  var test:=PhysicsRayQueryParameters3D.create(origin,origin+candidate*(travel+0.65))
+  test.collide_with_areas=false
+  if get_world_3d().direct_space_state.intersect_ray(test).is_empty():
+   var result:Vector3=enemy.position+candidate*travel
+   result.x=clampf(result.x,-18.7,18.7)
+   result.z=clampf(result.z,-18.7,18.7)
+   return result
+ return enemy.position
 
 func _has_clear_shot(target:Node3D)->bool:
  # OpenFPS-style hitscan visibility check; enemy health remains lightweight.
