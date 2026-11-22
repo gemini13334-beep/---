@@ -577,34 +577,56 @@ func _show_menu()->void:
 
 func _show_cases()->void:
  _show_menu()
- var title:=_label("АРСЕНАЛ / КЕЙСЫ И ДОБЫЧА",22)
- title.position=Vector2(475,210)
+ var title:=_label("МАГАЗИН / КЕЙСЫ",24)
+ title.position=Vector2(475,197)
  menu_layer.add_child(title)
- var details:=_label("КРЕДИТЫ: %d   •   ОТКРЫТО: %d   •   КОЛЛЕКЦИЯ: %d/%d"%[credits,cases_opened,inventory.size(),Loot.ITEMS.size()],15)
- details.position=Vector2(475,248)
+ var details:=_label("◈ %d КРЕДИТОВ     •     ОТКРЫТО %d     •     СКИНОВ %d/%d"%[credits,cases_opened,inventory.size(),Loot.ITEMS.size()],15)
+ details.position=Vector2(475,234)
+ details.add_theme_color_override("font_color",Color("#ffce76"))
  menu_layer.add_child(details)
+ var accents:=["#5ba8ff","#bb76ff","#ffc36b"]
+ var descriptions:=["БАЗОВЫЙ НАБОР","ПОВЫШЕННЫЕ ШАНСЫ","МАКСИМАЛЬНЫЙ БОНУС"]
  for i in range(Loot.CASES.size()):
   var data:Dictionary=Loot.CASES[i]
-  var button:=_button("%s  /  %d ◈"%[str(data["name"]),int(data["price"])])
-  button.position=Vector2(475,285+i*59)
-  button.custom_minimum_size=Vector2(470,50)
+  var x:float=475+i*176
+  var card:=_panel(Vector2(x,273),Vector2(166,206),Color("#10232d"))
+  card.add_theme_stylebox_override("panel",_rarity_panel_style(Color(accents[i])))
+  menu_layer.add_child(card)
+  var emblem:=_label(["◈","◆","✦"][i],38)
+  emblem.position=Vector2(x+62,290)
+  emblem.add_theme_color_override("font_color",Color(accents[i]))
+  menu_layer.add_child(emblem)
+  var case_name:=_label(str(data["name"]),14)
+  case_name.position=Vector2(x+12,343)
+  menu_layer.add_child(case_name)
+  var description:=_label(descriptions[i],11)
+  description.position=Vector2(x+12,367)
+  description.add_theme_color_override("font_color",Color("#9bbcc5"))
+  menu_layer.add_child(description)
+  var button:=_button("ОТКРЫТЬ  %d ◈"%int(data["price"]))
+  button.position=Vector2(x+9,412)
+  button.custom_minimum_size=Vector2(148,48)
   button.disabled=credits<int(data["price"])
   button.pressed.connect(_open_case.bind(i))
   menu_layer.add_child(button)
- var guarantee:=_label("ГАРАНТИЯ ЭПИЧЕСКОГО: %d/20"%min(loot_misses,19),15)
- guarantee.position=Vector2(475,475)
+ var guarantee:=_label("ГАРАНТИЯ: %d/20  •  ПОСЛЕ 19 НЕУДАЧ СЛЕДУЮЩИЙ ДРОП ЭПИЧЕСКИЙ+"%mini(loot_misses,19),14)
+ guarantee.position=Vector2(475,491)
  menu_layer.add_child(guarantee)
- if last_drop>=0:
-  var item:Dictionary=Loot.ITEMS[last_drop]
-  var result:=_label("ПОСЛЕДНИЙ ДРОП: "+str(item["name"])+"  /  "+str(Loot.RARITY_NAMES[int(item["rarity"])]),16)
-  result.position=Vector2(475,508)
-  result.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
-  menu_layer.add_child(result)
- var collection:=_button("КОЛЛЕКЦИЯ ПРЕДМЕТОВ")
+ var odds:=_label("ШАНСЫ БАЗОВОГО КЕЙСА: РЕДКИЙ 27%  /  ЭПИК 12%  /  ЛЕГЕНДА 5%  /  УЛЬТРА 1%",12)
+ odds.position=Vector2(475,521)
+ odds.add_theme_color_override("font_color",Color("#9bbcc5"))
+ menu_layer.add_child(odds)
+ var collection:=_button("МОЯ КОЛЛЕКЦИЯ")
  collection.position=Vector2(475,558)
- collection.custom_minimum_size=Vector2(470,47)
+ collection.custom_minimum_size=Vector2(252,46)
  collection.pressed.connect(_show_collection)
  menu_layer.add_child(collection)
+ if last_drop>=0:
+  var item:Dictionary=Loot.ITEMS[last_drop]
+  var last:=_label("ПОСЛЕДНИЙ: "+str(item["name"]),14)
+  last.position=Vector2(743,572)
+  last.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
+  menu_layer.add_child(last)
 
 func _open_case(index:int)->void:
  var cost:int=int(Loot.CASES[index]["price"])
