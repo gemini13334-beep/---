@@ -177,7 +177,7 @@ hudSettings.append(radarToggle,crosshairToggle,fpsToggle);syncHudToggles();
 const pauseRestart=document.createElement('button');pauseRestart.textContent='НАЧАТЬ ЗАНОВО';pauseRestart.style.cssText='padding:13px;background:#24313a;color:#d4c9ba;border:1px solid #566977;font-weight:bold';pauseRestart.onclick=()=>location.reload();
 resumeButton.style.cssText='padding:15px;background:#dcae62;color:#15202a;border:0;font-weight:900;letter-spacing:1px';
 pausePanel.append(pauseTitle,pauseDetails,pauseStats,resumeButton,pauseQuality,hudSettings,pauseRestart);pauseOverlay.append(pausePanel);document.body.append(pauseOverlay);
-function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';if(pausedByPlayer){pauseStats.textContent='ЗДОРОВЬЕ '+health+'  |  БРОНЯ '+armor+'  |  ЦЕЛИ '+kills+'/12';pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase()}pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;pointer=null;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
+function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';if(pausedByPlayer){pauseStats.textContent='ЗДОРОВЬЕ '+health+'  |  БРОНЯ '+armor+'  |  ЦЕЛИ '+kills+'/'+targetLabel();pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase()}pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;pointer=null;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
 pauseButton.addEventListener('click',togglePause);resumeButton.addEventListener('click',togglePause);
 function frame(){
  if(!running3d)return;
@@ -221,17 +221,35 @@ document.addEventListener('visibilitychange',()=>{if(document.hidden){move.x=mov
 frame();
 if(running3d)loading.remove();
 const mainMenu=document.createElement('div');mainMenu.id='mainMenu3d';
-mainMenu.style.cssText='position:fixed;inset:0;z-index:15;display:flex;align-items:center;background:linear-gradient(90deg,#101821fa 0%,#172530ed 46%,#101821aa 100%);padding:clamp(16px,5vw,65px);color:#f2e9db;font:14px Arial';
-const menuPanel=document.createElement('div');menuPanel.style.cssText='width:min(94vw,470px);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:13px';
-const menuTitle=document.createElement('h1');menuTitle.textContent='ОТПУСК / TACTICAL';menuTitle.style.cssText='font-size:clamp(22px,4vw,38px);margin:0;color:#e9b366;letter-spacing:2px';
-const menuSubtitle=document.createElement('p');menuSubtitle.textContent='ОПЕРАЦИИ · СЕКТОР A · ЭТАП '+stage;menuSubtitle.style.cssText='color:#a7b8c6;letter-spacing:2px;margin:0 0 12px';
-function menuButton(label,click,primary=false){const b=document.createElement('button');b.textContent=label;b.style.cssText='text-align:left;padding:16px;background:'+(primary?'#dda75b':'#263846dd')+';border:1px solid #7c8c96;color:'+(primary?'#13212b':'#eee6da')+';font-weight:800;letter-spacing:1px';b.onclick=click;menuPanel.append(b)}
-menuPanel.append(menuTitle,menuSubtitle);
+mainMenu.style.cssText='position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;background:linear-gradient(95deg,#101822f8 0%,#1b2b39e8 54%,#101720d9 100%);color:#f0e8dc;font:14px Arial;overflow:auto';
+const menuNav=document.createElement('div');menuNav.style.cssText='display:flex;align-items:center;gap:clamp(8px,2.5vw,26px);padding:12px clamp(18px,4vw,52px);background:#101923ee;border-bottom:1px solid #77899766;flex-wrap:wrap';
+const menuBrand=document.createElement('strong');menuBrand.textContent='ОТПУСК / TACTICAL';menuBrand.style.cssText='font-size:clamp(15px,2vw,22px);color:#e5ad5b;letter-spacing:2px;margin-right:clamp(5px,3vw,32px)';
+menuNav.append(menuBrand);
+const menuBody=document.createElement('div');menuBody.style.cssText='flex:1;display:flex;align-items:center;gap:clamp(20px,4vw,70px);padding:clamp(18px,4vw,52px);min-height:0';
+const menuPanel=document.createElement('div');menuPanel.style.cssText='width:min(100%,520px);display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto';
+const menuArt=document.createElement('div');menuArt.style.cssText='flex:1;min-width:0;align-self:stretch;display:flex;align-items:center;justify-content:center;opacity:.9;pointer-events:none';
+const artCanvas=document.createElement('canvas');artCanvas.width=520;artCanvas.height=480;artCanvas.style.cssText='width:min(100%,520px);max-height:100%;object-fit:contain';
+const ac=artCanvas.getContext('2d');
+if(ac){ac.strokeStyle='#d4a45b';ac.lineWidth=3;ac.beginPath();ac.arc(260,205,105,0,Math.PI*2);ac.stroke();ac.fillStyle='#32495a';ac.fillRect(185,150,150,175);ac.fillStyle='#425c6e';ac.fillRect(215,100,90,90);ac.fillStyle='#131f29';ac.fillRect(225,145,70,28);ac.fillStyle='#d6a85e';ac.fillRect(239,155,42,6);ac.fillStyle='#233440';ac.fillRect(142,195,236,35);ac.fillStyle='#a8b8c0';ac.font='bold 17px Arial';ac.fillText('ОПЕРАТИВНИК · СЕКТОР A',123,360);ac.font='12px Arial';ac.fillText('TACTICAL OPERATIONS / FIELD UNIT',145,383)}
+menuArt.append(artCanvas);menuBody.append(menuPanel,menuArt);
+function menuButton(label,click,primary=false){const b=document.createElement('button');b.textContent=label;b.style.cssText='text-align:left;padding:14px 18px;background:'+(primary?'#dda75b':'#273a49dd')+';border:1px solid #8494a0;color:'+(primary?'#13212b':'#eee6da')+';font-weight:800;letter-spacing:1px';b.onclick=click;menuPanel.append(b)}
+function heading(label,detail){const h=document.createElement('h2');h.textContent=label;h.style.cssText='font-size:clamp(22px,3vw,36px);margin:4px 0;color:#f0e8dc';const p=document.createElement('p');p.textContent=detail;p.style.cssText='color:#afbfca;line-height:1.5;margin:0 0 14px';menuPanel.append(h,p)}
+function renderMenu(tab){menuPanel.replaceChildren();for(const button of menuNav.querySelectorAll('button')){button.style.color=button.dataset.tab===tab?'#e8b15c':'#d6e0e6';button.style.borderBottom=button.dataset.tab===tab?'3px solid #e8b15c':'3px solid transparent'}
+if(tab==='play'){heading('ВЫБОР ОПЕРАЦИИ','Кампания · сектор A · этап '+stage+' · '+targetLabel()+' целей');
 menuButton('▶  ПРОДОЛЖИТЬ КАМПАНИЮ',()=>{saveSetting('mode','campaign');saveSetting('menu','false');location.reload()},true);
 menuButton('∞  БЕСКОНЕЧНЫЙ РЕЖИМ',()=>{saveSetting('mode','endless');saveSetting('menu','false');location.reload()});
 menuButton('↻  НАЧАТЬ КАМПАНИЮ СНАЧАЛА',()=>{saveSetting('stage','1');saveSetting('mode','campaign');saveSetting('menu','false');location.reload()});
-const story=document.createElement('p');story.textContent='ЗАДАНИЕ: ликвидировать вооружённые группы в заброшенном секторе. После зачистки открывается следующий этап с большим числом противников.';story.style.cssText='color:#bac5cd;line-height:1.5;max-width:440px';
-menuPanel.append(story);mainMenu.append(menuPanel);document.body.append(mainMenu);
+}else if(tab==='brief'){heading('БРИФИНГ · СЕКТОР A','Операция «Зачистка». Связь с разведгруппой потеряна. В заброшенном секторе обнаружены вооружённые отряды.');
+const p=document.createElement('p');p.textContent='Цель: нейтрализовать противников, удержать позицию и перейти к следующему этапу. В бесконечном режиме сопротивление продолжается без финальной волны.';p.style.cssText='color:#d1d9dc;line-height:1.7';menuPanel.append(p);
+menuButton('ПЕРЕЙТИ К ОПЕРАЦИЯМ',()=>renderMenu('play'),true);
+}else if(tab==='settings'){heading('НАСТРОЙКИ','Графика и параметры отображения');
+menuButton('КАЧЕСТВО: '+quality.toUpperCase(),()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';saveSetting('quality',quality);applyQuality();renderMenu('settings')},true);
+menuButton('РАДАР: '+(showRadar?'ВКЛ':'ВЫКЛ'),()=>{showRadar=!showRadar;saveSetting('radar',showRadar);syncHudToggles();renderMenu('settings')});
+menuButton('ПРИЦЕЛ: '+(showCrosshair?'ВКЛ':'ВЫКЛ'),()=>{showCrosshair=!showCrosshair;saveSetting('crosshair',showCrosshair);syncHudToggles();renderMenu('settings')});
+menuButton('FPS: '+(showFPS?'ВКЛ':'ВЫКЛ'),()=>{showFPS=!showFPS;saveSetting('fps',showFPS);syncHudToggles();renderMenu('settings')});
+}}
+for(const [tab,label] of [['play','ИГРАТЬ'],['brief','БРИФИНГ'],['settings','НАСТРОЙКИ']]){const b=document.createElement('button');b.dataset.tab=tab;b.textContent=label;b.style.cssText='background:transparent;border:0;border-bottom:3px solid transparent;padding:10px 4px;color:#d6e0e6;font-weight:800;letter-spacing:1px';b.onclick=()=>renderMenu(tab);menuNav.append(b)}
+mainMenu.append(menuNav,menuBody);document.body.append(mainMenu);renderMenu('play');
 pausedByPlayer=true;
 killsEl.textContent='0 / '+targetLabel();document.getElementById('mission').textContent=mode==='endless'?'БЕСКОНЕЧНАЯ ОПЕРАЦИЯ':'ОПЕРАЦИЯ · ЭТАП '+stage;
 if(readSetting('menu','true')==='false'){mainMenu.remove();pausedByPlayer=false}else saveSetting('menu','false');
