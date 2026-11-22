@@ -1,0 +1,18 @@
+name: Godot 4 Android Port Validation
+on:
+  push:
+    paths:
+      - 'godot/**'
+      - '.github/workflows/godot-android.yml'
+  workflow_dispatch:
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Import Godot project
+        run: godot --headless --path godot --editor --quit
+      - name: Validate scene and scripts
+        run: godot --headless --path godot --quit-after 3
