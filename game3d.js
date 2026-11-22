@@ -11,6 +11,7 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
   model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone()}});
   parent.add(model);
   if(replace){for(const item of Array.isArray(replace)?replace:[replace])item.visible=false;}
+  if(parent.userData.tacticalAgent)attachTacticalGear(parent,parent.userData.tacticalAgent);
   assetStatus.loaded++;
   if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animationMixers.push({mixer,owner:parent})}
  }).catch(error=>{assetStatus.failed++;console.warn('GLTF fallback:',url,error)});
@@ -73,7 +74,36 @@ for(let i=0;i<6;i++){
  barrel.position.set(x,.48,z);barrel.castShadow=true;barrel.receiveShadow=true;scene.add(barrel);
  for(const y of [.22,.75]){const band=new THREE.Mesh(new THREE.TorusGeometry(.46,.035,5,12),iron);band.rotation.x=Math.PI/2;band.position.set(x,y,z);scene.add(band)}
 }
-function agent(color){const root=new THREE.Group(),suit=mat(color,.65,.25),skin=mat(0xf3c3a6),hair=mat(0xdde8f1);let body=new THREE.Mesh(new THREE.CapsuleGeometry(.43,.75,4,8),suit);body.position.y=1.15;root.add(body);let head=new THREE.Mesh(new THREE.SphereGeometry(.35,12,8),skin);head.position.y=2.05;root.add(head);let cap=new THREE.Mesh(new THREE.SphereGeometry(.37,12,8),hair);cap.position.set(0,2.19,-.07);cap.scale.y=.55;root.add(cap);let gun=new THREE.Mesh(new THREE.BoxGeometry(.17,.18,.9),metal);gun.position.set(.4,1.35,-.48);root.add(gun);root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(root);loadModel(color===0x39769a?'./models/hero.gltf':'./models/enemy.gltf',root,{height:2.45,replace:[...root.children]});return root}
+const gearCache={};
+function attachTacticalGear(root,isHero){
+ if(root.userData.gearAttached)return;root.userData.gearAttached=true;
+ const fabric=mat(isHero?0x253b4b:0x534c42,.93),armorMat=mat(isHero?0x29333a:0x45423a,.76,.16),trim=mat(0x161f25,.67,.2),webbing=mat(0x776c51,.94),lens=new THREE.MeshStandardMaterial({color:0x15262d,metalness:.35,roughness:.14,envMapIntensity:.3});
+ function part(w,h,d,x,y,z,m,rot=0){const o=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);o.position.set(x,y,z);o.rotation.z=rot;o.castShadow=true;root.add(o);return o}
+ // Protective vest and shoulder pads, built from reusable low-cost geometry.
+ part(.83,.77,.31,0,1.35,-.30,armorMat);part(.7,.15,.33,0,1.72,-.31,trim);
+ for(const side of [-1,1]){
+  part(.28,.26,.42,side*.54,1.68,0,armorMat,side*.17);
+  part(.20,.5,.23,side*.57,1.25,.04,fabric,side*.08);
+  part(.21,.55,.25,side*.25,.47,0,fabric);
+  part(.26,.17,.33,side*.25,.16,-.02,trim);
+  part(.14,.63,.11,side*.30,1.34,-.51,webbing,side*.16);
+  part(.12,.12,.08,side*.31,1.18,-.51,trim);
+ }
+ for(let i=0;i<3;i++)part(.19,.24,.14,-.24+i*.24,1.24,-.54,webbing);
+ part(.8,.12,.38,0,1.02,0,trim);part(.44,.42,.25,0,1.42,.43,armorMat);
+ // Helmet, dark visor and headset.
+ const helmet=new THREE.Mesh(new THREE.SphereGeometry(.38,12,8),armorMat);helmet.position.set(0,2.18,0);helmet.scale.set(1.12,.67,1.08);helmet.castShadow=true;root.add(helmet);
+ part(.54,.16,.10,0,2.08,-.34,lens);part(.64,.09,.18,0,2.28,-.16,trim);
+ for(const side of [-1,1])part(.12,.29,.16,side*.37,2.02,0,trim);
+ // Rifle with stock, receiver, barrel, magazine and sight.
+ part(.24,.22,.77,.46,1.35,-.43,trim);
+ part(.14,.12,.58,.46,1.38,-1.04,armorMat);
+ part(.065,.065,.48,.46,1.38,-1.53,trim);
+ part(.27,.20,.32,.46,1.35,.09,webbing);
+ part(.13,.35,.17,.47,1.10,-.47,trim,-.2);
+ part(.10,.10,.16,.46,1.53,-.53,lens);
+}
+function agent(color){const root=new THREE.Group();root.userData.tacticalAgent=color===0x39769a;const suit=mat(color,.65,.25),skin=mat(0xf3c3a6),hair=mat(0xdde8f1);let body=new THREE.Mesh(new THREE.CapsuleGeometry(.43,.75,4,8),suit);body.position.y=1.15;root.add(body);let head=new THREE.Mesh(new THREE.SphereGeometry(.35,12,8),skin);head.position.y=2.05;root.add(head);let cap=new THREE.Mesh(new THREE.SphereGeometry(.37,12,8),hair);cap.position.set(0,2.19,-.07);cap.scale.y=.55;root.add(cap);let gun=new THREE.Mesh(new THREE.BoxGeometry(.17,.18,.9),metal);gun.position.set(.4,1.35,-.48);root.add(gun);root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(root);loadModel(color===0x39769a?'./models/hero.gltf':'./models/enemy.gltf',root,{height:2.45,replace:[...root.children]});return root}
 const hero=agent(0x39769a);hero.position.set(0,0,11);const enemies=[];
 function spawn(){
  const a=agent(0x943e48);let placed=false;
