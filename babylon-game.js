@@ -38,7 +38,19 @@ const torso=B.MeshBuilder.CreateCapsule(name+' torso',{radius:.38,height:1.18,te
 const head=B.MeshBuilder.CreateSphere(name+' helmet',{diameter:.65,segments:12},scene);head.parent=root;head.position.y=2.12;head.scaling.y=.78;head.material=dark;shadow.addShadowCaster(head);
 const visor=box(name+' visor',.5,.15,.12,0,0,0,metal);visor.parent=root;visor.position.set(0,2.1,-.31);
 for(const side of [-1,1]){const leg=box(name+' leg',.26,.72,.29,0,0,0,armor);leg.parent=root;leg.position.set(side*.22,.4,0);const arm=box(name+' arm',.23,.75,.26,0,0,0,armor);arm.parent=root;arm.position.set(side*.49,1.34,-.1)}
-const rifle=box(name+' rifle',.18,.18,1.15,0,0,0,metal);rifle.parent=root;rifle.position.set(.42,1.42,-.63);
+const vest=box(name+' ballistic vest',.79,.73,.38,0,0,0,dark);vest.parent=root;vest.position.set(0,1.4,-.16);
+for(const side of [-1,1]){
+ const pad=box(name+' shoulder armor',.33,.28,.4,0,0,0,armor);pad.parent=root;pad.position.set(side*.52,1.7,-.07);
+ const strap=box(name+' webbing',.13,.68,.12,0,0,0,timber);strap.parent=root;strap.position.set(side*.26,1.43,-.4);
+ const boot=box(name+' boot',.3,.18,.4,0,0,0,dark);boot.parent=root;boot.position.set(side*.22,.14,-.1);
+ const earpiece=box(name+' headset',.11,.22,.2,0,0,0,dark);earpiece.parent=root;earpiece.position.set(side*.34,2.08,0);
+}
+for(let i=0;i<3;i++){const pouch=box(name+' magazine pouch',.2,.23,.15,0,0,0,timber);pouch.parent=root;pouch.position.set((i-1)*.23,1.18,-.43)}
+const rifle=box(name+' rifle receiver',.2,.22,.73,0,0,0,metal);rifle.parent=root;rifle.position.set(.42,1.42,-.59);
+const stock=box(name+' rifle stock',.24,.2,.38,0,0,0,dark);stock.parent=root;stock.position.set(.42,1.42,.03);
+const barrel=box(name+' rifle barrel',.08,.08,.7,0,0,0,metal);barrel.parent=root;barrel.position.set(.42,1.44,-1.22);
+const sight=box(name+' optic',.13,.14,.2,0,0,0,dark);sight.parent=root;sight.position.set(.42,1.62,-.63);
+const magazine=box(name+' magazine',.15,.34,.18,0,0,0,dark);magazine.parent=root;magazine.position.set(.42,1.19,-.59);magazine.rotation.x=-.2;
 return {root,hp:hostile?3:100,cool:0}}
 const player=agent('operator',0,12);const enemies=[];let kills=0,stage=Number(localStorage.getItem('babylon_stage')||1),mode=localStorage.getItem('babylon_mode')||'campaign',playing=false,over=false;
 const objective=()=>mode==='endless'?Infinity:12+(stage-1)*6;
