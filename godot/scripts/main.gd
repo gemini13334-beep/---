@@ -153,12 +153,35 @@ func _spawn_enemy() -> void:
  if enemies.size() >= 20:
   return
  var e := Node3D.new()
- e.name = "Zombie Clerk"
+ var roll:=randf()
+ var enemy_kind:=0
+ if stage>=2 and roll<0.18:
+  enemy_kind=2
+ elif roll<0.42:
+  enemy_kind=1
  var angle := randf()*TAU
  e.position = Vector3(cos(angle)*15.0,0,sin(angle)*16.0)
  add_child(e)
- _make_operator(e,Color("#737467"),false)
- e.set_meta("hp",70.0+stage*10.0)
+ match enemy_kind:
+  1:
+   e.name="Fast Courier"
+   _make_operator(e,Color("#6d8068"),false)
+   e.set_meta("hp",43.0+stage*6.0)
+   e.set_meta("speed",2.65+stage*0.1)
+   e.set_meta("damage",8.0)
+  2:
+   e.name="Armored Bureaucrat"
+   _make_operator(e,Color("#565a67"),false)
+   _box(e,"Heavy armor",Vector3(0,1.3,-0.38),Vector3(1.03,0.77,0.17),Color("#29353d"))
+   e.set_meta("hp",170.0+stage*16.0)
+   e.set_meta("speed",1.05+stage*0.05)
+   e.set_meta("damage",20.0)
+  _:
+   e.name="Zombie Clerk"
+   _make_operator(e,Color("#737467"),false)
+   e.set_meta("hp",70.0+stage*10.0)
+   e.set_meta("speed",1.6+stage*0.08)
+   e.set_meta("damage",12.0)
  enemies.append(e)
 
 func _process(delta: float) -> void:
@@ -184,9 +207,9 @@ func _process(delta: float) -> void:
   var diff: Vector3 = hero.position-e.position
   diff.y = 0
   if diff.length()>1.4:
-   e.position += diff.normalized()*delta*(1.6+stage*0.08)
+   e.position += diff.normalized()*delta*float(e.get_meta("speed",1.6))
   else:
-   hp -= delta*12.0
+   hp -= delta*float(e.get_meta("damage",12.0))
   e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
  if hit_flash_timer > 0.0:
   hit_flash_timer -= delta
