@@ -8,12 +8,15 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    container:
-      image: barichello/godot-ci:4.3
     steps:
       - uses: actions/checkout@v4
+      - uses: chickensoft-games/setup-godot@v2
+        with:
+          version: 4.5.1
+          include-templates: false
+          use-dotnet: false
       - name: Import Godot project
-        run: godot --headless --path godot --editor --quit
+        run: godot --headless --path godot --editor --import
       - name: Validate scene and scripts
         run: |
           set -eu

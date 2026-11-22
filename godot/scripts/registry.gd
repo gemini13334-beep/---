@@ -100,6 +100,9 @@ func build()->void:
   box(self,desk+Vector3.UP*1.25,Vector3(3.14,0.11,1.56),walnut)
   box(self,desk+Vector3(0.82,1.39,-0.24),Vector3(0.44,0.16,0.32),material(Color("#e0cfab")))
   box(self,desk+Vector3(0.82,1.48,-0.24),Vector3(0.46,0.025,0.34),metal)
+  var stamp:=preload("res://assets/models/registry-stamp.glb").instantiate() as Node3D
+  stamp.position=desk+Vector3(0.15,1.31,0.45)
+  add_child(stamp)
   var papers:=material(Color("#e7dfc4"))
   var leather:=material(Color("#744b35"))
   box(self,desk+Vector3(0,0.67,0.744),Vector3(2.78,0.7,0.035),walnut)

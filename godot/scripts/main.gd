@@ -69,6 +69,7 @@ var weapon_status: Label
 var kills_label: Label
 var hero: Node3D
 var cam: Camera3D
+const Inspector = preload("res://scripts/inspector.gd")
 const Registry = preload("res://scripts/registry.gd")
 var arena: Node3D
 var registry: Registry
@@ -354,13 +355,16 @@ func _spawn_enemy() -> void:
  var spawn_z:=12.8 if registry!=null else 16.5
  e.position=Vector3(lanes.pick_random(),0,-spawn_z if hero.position.z>=0 else spawn_z)
  world_root.add_child(e)
- var portrait:=Sprite3D.new()
- portrait.texture=load("res://assets/courtyard/clerk-%d.webp"%enemy_kind)
- portrait.pixel_size=2.05/portrait.texture.get_height()
- portrait.position.y=1.025
- portrait.billboard=BaseMaterial3D.BILLBOARD_FIXED_Y
- portrait.alpha_cut=SpriteBase3D.ALPHA_CUT_DISCARD
- e.add_child(portrait)
+ if enemy_kind==0:
+  e.add_child(Inspector.new())
+ else:
+  var portrait:=Sprite3D.new()
+  portrait.texture=load("res://assets/courtyard/clerk-%d.webp"%enemy_kind)
+  portrait.pixel_size=2.05/portrait.texture.get_height()
+  portrait.position.y=1.025
+  portrait.billboard=BaseMaterial3D.BILLBOARD_FIXED_Y
+  portrait.alpha_cut=SpriteBase3D.ALPHA_CUT_DISCARD
+  e.add_child(portrait)
  match enemy_kind:
   1:
    e.name="Fast Courier"
@@ -402,6 +406,7 @@ func _process(delta: float) -> void:
  var hp_before:=hp
  for e in enemies.duplicate():
   if not is_instance_valid(e): continue
+  var previous_position:Vector3=e.position
   var diff: Vector3 = hero.position-e.position
   diff.y = 0
   var distance_to_hero:float=diff.length()
@@ -430,6 +435,8 @@ func _process(delta: float) -> void:
   var portrait:=e.get_child(0) as Sprite3D
   if portrait!=null:
    portrait.position.y=1.025+absf(sin(elapsed*6+e.get_instance_id()%13))*0.045
+  elif e.get_child(0) is Inspector:
+   e.get_child(0).advance(delta,e.position.distance_to(previous_position))
   if distance_to_hero>0.01:
    e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
  if hp<hp_before:
@@ -918,7 +925,7 @@ func _open_case(index:int)->void:
  _show_case_roulette(item_id)
 
 func _show_case_roulette(item_id:int)->void:
- _show_menu()
+ _show_subpage("МАГАЗИН / ВСКРЫТИЕ КЕЙСА")
  var title:=_label("ВСКРЫТИЕ КЕЙСА  /  СКАНИРОВАНИЕ",23)
  title.position=Vector2(475,218)
  menu_layer.add_child(title)
@@ -988,7 +995,7 @@ func _update_reel_slot(slot:Label,item_id:int)->void:
  slot.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
 
 func _show_drop_reveal(item_id:int)->void:
- _show_menu()
+ _show_subpage("МАГАЗИН / НАГРАДА")
  var item:Dictionary=Loot.ITEMS[item_id]
  var rarity:int=int(item["rarity"])
  var color:=Color(str(Loot.RARITY_COLORS[rarity]))
@@ -1053,7 +1060,7 @@ func _equip_skin(item_id:int)->void:
 
 func _show_skin_preview(item_id:int)->void:
  if not inventory.has(item_id): return
- _show_menu()
+ _show_subpage("ИНВЕНТАРЬ / СКИН")
  var item:Dictionary=Loot.ITEMS[item_id]
  var rarity:int=int(item["rarity"])
  var weapon:int=int(item["weapon"])
@@ -1065,30 +1072,19 @@ func _show_skin_preview(item_id:int)->void:
  var panel:=_panel(Vector2(475,255),Vector2(510,278),Color("#10232d"))
  panel.add_theme_stylebox_override("panel",_rarity_panel_style(rarity_color))
  menu_layer.add_child(panel)
- var stripe:=ColorRect.new()
- stripe.color=tint
- stripe.position=Vector2(510,327)
- stripe.size=Vector2(400,36)
- stripe.mouse_filter=Control.MOUSE_FILTER_IGNORE
- menu_layer.add_child(stripe)
- var barrel:=ColorRect.new()
- barrel.color=tint.darkened(0.4)
- barrel.position=Vector2(810,338)
- barrel.size=Vector2(150,13)
- barrel.mouse_filter=Control.MOUSE_FILTER_IGNORE
- menu_layer.add_child(barrel)
- var grip:=ColorRect.new()
- grip.color=tint.darkened(0.28)
- grip.position=Vector2(600,357)
- grip.size=Vector2(42,75)
- grip.mouse_filter=Control.MOUSE_FILTER_IGNORE
- menu_layer.add_child(grip)
- var accent:=ColorRect.new()
- accent.color=rarity_color
- accent.position=Vector2(510,316)
- accent.size=Vector2(400,5)
- accent.mouse_filter=Control.MOUSE_FILTER_IGNORE
- menu_layer.add_child(accent)
+ var preview:=TextureRect.new()
+ preview.texture=load("res://assets/briefing/"+str(HAND_ART[weapon])+".webp")
+ preview.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+ preview.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+ preview.position=Vector2(495,316)
+ preview.size=Vector2(470,145)
+ preview.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ var paint:=foreground.material.duplicate() as ShaderMaterial
+ paint.set_shader_parameter("equipped",true)
+ paint.set_shader_parameter("finish",tint)
+ paint.set_shader_parameter("pattern",item_id%4)
+ preview.material=paint
+ menu_layer.add_child(preview)
  var name_label:=_label(str(item["name"]),26)
  name_label.position=Vector2(506,270)
  name_label.add_theme_color_override("font_color",rarity_color)
@@ -1108,9 +1104,6 @@ func _show_skin_preview(item_id:int)->void:
  back.custom_minimum_size=Vector2(248,50)
  back.pressed.connect(_show_collection)
  menu_layer.add_child(back)
- var note:=_label("СХЕМАТИЧНЫЙ ПРЕДПРОСМОТР ЦВЕТА • В ИГРЕ СКИН НА 3D-ОРУЖИИ",12)
- note.position=Vector2(475,610)
- menu_layer.add_child(note)
 
 func _set_collection_filter(value:int)->void:
  collection_filter=value
@@ -1122,7 +1115,7 @@ func _set_collection_page(value:int)->void:
  _show_collection()
 
 func _show_collection()->void:
- _show_menu()
+ _show_subpage("ИНВЕНТАРЬ / КОЛЛЕКЦИЯ")
  var title:=_label("АРСЕНАЛ / КОЛЛЕКЦИЯ  %d/%d"%[inventory.size(),Loot.ITEMS.size()],22)
  title.position=Vector2(475,203)
  menu_layer.add_child(title)
@@ -1211,7 +1204,7 @@ func _show_subpage(title_text:String)->void:
  menu_layer.add_child(back)
 
 func _show_loadout()->void:
- _show_subpage("АРСЕНАЛ / СНАРЯЖЕНИЕ")
+ _show_subpage("СНАРЯЖЕНИЕ / ОРУЖИЕ")
  var b:=_button("ОРУЖИЕ: "+str(WEAPONS[weapon_index]["name"]))
  b.position=Vector2(475,370)
  b.custom_minimum_size=Vector2(450,50)
@@ -1235,7 +1228,7 @@ func _show_file()->void:
  menu_layer.add_child(l)
 
 func _show_settings()->void:
- _show_subpage("ПАРАМЕТРЫ / ANDROID")
+ _show_subpage("НАСТРОЙКИ / ANDROID")
  var title:=_label("⚙ НАСТРОЙКИ / ANDROID",24)
  title.position=Vector2(475,290)
  menu_layer.add_child(title)
