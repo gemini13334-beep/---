@@ -3,7 +3,14 @@
 const B=window.BABYLON;
 const canvas=document.getElementById('renderCanvas'),status=document.getElementById('status');
 const engine=new B.Engine(canvas,true,{preserveDrawingBuffer:false,stencil:true,antialias:true,adaptToDeviceRatio:true});
-engine.setHardwareScalingLevel(Math.max(1,Math.min(1.5,window.devicePixelRatio/1.5)));
+const qualityOptions={low:{scale:1.9,shadows:false,detail:128},medium:{scale:1.4,shadows:true,detail:256},high:{scale:1,shadows:true,detail:512}};
+let quality=localStorage.getItem('babylon_quality')||'medium';
+if(!qualityOptions[quality])quality='medium';
+engine.setHardwareScalingLevel(qualityOptions[quality].scale);
+const qualityButton=document.getElementById('qualitySwitch');
+function updateQuality(){if(qualityButton)qualityButton.textContent='ГРАФИКА: '+({low:'НИЗКАЯ',medium:'СРЕДНЯЯ',high:'ВЫСОКАЯ'}[quality])}
+if(qualityButton)qualityButton.onclick=()=>{quality=quality==='low'?'medium':quality==='medium'?'high':'low';localStorage.setItem('babylon_quality',quality);location.reload()};
+updateQuality();
 const scene=new B.Scene(engine);scene.clearColor=new B.Color4(.55,.69,.77,1);
 scene.collisionsEnabled=true;
 const camera=new B.ArcRotateCamera('camera',-Math.PI/2,1.02,18,new B.Vector3(0,1,0),scene);
@@ -14,7 +21,7 @@ function changeView(){cameraZoom=cameraZoom===18?12:18;if(viewButton)viewButton.
 if(viewButton)viewButton.onclick=changeView;
 const light=new B.HemisphericLight('ambient',new B.Vector3(0,1,0),scene);light.intensity=.9;
 const sun=new B.DirectionalLight('sun',new B.Vector3(-.5,-1,.35),scene);sun.position=new B.Vector3(12,23,-10);sun.intensity=1.9;
-const shadow=new B.ShadowGenerator(1024,sun);shadow.useBlurExponentialShadowMap=true;shadow.blurKernel=12;
+const shadow=new B.ShadowGenerator(1024,sun);shadow.useBlurExponentialShadowMap=true;shadow.blurKernel=12;shadow.setDarkness(.3);if(!qualityOptions[quality].shadows)shadow.setEnabled(false);
 function material(name,hex,rough=1){const m=new B.PBRMaterial(name,scene);m.albedoColor=B.Color3.FromHexString(hex);m.metallic=0;m.roughness=rough;return m}
 const sand=material('sand','#b4a28b'),stone=material('stone','#d0b99b'),dark=material('dark','#454d50'),blue=material('blue','#334f5d'),enemyMat=material('enemy','#665044'),metal=material('metal','#3b4145',.55);
 function atlasTexture(name,key,scale){
@@ -36,17 +43,17 @@ function proceduralStone(){
 sand.albedoTexture=atlasTexture('ground atlas','concrete',6)||proceduralStone();stone.albedoTexture=atlasTexture('brick atlas','brick',3);metal.albedoTexture=atlasTexture('metal atlas','metal',2);
 const trim=material('limestone trim','#e0cbb0'),timber=material('timber','#735941'),windowMat=material('window','#273e48',.4);
 function paintedTexture(name,kind,seed){
- const tex=new B.DynamicTexture(name,{width:256,height:256},scene,true);
+ const resolution=qualityOptions[quality].detail;const tex=new B.DynamicTexture(name,{width:resolution,height:resolution},scene,true);
  const ctx=tex.getContext();let state=seed>>>0;
  const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296};
  const base={sand:'#b5a185',wood:'#786049',stone:'#c9b39a',fabric:'#7c7867',cargo:'#65747a',hazard:'#85704b'}[kind]||'#999999';
- ctx.fillStyle=base;ctx.fillRect(0,0,256,256);
- if(kind==='wood'){for(let y=0;y<256;y+=43){ctx.fillStyle='#403326';ctx.fillRect(0,y,256,3);ctx.fillStyle='rgba(240,203,144,.2)';ctx.fillRect(0,y+4,256,2)}}
- if(kind==='stone'){ctx.strokeStyle='rgba(70,60,49,.42)';ctx.lineWidth=3;for(let y=0;y<256;y+=64){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(256,y);ctx.stroke();for(let x=(y/64%2)*64;x<256;x+=128){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+64);ctx.stroke()}}}
- if(kind==='cargo'){ctx.fillStyle='rgba(24,37,44,.25)';for(let x=0;x<256;x+=23)ctx.fillRect(x,0,5,256)}
- if(kind==='hazard'){ctx.save();ctx.translate(128,128);ctx.rotate(-Math.PI/4);ctx.fillStyle='#d7a33f';for(let x=-420;x<420;x+=52)ctx.fillRect(x,-400,26,800);ctx.restore()}
- if(kind==='fabric'){ctx.strokeStyle='rgba(30,31,24,.17)';ctx.lineWidth=1;for(let y=0;y<256;y+=5){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(256,y);ctx.stroke()}for(let x=0;x<256;x+=5){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,256);ctx.stroke()}}
- for(let i=0;i<6500;i++){const x=rand()*256,y=rand()*256,v=rand();ctx.fillStyle=v>.5?'rgba(255,247,223,'+(rand()*.11)+')':'rgba(25,22,19,'+(rand()*.12)+')';ctx.fillRect(x,y,1+rand()*3,1+rand()*3)}
+ ctx.fillStyle=base;ctx.fillRect(0,0,resolution,resolution);
+ if(kind==='wood'){for(let y=0;y<resolution;y+=43){ctx.fillStyle='#403326';ctx.fillRect(0,y,resolution,3);ctx.fillStyle='rgba(240,203,144,.2)';ctx.fillRect(0,y+4,resolution,2)}}
+ if(kind==='stone'){ctx.strokeStyle='rgba(70,60,49,.42)';ctx.lineWidth=3;for(let y=0;y<resolution;y+=64){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(resolution,y);ctx.stroke();for(let x=(y/64%2)*64;x<resolution;x+=128){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+64);ctx.stroke()}}}
+ if(kind==='cargo'){ctx.fillStyle='rgba(24,37,44,.25)';for(let x=0;x<resolution;x+=23)ctx.fillRect(x,0,5,resolution)}
+ if(kind==='hazard'){ctx.save();ctx.translate(resolution/2,resolution/2);ctx.rotate(-Math.PI/4);ctx.fillStyle='#d7a33f';for(let x=-420;x<420;x+=52)ctx.fillRect(x,-400,26,800);ctx.restore()}
+ if(kind==='fabric'){ctx.strokeStyle='rgba(30,31,24,.17)';ctx.lineWidth=1;for(let y=0;y<resolution;y+=5){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(resolution,y);ctx.stroke()}for(let x=0;x<resolution;x+=5){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,resolution);ctx.stroke()}}
+ for(let i=0;i<resolution*resolution/10;i++){const x=rand()*resolution,y=rand()*resolution,v=rand();ctx.fillStyle=v>.5?'rgba(255,247,223,'+(rand()*.11)+')':'rgba(25,22,19,'+(rand()*.12)+')';ctx.fillRect(x,y,1+rand()*3,1+rand()*3)}
  tex.update(false);tex.wrapU=tex.wrapV=B.Texture.WRAP_ADDRESSMODE;tex.uScale=2;tex.vScale=2;return tex
 }
 const groundDetail=material('desert ground','#ffffff'),wallDetail=material('wall stone','#ffffff'),woodDetail=material('weathered wood','#ffffff'),fabricDetail=material('canvas fabric','#ffffff'),cargoDetail=material('corrugated metal','#ffffff'),hazardDetail=material('hazard paint','#ffffff');
