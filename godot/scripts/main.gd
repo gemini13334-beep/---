@@ -2,7 +2,17 @@ extends Node3D
 
 const Story = preload("res://scripts/story.gd")
 const Loot = preload("res://scripts/loot.gd")
-const TacticalCamera = preload("res://scripts/tactical_camera.gd")
+const Briefing = preload("res://scripts/briefing.gd")
+const Radar = preload("res://scripts/radar.gd")
+var active_stage := 0
+var preview_stage := 0
+var look_touch_id := -1
+var pitch := 0.0
+var elapsed := 0.0
+var timer_label:Label
+var radar:Control
+var foreground:TextureRect
+const HAND_ART := ["first-person","stapler","folder"]
 const SAVE_PATH := "user://vacation_save.json"
 const SETTINGS_PATH := "user://tactical_settings.json"
 var graphics_level := 1
@@ -90,40 +100,6 @@ func _box(parent: Node3D, name: String, pos: Vector3, size: Vector3, color: Colo
  var mat := StandardMaterial3D.new()
  mat.albedo_color = color
  mat.roughness = 0.92
- # Imported original SVG texture set; neutral tint preserves authored colors.
- var texture_name: String = ""
- if name.contains("Window glass"):
-  texture_name = "glass_blue"
- elif name.contains("Window frame") or name.contains("Checkpoint"):
-  texture_name = "painted_steel"
- elif name.contains("Roof"):
-  texture_name = "roof_tar"
- elif name.contains("Industrial block"):
-  texture_name = "plaster_wall"
- elif name.contains("wall"):
-  texture_name = "sandstone_wall"
- elif name.contains("floor"):
-  texture_name = "concrete_tiles"
- elif name.contains("Barricade marking") or name.contains("Facade stripe"):
-  texture_name = "yellow_warning"
- elif name.contains("Concrete cover") or name.contains("Barricade"):
-  texture_name = "concrete_floor"
- elif name.contains("Crate") or name.contains("crate"):
-  texture_name = "crate_wood"
- elif name.contains("Boots") or name.contains("glove"):
-  texture_name = "dark_rubber"
- elif name.contains("Vest") or name.contains("Legs") or name.contains("arm"):
-  texture_name = "military_camo"
- elif name.contains("Weapon"):
-  texture_name = "painted_steel"
- elif name.contains("armor") or name.contains("Helmet"):
-  texture_name = "industrial_metal"
- if texture_name != "":
-  var tex: Texture2D = load("res://assets/textures/" + texture_name + ".svg") as Texture2D
-  if tex != null:
-   mat.albedo_texture = tex
-   mat.albedo_color = Color.WHITE
-
  node.material_override = mat
  node.position = pos
  parent.add_child(node)
@@ -141,127 +117,204 @@ func _build_world() -> void:
  world_root = Node3D.new()
  world_root.name = "Sector"
  add_child(world_root)
- var env := WorldEnvironment.new()
- var environment := Environment.new()
- environment.background_mode = Environment.BG_COLOR
- environment.background_color = Color("#697e8c")
- environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
- environment.ambient_light_color = Color("#b9cad1")
- environment.ambient_light_energy = 0.48
- env.environment = environment
- add_child(env)
- var sun := DirectionalLight3D.new()
- sun.rotation_degrees = Vector3(-55,-35,0)
- sun.light_energy = 1.35
- sun.shadow_enabled = true
- add_child(sun)
- _box(world_root,"Concrete floor",Vector3(0,-0.2,0),Vector3(40,0.4,42),Color("#56646c"),true)
- for z in [-20.0,20.0]:
-  _box(world_root,"Outer wall",Vector3(0,2.1,z),Vector3(40,4.2,0.65),Color("#79858a"),true)
- for x in [-19.7,19.7]:
-  _box(world_root,"Outer wall",Vector3(x,2.1,0),Vector3(0.65,4.2,42),Color("#b5aa94"),true)
- # Structured industrial courtyard: readable lanes and recognizable buildings.
- for side in [-1.0,1.0]:
-  var bx:float=side*14.0
-  for row in range(3):
-   var bz:float=-13.0+float(row)*12.0
-   _box(world_root,"Industrial block",Vector3(bx,3.0,bz),Vector3(6.5,6.0,8.2),Color("#465660"),true)
-   _box(world_root,"Roof parapet",Vector3(bx,6.1,bz),Vector3(7.0,0.35,8.6),Color("#293943"))
-   _box(world_root,"Concrete foundation",Vector3(bx,0.24,bz),Vector3(7.2,0.48,9.0),Color("#35434a"))
-   for level in range(2):
-    for col in range(2):
-     var wz:float=bz-2.1+float(col)*4.2
-     _box(world_root,"Window frame",Vector3(bx-side*3.31,2.0+level*2.5,wz),Vector3(0.09,1.45,2.1),Color("#172a34"))
-     _box(world_root,"Window glass",Vector3(bx-side*3.37,2.0+level*2.5,wz),Vector3(0.035,1.16,1.7),Color("#477585"))
-   _box(world_root,"Facade stripe",Vector3(bx-side*3.37,4.8,bz),Vector3(0.07,0.18,8.0),Color("#d3a955"))
- for i in range(8):
-  var x:float=-8.0+float(i%2)*16.0
-  var z:float=-15.0+float(i/2)*9.5
-  if Vector2(x,z).length()<5.0: continue
-  _box(world_root,"Concrete cover",Vector3(x,0.75,z),Vector3(2.8,1.5,0.65),Color("#7b8586"),true)
-  _box(world_root,"Cover edge",Vector3(x,1.54,z),Vector3(2.95,0.12,0.8),Color("#c5aa70"))
- # Cross-street asphalt and lane markings improve arena legibility.
- _box(world_root,"Asphalt road",Vector3(0,0.014,0),Vector3(10,0.028,38),Color("#41484c"))
- for mark in range(10):
-  _box(world_root,"Center line",Vector3(0,0.035,-17.0+float(mark)*3.7),Vector3(0.17,0.014,1.6),Color("#e1c16a"))
- for side in [-1.0,1.0]:
-  _box(world_root,"Sidewalk",Vector3(side*6.0,0.11,0),Vector3(1.5,0.22,38),Color("#8c9491"))
-  for segment in range(10):
-   _box(world_root,"Sidewalk joint",Vector3(side*6.0,0.228,-17.0+float(segment)*3.8),Vector3(1.48,0.01,0.055),Color("#465157"))
- # Lightweight environmental dressing: checkpoint, lane markings and warning lights.
- for i in range(11):
-  var lane_z:float=-17.0+float(i)*3.3
-  _box(world_root,"Road stripe %d"%i,Vector3(0,-0.005,lane_z),Vector3(0.17,0.012,1.45),Color("#d9c38d"))
- for side in [-1.0,1.0]:
-  _box(world_root,"Checkpoint post",Vector3(side*6.0,1.65,-12.0),Vector3(0.45,3.3,0.45),Color("#414b4d"),true)
-  _box(world_root,"Warning lamp",Vector3(side*6.0,3.4,-12.0),Vector3(0.65,0.35,0.65),Color("#e6a24e"))
-  _box(world_root,"Barricade",Vector3(side*10.0,0.55,-8.0),Vector3(3.3,1.1,0.55),Color("#b1a28a"),true)
-  for stripe in range(3):
-   _box(world_root,"Barricade marking",Vector3(side*10.0-1.0+stripe*1.0,0.8,-8.29),Vector3(0.38,0.23,0.035),Color("#d7ad52"))
- _box(world_root,"Checkpoint gate",Vector3(0,3.2,-12.0),Vector3(12.4,0.5,0.6),Color("#394a4f"))
- _box(world_root,"Checkpoint sign",Vector3(0,3.24,-12.34),Vector3(4.7,0.32,0.06),Color("#d7b667"))
- for i in range(8):
-  var ix:float=-15.0+float(i%4)*10.0
-  var iz:float=-13.0+float(i/4)*26.0
-  _box(world_root,"Supply crate %d"%i,Vector3(ix,0.48,iz),Vector3(1.1,0.95,1.0),Color("#52625b"),true)
-  _box(world_root,"Crate lid %d"%i,Vector3(ix,0.98,iz),Vector3(1.18,0.12,1.08),Color("#293c39"))
- hero = Node3D.new()
+ _build_courtyard()
+ hero = CharacterBody3D.new()
  hero.name = "Player"
  add_child(hero)
- _make_operator(hero,Color("#475c63"),true)
- _apply_weapon_skin()
- cam = Camera3D.new()
- cam.current = true
- cam.fov = 52
+ var hull:=CollisionShape3D.new()
+ var capsule:=CapsuleShape3D.new()
+ capsule.height=1.8
+ capsule.radius=0.36
+ hull.shape=capsule
+ hull.position.y=0.92
+ hero.add_child(hull)
+ (hero as CharacterBody3D).collision_layer=2
+ cam=Camera3D.new()
+ cam.current=true
+ cam.fov=69
+ cam.near=0.04
  add_child(cam)
- _update_camera(1.0)
+ _update_camera(0.0)
  _apply_settings()
 
-func _capsule_part(root:Node3D,part_name:String,pos:Vector3,radius:float,height:float,tint:Color)->MeshInstance3D:
- var part:=MeshInstance3D.new()
- part.name=part_name
- var shape:=CapsuleMesh.new()
- shape.radius=radius
- shape.height=height
- shape.radial_segments=12
- shape.rings=5
- part.mesh=shape
- var material:=StandardMaterial3D.new()
- material.albedo_color=tint
- material.roughness=0.85
- part.material_override=material
- part.position=pos
- root.add_child(part)
+# The four photographic surfaces tile in metres across the courtyard geometry.
+var courtyard_materials:Dictionary={}
+
+func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:int, tint:Color, solid:=false)->MeshInstance3D:
+ var id:=[atlas,tint]
+ var part:=_box(parent,title,pos,extent,tint,solid)
+ if not courtyard_materials.has(id):
+  var mat:=StandardMaterial3D.new()
+  mat.albedo_texture=load("res://assets/courtyard/surface-%d.webp"%atlas)
+  mat.albedo_color=tint
+  mat.texture_filter=BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+  mat.uv1_triplanar=true
+  mat.uv1_world_triplanar=true
+  mat.uv1_scale=Vector3.ONE*(0.66 if atlas==2 else 0.26)
+  mat.roughness=0.88
+  courtyard_materials[id]=mat
+ part.material_override=courtyard_materials[id]
  return part
 
-func _make_operator(root: Node3D, uniform: Color, player: bool) -> void:
- # Rounded silhouette and articulated equipment replace the block-only operator.
- var suit:=uniform
- _capsule_part(root,"Torso",Vector3(0,1.22,0),0.36,0.85,suit)
- _capsule_part(root,"Left leg",Vector3(-0.21,0.53,0),0.17,0.86,suit.darkened(0.15))
- _capsule_part(root,"Right leg",Vector3(0.21,0.53,0),0.17,0.86,suit.darkened(0.15))
- _capsule_part(root,"Left arm",Vector3(-0.53,1.2,-0.02),0.15,0.74,suit)
- _capsule_part(root,"Right arm",Vector3(0.53,1.2,-0.02),0.15,0.74,suit)
- _capsule_part(root,"Head",Vector3(0,1.89,0),0.29,0.49,Color("#a28b79"))
- _capsule_part(root,"Helmet shell",Vector3(0,2.03,0.01),0.33,0.41,Color("#29363c"))
- _box(root,"Visor",Vector3(0,1.94,-0.31),Vector3(0.5,0.15,0.08),Color("#101d29"))
- _box(root,"Vest",Vector3(0,1.28,-0.12),Vector3(0.76,0.67,0.48),Color("#36464b"))
- _box(root,"Chest armor",Vector3(0,1.32,-0.38),Vector3(0.64,0.45,0.10),Color("#50636b"))
- _box(root,"Utility belt",Vector3(0,0.86,-0.02),Vector3(0.75,0.16,0.45),Color("#222b2b"))
- for side in [-1.0,1.0]:
-  _box(root,"Boots",Vector3(side*0.21,0.13,-0.08),Vector3(0.32,0.25,0.51),Color("#1b262a"))
-  _box(root,"Knee armor",Vector3(side*0.21,0.54,-0.19),Vector3(0.27,0.26,0.13),Color("#374b51"))
-  _box(root,"Shoulder plate",Vector3(side*0.51,1.5,-0.02),Vector3(0.31,0.23,0.42),Color("#3b4c53"))
-  _box(root,"glove",Vector3(side*0.53,0.82,-0.07),Vector3(0.27,0.21,0.33),Color("#1d292c"))
-  _box(root,"Magazine pouch",Vector3(side*0.3,1.0,-0.38),Vector3(0.23,0.27,0.17),Color("#68776a"))
- _box(root,"Backpack",Vector3(0,1.22,0.36),Vector3(0.58,0.72,0.29),Color("#334a43"))
- _box(root,"Weapon",Vector3(0.33,1.24,-0.52),Vector3(0.18,0.21,0.98),Color("#1d252b"))
- _box(root,"Weapon barrel",Vector3(0.33,1.24,-1.12),Vector3(0.085,0.085,0.42),Color("#111b20"))
- _box(root,"Weapon sight",Vector3(0.33,1.40,-0.59),Vector3(0.13,0.12,0.20),Color("#303b40"))
- _box(root,"Weapon magazine",Vector3(0.33,1.01,-0.42),Vector3(0.14,0.29,0.18),Color("#303b40"))
- _box(root,"Weapon stock",Vector3(0.33,1.2,0.03),Vector3(0.14,0.18,0.35),Color("#252e31"))
- if not player:
-  _box(root,"Clerk badge",Vector3(0,1.45,-0.45),Vector3(0.26,0.13,0.05),Color("#e7d3a0"))
+func _build_courtyard()->void:
+ var environment:=Environment.new()
+ environment.background_mode=Environment.BG_SKY
+ var atmosphere:=ProceduralSkyMaterial.new()
+ atmosphere.sky_top_color=Color("#467fc0")
+ atmosphere.sky_horizon_color=Color("#c6dae6")
+ atmosphere.ground_horizon_color=Color("#d9c9a8")
+ atmosphere.sun_angle_max=4.0
+ environment.sky=Sky.new()
+ environment.sky.sky_material=atmosphere
+ environment.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
+ environment.ambient_light_color=Color("#d5dfec")
+ environment.ambient_light_energy=0.50
+ environment.tonemap_mode=Environment.TONE_MAPPER_FILMIC
+ var world:=WorldEnvironment.new()
+ world.environment=environment
+ add_child(world)
+ var sun:=DirectionalLight3D.new()
+ sun.rotation_degrees=Vector3(-47,-38,0)
+ sun.light_color=Color("#fff0d7")
+ sun.light_energy=0.90
+ sun.shadow_enabled=true
+ sun.directional_shadow_max_distance=45
+ add_child(sun)
+ _surface(world_root,"Paving",Vector3(0,-0.23,0),Vector3(41,0.46,42),1,Color("#e1d6c6"),true)
+ for side in [-1,1]:
+  _surface(world_root,"Boundary",Vector3(side*20,2.7,0),Vector3(0.8,5.4,42),0,Color.WHITE,true)
+  for row in 3:
+   var z:float=-14+row*13
+   var height:float=6.4+float((row+side+2)%3)*0.85
+   var x:float=side*15.6
+   _surface(world_root,"Registry",Vector3(x,height/2,z),Vector3(8.4,height,10.8),0,Color.WHITE,true)
+   _surface(world_root,"Cornice",Vector3(x,height,z),Vector3(8.8,0.28,11.1),0,Color("#e6cead"))
+   for offset in [-3.1,0,3.1]:
+    _surface(world_root,"Window recess",Vector3(side*11.35,height-1.55,z+offset),Vector3(0.12,1.64,1.15),2,Color("#454944"))
+    _surface(world_root,"Window sill",Vector3(side*11.19,height-2.37,z+offset),Vector3(0.45,0.16,1.42),0,Color.WHITE)
+   _surface(world_root,"Entry",Vector3(side*11.31,1.4,z+2.6),Vector3(0.15,2.8,1.75),2,Color("#77938a"))
+ for side in [-1,1]:
+  _surface(world_root,"Gatehouse",Vector3(side*11.9,3.85,-20),Vector3(16,7.7,1.2),0,Color.WHITE,true)
+  _surface(world_root,"Parapet",Vector3(side*11.9,7.8,-20),Vector3(16.3,0.34,1.65),0,Color.WHITE)
+  _surface(world_root,"Gate pier",Vector3(side*3.68,1.8,-19.15),Vector3(0.55,3.6,1.15),0,Color("#dec3a2"),true)
+  _surface(world_root,"Gate leaf",Vector3(side*1.84,2.55,-19.84),Vector3(3.65,5.1,0.45),2,Color("#b4ab8c"),true)
+  for y in [0.8,2.6,4.35]:
+   _surface(world_root,"Iron strap",Vector3(side*1.85,y,-19.53),Vector3(3.52,0.12,0.14),3,Color("#646460"))
+  for i in 4:
+   _surface(world_root,"Merlon",Vector3(side*(4.6+i*3.6),8.15,-20),Vector3(1,0.65,1.25),0,Color.WHITE)
+ _surface(world_root,"Arch backing",Vector3(0,5.3,-20.27),Vector3(8,4.8,0.55),0,Color("#b7a186"),true)
+ for i in 17:
+  var angle:=PI*(i+0.5)/17
+  var stone:=_surface(world_root,"Arch stone",Vector3(cos(angle)*3.7,3.45+sin(angle)*2.75,-19.09),Vector3(0.76,0.62,1.12),0,Color("#e9d2b1"))
+  stone.rotation.z=atan2(2.75*cos(angle),-3.7*sin(angle))
+ _surface(world_root,"South wall",Vector3(0,2.7,20),Vector3(40,5.4,0.9),0,Color.WHITE,true)
+ for location in [Vector3(-8,0,-9),Vector3(7,0,-11),Vector3(9,0,4),Vector3(-9,0,7)]:
+  for i in 3:
+   var p:Vector3=location+Vector3((i%2)*1.55,(i/2)*1.42,0)
+   _surface(world_root,"Freight",p+Vector3.UP*0.71,Vector3(1.5,1.42,1.5),2,Color("#d8c7af"),true)
+   for dx in [-0.61,0.61]:
+    _surface(world_root,"Crate slat",p+Vector3(dx,0.71,0.78),Vector3(0.13,1.42,0.09),2,Color("#dbbf93"))
+ for i in 5:
+  var x:float=-18+i*8.3
+  var h:float=[9,10.6,9.4,11.8,9.5][i]
+  var back_z:float=-24-i%2*1.8
+  _surface(world_root,"Annex",Vector3(x,h/2,back_z),Vector3(7.4,h,5.3),0,Color("#e6d7c3"))
+  _surface(world_root,"Eave",Vector3(x,h,back_z),Vector3(7.8,0.2,5.7),0,Color.WHITE)
+  for j in 3:
+   _surface(world_root,"Gallery",Vector3(x-2.4+j*2.3,h-1.25,back_z+2.7),Vector3(0.72,1.15,0.08),2,Color("#616059"))
+ for side in [-1,1]:
+  for row in 3:
+   var z:float=-14+row*13
+   for off in [-3.1,0,3.1]:
+    for leaf in [-1,1]:
+     _surface(world_root,"Shutter",Vector3(side*11.26,5.3+float((row+side+2)%3)*0.85,z+off+leaf*0.82),Vector3(0.15,1.75,0.42),2,Color("#858e83"))
+   _surface(world_root,"Canopy",Vector3(side*10.67,3.12,z+2.6),Vector3(1.65,0.14,3.05),2,Color("#a79c81"))
+   for k in [-1,1]:
+    _surface(world_root,"Awning bracket",Vector3(side*10.91,2.85,z+2.6+k*1.24),Vector3(1.15,0.12,0.12),3,Color("#65645b"))
+ for i in 3:
+  var z:float=-10.5+i*8.6
+  var line_start:=Vector3(-11.3,5.8,z)
+  for n in 12:
+   var u:float=float(n+1)/12
+   var end:=Vector3(lerpf(-11.3,11.3,u),5.8-sin(u*PI)*1.15,z+u*2.0)
+   var wire:=_box(world_root,"Cable",(line_start+end)/2,Vector3(0.025,0.025,line_start.distance_to(end)),Color("#383532"))
+   wire.look_at(end,Vector3.UP)
+   line_start=end
+ for location in [Vector3(-6.8,0,-8),Vector3(-5.8,0,-8.5),Vector3(7,0,2.5)]:
+  for band in [0,1,2]:
+   var drum:=MeshInstance3D.new()
+   var shell:=CylinderMesh.new()
+   shell.height=1.22 if band==0 else 0.05
+   shell.top_radius=0.46 if band==0 else 0.48
+   shell.bottom_radius=shell.top_radius
+   shell.radial_segments=18
+   drum.mesh=shell
+   var finish:=StandardMaterial3D.new()
+   finish.albedo_texture=load("res://assets/courtyard/surface-3.webp")
+   finish.albedo_color=Color("#929d9c") if band==0 else Color("#d5cbc0")
+   drum.material_override=finish
+   drum.position=location+Vector3.UP*[0.61,0.29,0.92][band]
+   world_root.add_child(drum)
+   if band==0:
+    var body:=StaticBody3D.new()
+    var collision:=CollisionShape3D.new()
+    var volume:=CylinderShape3D.new()
+    volume.radius=0.46
+    volume.height=1.22
+    collision.shape=volume
+    drum.add_child(body)
+    body.add_child(collision)
+ _surface(world_root,"Sector plaque",Vector3(-7.4,3.85,-19.33),Vector3(4.4,0.85,0.1),3,Color("#485b58"))
+ for i in 6:
+  _palm(Vector3([-16,-7,8,17,-18,17][i],0,[-23,-25,-24,-23,5,8][i]),9+i%3,i)
+ var sign:=Label3D.new()
+ sign.text="01   /   ПРОХОДНАЯ"
+ sign.font=Briefing.FACE
+ sign.font_size=72
+ sign.pixel_size=0.0035
+ sign.modulate=Color("#f4e8ca")
+ sign.outline_size=0
+ sign.position=Vector3(-7.4,3.85,-19.24)
+ world_root.add_child(sign)
+
+func _palm(base:Vector3, height:float, seed_index:int)->void:
+ var trunk:=MeshInstance3D.new()
+ var cylinder:=CylinderMesh.new()
+ cylinder.top_radius=0.18
+ cylinder.bottom_radius=0.37
+ cylinder.height=height
+ cylinder.radial_segments=9
+ trunk.mesh=cylinder
+ var bark:=StandardMaterial3D.new()
+ bark.albedo_texture=load("res://assets/courtyard/surface-2.webp")
+ bark.albedo_color=Color("#97816a")
+ bark.uv1_scale=Vector3(1,4,1)
+ trunk.material_override=bark
+ trunk.position=base+Vector3.UP*height*0.5
+ world_root.add_child(trunk)
+ var leaves:=SurfaceTool.new()
+ leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
+ var green:=StandardMaterial3D.new()
+ green.albedo_color=Color("#718347")
+ green.cull_mode=BaseMaterial3D.CULL_DISABLED
+ leaves.set_material(green)
+ for i in 19:
+  var angle:=i*2.4+seed_index
+  var axis:=Vector3(cos(angle),0,sin(angle))
+  var crosswise:=Vector3(-axis.z,0,axis.x)
+  var length:=3.8+0.75*(i%3)
+  for j in 15:
+   var u:=float(j)/15.0
+   var stem:=axis*length*u+Vector3.UP*(sin(PI*u)*1.1-u*u)
+   for side in [-1,1]:
+    leaves.add_vertex(stem)
+    leaves.add_vertex(stem+axis*0.34)
+    leaves.add_vertex(stem+axis*0.65+crosswise*side*(0.15+sin(PI*u)*0.62)-Vector3.UP*0.36)
+ leaves.generate_normals()
+ var crown:=MeshInstance3D.new()
+ crown.mesh=leaves.commit()
+ crown.position=base+Vector3.UP*height
+ world_root.add_child(crown)
 
 func _spawn_enemy() -> void:
  if enemies.size() >= 20:
@@ -269,52 +322,57 @@ func _spawn_enemy() -> void:
  var e := Node3D.new()
  var roll:=randf()
  var enemy_kind:=0
- if stage>=2 and roll<0.18:
+ if active_stage>=2 and roll<0.18:
   enemy_kind=2
  elif roll<0.42:
   enemy_kind=1
- var angle := randf()*TAU
- e.position = Vector3(cos(angle)*15.0,0,sin(angle)*16.0)
- add_child(e)
+ var lane:float=[-7.0,-3.5,0.0,3.5,7.0].pick_random()
+ e.position=Vector3(lane,0,-16.5 if hero.position.z>=0 else 16.5)
+ world_root.add_child(e)
+ var portrait:=Sprite3D.new()
+ portrait.texture=load("res://assets/courtyard/clerk-%d.webp"%enemy_kind)
+ portrait.pixel_size=2.05/portrait.texture.get_height()
+ portrait.position.y=1.025
+ portrait.billboard=BaseMaterial3D.BILLBOARD_FIXED_Y
+ portrait.alpha_cut=SpriteBase3D.ALPHA_CUT_DISCARD
+ e.add_child(portrait)
  match enemy_kind:
   1:
    e.name="Fast Courier"
-   _make_operator(e,Color("#6d8068"),false)
-   e.set_meta("hp",43.0+stage*6.0)
-   e.set_meta("speed",2.65+stage*0.1)
+   e.set_meta("hp",43.0+active_stage*6.0)
+   e.set_meta("speed",2.65+active_stage*0.1)
    e.set_meta("damage",8.0)
   2:
    e.name="Armored Bureaucrat"
-   _make_operator(e,Color("#565a67"),false)
-   _box(e,"Heavy armor",Vector3(0,1.3,-0.38),Vector3(1.03,0.77,0.17),Color("#29353d"))
-   e.set_meta("hp",170.0+stage*16.0)
-   e.set_meta("speed",1.05+stage*0.05)
+   e.set_meta("hp",170.0+active_stage*16.0)
+   e.set_meta("speed",1.05+active_stage*0.05)
    e.set_meta("damage",20.0)
   _:
    e.name="Zombie Clerk"
-   _make_operator(e,Color("#737467"),false)
-   e.set_meta("hp",70.0+stage*10.0)
-   e.set_meta("speed",1.6+stage*0.08)
+   e.set_meta("hp",70.0+active_stage*10.0)
+   e.set_meta("speed",1.6+active_stage*0.08)
    e.set_meta("damage",12.0)
  enemies.append(e)
 
 func _process(delta: float) -> void:
- if not playing:
-  if is_instance_valid(hero):
-   hero.rotation.y = sin(Time.get_ticks_msec()*0.0005)*0.12
-  _update_camera(delta)
-  return
+ if not playing: return
  var move: Vector2 = joystick
  if Input.is_key_pressed(KEY_A): move.x -= 1
  if Input.is_key_pressed(KEY_D): move.x += 1
  if Input.is_key_pressed(KEY_W): move.y -= 1
  if Input.is_key_pressed(KEY_S): move.y += 1
  move = move.limit_length()
- hero.position.x = clampf(hero.position.x+move.x*delta*6.0,-18,18)
- hero.position.z = clampf(hero.position.z+move.y*delta*6.0,-18,18)
+ elapsed+=delta
+ timer_label.text="%02d:%02d"%[int(elapsed)/60,int(elapsed)%60]
+ var motion:=Vector3(move.x,0,move.y).rotated(Vector3.UP,hero.rotation.y)*delta*6.0
+ var collision:KinematicCollision3D=(hero as CharacterBody3D).move_and_collide(motion)
+ if collision:
+  (hero as CharacterBody3D).move_and_collide(collision.get_remainder().slide(collision.get_normal()))
+ _update_camera(delta)
+ radar.queue_redraw()
  enemy_timer -= delta
  if enemy_timer <= 0:
-  enemy_timer = maxf(0.6,2.0-stage*0.15)
+  enemy_timer = maxf(0.6,2.0-active_stage*0.15)
   _spawn_enemy()
  var hp_before:=hp
  for e in enemies.duplicate():
@@ -344,6 +402,9 @@ func _process(delta: float) -> void:
     e.position=_enemy_navigate(e,next_position,steering.normalized(),delta)
   else:
    hp-=delta*float(e.get_meta("damage",12.0))
+  var portrait:=e.get_child(0) as Sprite3D
+  if portrait!=null:
+   portrait.position.y=1.025+absf(sin(elapsed*6+e.get_instance_id()%13))*0.045
   if distance_to_hero>0.01:
    e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
  if hp<hp_before:
@@ -363,24 +424,28 @@ func _process(delta: float) -> void:
   if reload_timer==0.0:
    magazine_rounds[weapon_index]=_magazine_capacity()
   _refresh_ammo_ui()
- var firing := auto_fire or fire_requested or fire_touch_id != -1 or fire_button.button_pressed or Input.is_key_pressed(KEY_SPACE)
+ var firing := auto_fire or fire_requested or fire_touch_id != -1 or fire_button.button_pressed or Input.is_key_pressed(KEY_SPACE) or (Input.mouse_mode==Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
  fire_requested=false
  if firing and fire_timer<=0 and reload_timer<=0.0 and magazine_rounds[weapon_index]>0:
   var nearest: Node3D = null
   var distance: float = float(WEAPONS[weapon_index]["range"])
+  var best_error:=0.075 if auto_fire else 0.032
   for e in enemies:
    if not is_instance_valid(e): continue
+   var center:Vector3=e.global_position+Vector3.UP*1.3
+   if cam.is_position_behind(center): continue
+   var viewport_size:=get_viewport().get_visible_rect().size
+   var aim_error:=cam.unproject_position(center).distance_to(viewport_size*0.5)/viewport_size.y
    var d: float = hero.position.distance_to(e.position)
-   if d<distance and _has_clear_shot(e):
-    distance=d
+   if d<=distance and aim_error<best_error and _has_clear_shot(e):
+    best_error=aim_error
     nearest=e
   if nearest != null:
    fire_timer=float(WEAPONS[weapon_index]["cooldown"])
    magazine_rounds[weapon_index]-=1
-   _animate_weapon_recoil()
+   recoil_timer=0.14
    camera_kick=minf(0.18,camera_kick+0.045)
    _refresh_ammo_ui()
-   hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
    _show_shot_feedback(nearest)
    var remaining: float = float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
    nearest.set_meta("hp",remaining)
@@ -390,19 +455,18 @@ func _process(delta: float) -> void:
     _animate_enemy_defeat(nearest)
     kills+=1
     xp+=10
-    kills_label.text="%d / %d"%[kills,_target()]
+    kills_label.text="%d / ∞"%kills if endless else "%d / %d"%[kills,_target()]
     if not endless and kills>=_target():
      _win()
  if playing and magazine_rounds[weapon_index]<=0 and reload_timer<=0.0:
   _start_reload()
- if hp<=0:
+ if playing and hp<=0:
   playing=false
   _show_result(false)
  hp_label.text="✚ %d"%ceili(maxf(hp,0))
  if is_instance_valid(health_bar):
   health_bar.value=clampf(hp,0.0,100.0)
-  health_bar.modulate=Color("#e96c62") if hp<=30.0 else Color("#68e0c1")
- _update_camera(delta)
+  health_bar.modulate=Color("#e96c62") if hp<=30.0 else Color.WHITE
 
 func _enemy_navigate(enemy:Node3D, desired_position:Vector3, direction:Vector3, delta:float)->Vector3:
  # Cheap wall/cover avoidance for the low-poly arena, no navigation bake required.
@@ -429,9 +493,9 @@ func _has_clear_shot(target:Node3D)->bool:
  # OpenFPS-style hitscan visibility check; enemy health remains lightweight.
  # Props/walls are StaticBody3D and block shots; the target has no collider.
  if not is_instance_valid(target) or not is_instance_valid(hero): return false
- var from:Vector3=hero.global_position+Vector3(0.33,1.25,0.0)
+ var from:Vector3=cam.global_position
  var to:Vector3=target.global_position+Vector3(0.0,1.3,0.0)
- var params:=PhysicsRayQueryParameters3D.create(from,to)
+ var params:=PhysicsRayQueryParameters3D.create(from,to,1)
  params.collide_with_areas=false
  var hit:Dictionary=get_world_3d().direct_space_state.intersect_ray(params)
  return hit.is_empty()
@@ -449,18 +513,8 @@ func _animate_enemy_defeat(target:Node3D)->void:
   if is_instance_valid(target): target.queue_free()
  )
 
-func _animate_weapon_recoil()->void:
- if not is_instance_valid(hero): return
- var weapon:=hero.get_node_or_null("Weapon") as MeshInstance3D
- if weapon==null: return
- var baseline:Vector3=Vector3(0.33,1.24,-0.52)
- var kick:float=0.055 if weapon_index==0 else (0.10 if weapon_index==1 else 0.14)
- weapon.position=baseline+Vector3(0.0,0.035,kick)
- var tween:=create_tween()
- tween.tween_property(weapon,"position",baseline,0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-
 func _show_shot_feedback(target:Node3D)->void:
- var start:=hero.global_position+Vector3(0.32,1.25,0)
+ var start:=cam.to_global(Vector3(0.19,-0.17,-0.64))
  var finish:=target.global_position+Vector3(0,1.3,0)
  var distance:=start.distance_to(finish)
  if distance<0.1: return
@@ -510,109 +564,130 @@ func _show_hit_feedback(target:Node3D)->void:
   impact.tween_callback(target.remove_meta.bind("staggering"))
 
 func _target()->int:
- return int(Story.mission(stage)["kills"])
+ return int(Story.mission(active_stage)["kills"])
 
 func _update_camera(delta: float)->void:
  if not is_instance_valid(hero) or not is_instance_valid(cam): return
- TacticalCamera.follow(cam,hero,delta,playing,camera_kick)
+ cam.global_position=hero.global_position+Vector3.UP*1.68
+ cam.rotation=Vector3(pitch+camera_kick*0.08,hero.rotation.y,0)
+ if is_instance_valid(foreground):
+  recoil_timer=maxf(0.0,recoil_timer-delta)
+  foreground.offset_top=-360.0+recoil_timer*62.0+sin(elapsed*2.4)*1.5
+  foreground.offset_bottom=8.0+recoil_timer*62.0+sin(elapsed*2.4)*1.5
+
+func _hud_place(control:Control, anchor:Control.LayoutPreset, at:Vector2, extent:Vector2)->void:
+ control.set_anchors_preset(anchor)
+ control.position=at
+ control.custom_minimum_size=extent
+ hud.add_child(control)
+ control.set_deferred("size",extent)
+
+func _hud_text(value:String, pixels:int, anchor:Control.LayoutPreset, at:Vector2, extent:Vector2)->Label:
+ var label:=_label(value,pixels)
+ label.add_theme_font_override("font",Briefing.FACE)
+ label.add_theme_color_override("font_color",Color("#ffdb96"))
+ label.add_theme_color_override("font_outline_color",Color("#1d2022"))
+ label.add_theme_constant_override("outline_size",4)
+ _hud_place(label,anchor,at,extent)
+ return label
+
+func _combat_button(value:String, anchor:Control.LayoutPreset, at:Vector2, extent:Vector2, action:Callable)->Button:
+ var b:=_button(value)
+ for state in ["normal","hover","pressed","disabled"]:
+  var style:=StyleBoxFlat.new()
+  style.bg_color=Color("#16202a94") if state!="pressed" else Color("#b68b42ab")
+  style.set_border_width_all(1)
+  style.border_color=Color("#e3d9c48c")
+  style.set_corner_radius_all(int(extent.y/2))
+  b.add_theme_stylebox_override(state,style)
+ b.focus_mode=Control.FOCUS_NONE
+ b.pressed.connect(action)
+ _hud_place(b,anchor,at,extent)
+ return b
 
 func _build_ui()->void:
- var layer := CanvasLayer.new()
- layer.name="Interface"
+ var layer:=CanvasLayer.new()
  add_child(layer)
  hud=Control.new()
+ layer.add_child(hud)
  hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
- layer.add_child(hud)
- var bar:=HBoxContainer.new()
- bar.position=Vector2(28,20)
- var hud_strip:=_panel(Vector2(18,12),Vector2(430,60),Color(0.025,0.065,0.085,0.82))
- hud.add_child(hud_strip)
- hud.move_child(hud_strip,0)
- hud.add_child(bar)
- hp_label=_label("✚ 100",27)
- bar.add_child(hp_label)
- health_bar=ProgressBar.new()
- health_bar.custom_minimum_size=Vector2(96,20)
- health_bar.max_value=100.0
- health_bar.value=100.0
- health_bar.show_percentage=false
- health_bar.mouse_filter=Control.MOUSE_FILTER_IGNORE
- health_bar.modulate=Color("#68e0c1")
- bar.add_child(health_bar)
- kills_label=_label("0 / %d"%_target(),22)
- bar.add_child(kills_label)
- status_label=_label("ОПЕРАЦИЯ",17)
- status_label.set_anchors_preset(Control.PRESET_CENTER_TOP)
- status_label.position=Vector2(-125,20)
- status_label.custom_minimum_size=Vector2(250,32)
- status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- status_label.add_theme_color_override("font_color",Color("#b4e9e4"))
- hud.add_child(status_label)
- fire_button=_button("ОГОНЬ")
- fire_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- fire_button.position=Vector2(-290,-295)
- fire_button.custom_minimum_size=Vector2(275,70)
- fire_button.focus_mode=Control.FOCUS_NONE
- fire_button.button_down.connect(func(): fire_requested=true)
- hud.add_child(fire_button)
- var pause:=_button("Ⅱ  МЕНЮ")
- pause.set_anchors_preset(Control.PRESET_TOP_RIGHT)
- pause.position=Vector2(-190,14)
- pause.pressed.connect(_show_menu)
- hud.add_child(pause)
- weapon_button=_button("↻ "+str(WEAPONS[weapon_index]["name"]))
- weapon_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- weapon_button.position=Vector2(-290,-98)
- weapon_button.custom_minimum_size=Vector2(275,66)
- weapon_button.pressed.connect(_cycle_weapon)
- hud.add_child(weapon_button)
- reload_button=_button("↻ ПЕРЕЗАРЯДКА")
- reload_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- reload_button.position=Vector2(-290,-205)
- reload_button.custom_minimum_size=Vector2(275,45)
- reload_button.pressed.connect(_start_reload)
- hud.add_child(reload_button)
- ammo_label=_label("30 / 30",18)
- ammo_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- ammo_label.position=Vector2(-290,-161)
- hud.add_child(ammo_label)
- reload_progress=ProgressBar.new()
- reload_progress.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- reload_progress.position=Vector2(-290,-212)
- reload_progress.size=Vector2(275,5)
- reload_progress.show_percentage=false
- reload_progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
- reload_progress.modulate=Color("#59e0cf")
- hud.add_child(reload_progress)
- _refresh_ammo_ui()
- weapon_status=_label("АВТО • "+str(WEAPONS[weapon_index]["name"]),14)
- weapon_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- weapon_status.position=Vector2(-290,-126)
- weapon_status.add_theme_color_override("font_color",Color("#83e9df"))
- hud.add_child(weapon_status)
- joystick_base=_panel(Vector2(32,-166),Vector2(132,132),Color(0.05,0.13,0.16,0.38))
- joystick_base.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
- joystick_base.mouse_filter=Control.MOUSE_FILTER_IGNORE
- hud.add_child(joystick_base)
- joystick_knob=_panel(Vector2(42,42),Vector2(48,48),Color(0.18,0.74,0.70,0.78))
- joystick_knob.mouse_filter=Control.MOUSE_FILTER_IGNORE
- joystick_base.add_child(joystick_knob)
- hit_marker=_label("✕",38)
- hit_marker.set_anchors_preset(Control.PRESET_CENTER)
- hit_marker.position=Vector2(-16,-24)
- hit_marker.add_theme_color_override("font_color",Color("#62f2de"))
- hit_marker.visible=false
- hud.add_child(hit_marker)
+ foreground=TextureRect.new()
+ foreground.texture=preload("res://assets/briefing/first-person.webp")
+ var paint:=ShaderMaterial.new()
+ paint.shader=preload("res://assets/briefing/finish.gdshader")
+ foreground.material=paint
+ foreground.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+ foreground.stretch_mode=TextureRect.STRETCH_SCALE
+ foreground.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ _hud_place(foreground,Control.PRESET_BOTTOM_RIGHT,Vector2(-545,-360),Vector2(561,368))
  damage_overlay=ColorRect.new()
- damage_overlay.color=Color(0.82,0.09,0.07,0.0)
- damage_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ damage_overlay.color=Color.TRANSPARENT
  damage_overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE
  hud.add_child(damage_overlay)
- hud.move_child(damage_overlay,0)
+ damage_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ radar=Radar.new()
+ radar.player=hero
+ radar.contacts=enemies
+ for prop in world_root.get_children():
+  if prop is MeshInstance3D and prop.mesh is BoxMesh and prop.get_child_count()>0 and prop.position.y>0:
+   var footprint:=Vector2(prop.mesh.size.x,prop.mesh.size.z)
+   radar.buildings.append(Rect2(Vector2(prop.position.x,prop.position.z)-footprint/2,footprint))
+ radar.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ _hud_place(radar,Control.PRESET_TOP_LEFT,Vector2(18,18),Vector2(154,154))
+ status_label=_hud_text("",17,Control.PRESET_TOP_LEFT,Vector2(16,174),Vector2(159,27))
+ status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ var score:=_panel(Vector2.ZERO,Vector2(184,57),Color("#151e26ce"))
+ _hud_place(score,Control.PRESET_CENTER_TOP,Vector2(-92,10),Vector2(184,57))
+ timer_label=_hud_text("00:00",27,Control.PRESET_CENTER_TOP,Vector2(-78,14),Vector2(76,44))
+ kills_label=_hud_text("",23,Control.PRESET_CENTER_TOP,Vector2(7,17),Vector2(78,39))
+ _combat_button("МЕНЮ",Control.PRESET_TOP_RIGHT,Vector2(-101,16),Vector2(85,46),_show_menu)
+ fire_button=_combat_button("ОГОНЬ",Control.PRESET_BOTTOM_RIGHT,Vector2(-116,-245),Vector2(91,91),func():pass)
+ fire_button.button_down.connect(func():fire_requested=true)
+ weapon_button=_combat_button("СМЕНА",Control.PRESET_BOTTOM_RIGHT,Vector2(-124,-101),Vector2(103,55),_cycle_weapon)
+ reload_button=_combat_button("↻",Control.PRESET_BOTTOM_RIGHT,Vector2(-195,-150),Vector2(64,64),_start_reload)
+ reload_button.add_theme_font_size_override("font_size",27)
+ ammo_label=_hud_text("",28,Control.PRESET_CENTER_BOTTOM,Vector2(202,-58),Vector2(178,41))
+ weapon_status=_hud_text("",14,Control.PRESET_CENTER_BOTTOM,Vector2(202,-79),Vector2(250,24))
+ reload_progress=ProgressBar.new()
+ reload_progress.show_percentage=false
+ _hud_place(reload_progress,Control.PRESET_CENTER_BOTTOM,Vector2(202,-18),Vector2(150,6))
+ hp_label=_hud_text("✚ 100",31,Control.PRESET_CENTER_BOTTOM,Vector2(-292,-62),Vector2(110,47))
+ health_bar=ProgressBar.new()
+ health_bar.show_percentage=false
+ var trough:=StyleBoxFlat.new()
+ trough.bg_color=Color("#292824a6")
+ var fill:=StyleBoxFlat.new()
+ fill.bg_color=Color("#ffd88c")
+ health_bar.add_theme_stylebox_override("background",trough)
+ health_bar.add_theme_stylebox_override("fill",fill)
+ _hud_place(health_bar,Control.PRESET_CENTER_BOTTOM,Vector2(-290,-18),Vector2(85,4))
+ var wallet:=_hud_text("",24,Control.PRESET_BOTTOM_LEFT,Vector2(28,-51),Vector2(160,34))
+ wallet.name="Balance"
+ joystick_base=_panel(Vector2.ZERO,Vector2(132,132),Color("#1a20264d"))
+ var ring:=StyleBoxFlat.new()
+ ring.bg_color=Color("#20232a55")
+ ring.set_corner_radius_all(66)
+ ring.border_color=Color("#fff1ca99")
+ ring.set_border_width_all(2)
+ joystick_base.add_theme_stylebox_override("panel",ring)
+ _hud_place(joystick_base,Control.PRESET_BOTTOM_LEFT,Vector2(57,-210),Vector2(132,132))
+ joystick_knob=_panel(Vector2(42,42),Vector2(48,48),Color.TRANSPARENT)
+ var knob:=ring.duplicate()
+ knob.bg_color=Color("#ffefcd44")
+ joystick_knob.add_theme_stylebox_override("panel",knob)
+ joystick_base.add_child(joystick_knob)
+ for axis in [Vector2.UP,Vector2.DOWN,Vector2.LEFT,Vector2.RIGHT]:
+  var tick:=ColorRect.new()
+  tick.color=Color("#eff2e5")
+  tick.mouse_filter=Control.MOUSE_FILTER_IGNORE
+  var dimensions:=Vector2(2,7) if axis.x==0 else Vector2(7,2)
+  _hud_place(tick,Control.PRESET_CENTER,axis*8-dimensions/2,dimensions)
+ hit_marker=_hud_text("×",30,Control.PRESET_CENTER,Vector2(-10,-24),Vector2(20,40))
+ hit_marker.visible=false
  menu_layer=Control.new()
- menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  layer.add_child(menu_layer)
+ menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func _cycle_weapon()->void:
  weapon_index=(weapon_index+1)%WEAPONS.size()
@@ -632,7 +707,7 @@ func _start_reload()->void:
 
 func _refresh_ammo_ui()->void:
  if is_instance_valid(ammo_label):
-  ammo_label.text="ПЕРЕЗАРЯДКА..." if reload_timer>0.0 else "ПАТРОНЫ  %d / %d"%[magazine_rounds[weapon_index],_magazine_capacity()]
+  ammo_label.text="ПЕРЕЗАРЯДКА..." if reload_timer>0.0 else "%d  /  %d"%[magazine_rounds[weapon_index],_magazine_capacity()]
  if is_instance_valid(reload_progress):
   reload_progress.visible=reload_timer>0.0
   reload_progress.value=100.0*(1.0-reload_timer/reload_duration)
@@ -640,77 +715,18 @@ func _refresh_ammo_ui()->void:
   reload_button.disabled=not playing or reload_timer>0.0 or magazine_rounds[weapon_index]>=_magazine_capacity()
 
 func _apply_weapon_skin()->void:
- if not is_instance_valid(hero): return
+ if not is_instance_valid(foreground): return
+ foreground.texture=load("res://assets/briefing/"+str(HAND_ART[weapon_index])+".webp")
  var skin_id:int=equipped_skins[weapon_index]
- var tint:=Color("#1d252b") if skin_id<0 else Color(SKIN_PALETTE[skin_id])
- for part_name in ["Weapon","Weapon sight","Weapon magazine"]:
-  var part:=hero.get_node_or_null(part_name) as MeshInstance3D
-  if part==null: continue
-  var material:=StandardMaterial3D.new()
-  material.albedo_color=tint if part_name=="Weapon" else tint.darkened(0.28)
-  material.metallic=0.38 if skin_id>=0 else 0.0
-  material.roughness=0.38 if skin_id>=0 else 0.9
-  part.material_override=material
- _update_weapon_silhouette()
- _add_skin_details(skin_id)
-
-func _update_weapon_silhouette()->void:
- if not is_instance_valid(hero): return
- var body:=hero.get_node_or_null("Weapon") as MeshInstance3D
- var barrel:=hero.get_node_or_null("Weapon barrel") as MeshInstance3D
- var magazine:=hero.get_node_or_null("Weapon magazine") as MeshInstance3D
- var sight:=hero.get_node_or_null("Weapon sight") as MeshInstance3D
- if body==null or barrel==null or magazine==null or sight==null: return
- match weapon_index:
-  0:
-   body.scale=Vector3.ONE
-   barrel.scale=Vector3.ONE
-   magazine.visible=true
-   sight.visible=true
-  1:
-   body.scale=Vector3(1.55,1.2,0.64)
-   barrel.scale=Vector3(1.4,1.2,0.48)
-   magazine.visible=false
-   sight.visible=false
-  2:
-   body.scale=Vector3(2.7,0.5,1.15)
-   barrel.scale=Vector3(1.0,0.7,0.45)
-   magazine.visible=false
-   sight.visible=true
-
-func _clear_skin_details()->void:
- if not is_instance_valid(hero): return
- var old:=hero.get_node_or_null("SkinDetails")
- if old!=null:
-  hero.remove_child(old)
-  old.queue_free()
-
-func _add_skin_details(skin_id:int)->void:
- _clear_skin_details()
- if skin_id<0 or not is_instance_valid(hero): return
- var details:=Node3D.new()
- details.name="SkinDetails"
- hero.add_child(details)
- var primary:=Color(SKIN_PALETTE[skin_id])
- var accent:=Color(str(Loot.RARITY_COLORS[int(Loot.ITEMS[skin_id]["rarity"])]))
- var style_id:int=skin_id%4
- for i in range(4):
-  var z:float=-0.87+float(i)*0.22
-  var stripe_color:=accent if i%2==0 else primary.lightened(0.36)
-  match style_id:
-   0:
-    _box(details,"Stripe %d"%i,Vector3(0.33,1.337,z),Vector3(0.165,0.018,0.06),stripe_color)
-   1:
-    _box(details,"Circuit %d"%i,Vector3(0.33,1.337,z),Vector3(0.065+float(i%2)*0.08,0.018,0.025),stripe_color)
-   2:
-    _box(details,"Panel %d"%i,Vector3(0.33,1.337,z),Vector3(0.17,0.018,0.11),stripe_color.darkened(0.2))
-   _:
-    _box(details,"Gold line %d"%i,Vector3(0.33,1.337,z),Vector3(0.13,0.018,0.025),accent)
- _box(details,"Skin emblem",Vector3(0.33,1.35,-0.53),Vector3(0.12,0.02,0.1),accent)
+ var paint:=foreground.material as ShaderMaterial
+ paint.set_shader_parameter("equipped",skin_id>=0)
+ if skin_id>=0:
+  paint.set_shader_parameter("finish",Color(SKIN_PALETTE[skin_id]))
+  paint.set_shader_parameter("pattern",skin_id%4)
 
 func _refresh_weapon_button()->void:
  if is_instance_valid(weapon_button):
-  weapon_button.text="↻ "+str(WEAPONS[weapon_index]["name"])
+  weapon_button.text="СМЕНА   %d"%(weapon_index+1)
  if is_instance_valid(weapon_status):
   weapon_status.text=("АВТО • " if auto_fire else "РУЧНОЙ • ")+str(WEAPONS[weapon_index]["name"])
 
@@ -724,7 +740,7 @@ func _panel(pos:Vector2,dimensions:Vector2,tint:Color)->Panel:
  style.bg_color=tint
  style.set_corner_radius_all(12)
  style.border_width_left=2
- style.border_color=Color("#35d6cb")
+ style.border_color=Color("#d4b47b")
  p.add_theme_stylebox_override("panel",style)
  return p
 
@@ -738,18 +754,19 @@ func _label(value:String,size:int)->Label:
 func _button(value:String)->Button:
  var b:=Button.new()
  b.text=value
+ b.add_theme_font_override("font",Briefing.FACE)
  b.custom_minimum_size=Vector2(160,45)
  b.add_theme_font_size_override("font_size",16)
  b.add_theme_color_override("font_color",Color("#e8f3f5"))
  b.add_theme_color_override("font_hover_color",Color("#ffffff"))
  var normal:=StyleBoxFlat.new()
- normal.bg_color=Color("#18303c")
+ normal.bg_color=Color("#232b31")
  normal.set_corner_radius_all(8)
  normal.border_width_left=3
- normal.border_color=Color("#2ebcb8")
+ normal.border_color=Color("#d9a859")
  b.add_theme_stylebox_override("normal",normal)
  var hover:=normal.duplicate()
- hover.bg_color=Color("#255363")
+ hover.bg_color=Color("#41474a")
  b.add_theme_stylebox_override("hover",hover)
  b.add_theme_stylebox_override("pressed",hover)
  b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
@@ -757,111 +774,45 @@ func _button(value:String)->Button:
 
 func _clear_menu()->void:
  for child in menu_layer.get_children():
+  menu_layer.remove_child(child)
   child.queue_free()
+
+func _briefing()->Briefing:
+ _clear_menu()
+ var screen:=Briefing.new()
+ menu_layer.add_child(screen)
+ screen.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ screen.frontier=stage
+ screen.selected=preview_stage
+ screen.experience=xp
+ screen.balance=credits
+ screen.navigate.connect(_navigate)
+ screen.deploy.connect(_start)
+ return screen
 
 func _show_menu()->void:
  playing=false
+ world_root.hide()
+ Input.mouse_mode=Input.MOUSE_MODE_VISIBLE
  hud.hide()
  menu_layer.show()
- _clear_menu()
- var shade:=ColorRect.new()
- shade.color=Color("#0a111b")
- shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
- menu_layer.add_child(shade)
- # Separate visual hierarchy: navigation rail, content viewport and operator stage.
- var top:=ColorRect.new()
- top.color=Color("#101f2a")
- top.size=Vector2(1280,62)
- menu_layer.add_child(top)
- var brand:=_label("ОТПУСК   /   TACTICAL",27)
- brand.position=Vector2(34,14)
- menu_layer.add_child(brand)
- var top_info:=_label("ANDROID   •   OPERATOR 03",13)
- top_info.position=Vector2(1010,22)
- top_info.add_theme_color_override("font_color",Color("#7cabb5"))
- menu_layer.add_child(top_info)
- var rail:=ColorRect.new()
- rail.color=Color("#0d1b25")
- rail.position=Vector2(0,62)
- rail.size=Vector2(330,658)
- menu_layer.add_child(rail)
- var section:=_label("ВЫБОР ОПЕРАЦИИ",14)
- section.position=Vector2(28,101)
- section.add_theme_color_override("font_color",Color("#5bdfd1"))
- menu_layer.add_child(section)
- var labels:=["▶  КАМПАНИЯ","∞  БЕСКОНЕЧНЫЙ","◈  АРСЕНАЛ","▣  КЕЙСЫ","▤  ПРОФИЛЬ","⚙  НАСТРОЙКИ"]
- for i in range(labels.size()):
-  var b:=_button(labels[i])
-  b.position=Vector2(25,148+i*71)
-  b.custom_minimum_size=Vector2(278,57)
-  b.alignment=HORIZONTAL_ALIGNMENT_LEFT
-  b.add_theme_font_size_override("font_size",19)
-  menu_layer.add_child(b)
-  if i==0:
-   var active:=StyleBoxFlat.new()
-   active.bg_color=Color("#137d7b")
-   active.set_corner_radius_all(7)
-   active.border_width_left=4
-   active.border_color=Color("#a7fff0")
-   b.add_theme_stylebox_override("normal",active)
-  match i:
-   0: b.pressed.connect(func(): _start(false))
-   1: b.pressed.connect(func(): _start(true))
-   2: b.pressed.connect(_show_loadout)
-   3: b.pressed.connect(_show_cases)
-   4: b.pressed.connect(_show_file)
-   5: b.pressed.connect(_show_settings)
- var main_card:=_panel(Vector2(356,100),Vector2(580,548),Color("#11232f"))
- main_card.add_theme_stylebox_override("panel",_rarity_panel_style(Color("#317c85")))
- menu_layer.add_child(main_card)
- var kicker:=_label("ДОСЬЕ  /  ОПЕРАЦИЯ %02d"%[stage+1],15)
- kicker.position=Vector2(385,131)
- kicker.add_theme_color_override("font_color",Color("#59d6c7"))
- menu_layer.add_child(kicker)
- var mission_title:=_label(str(Story.mission(stage)["name"]).to_upper(),31)
- mission_title.position=Vector2(385,172)
- menu_layer.add_child(mission_title)
- var divider:=ColorRect.new()
- divider.color=Color("#2a6671")
- divider.position=Vector2(385,229)
- divider.size=Vector2(510,2)
- menu_layer.add_child(divider)
- var briefing:=_label(str(Story.mission(stage)["brief"]),20)
- briefing.position=Vector2(385,255)
- briefing.custom_minimum_size=Vector2(500,130)
- briefing.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- menu_layer.add_child(briefing)
- var hint:=_label("ВЫЖИВАНИЕ   •   АВТОПРИЦЕЛ   •   ТАКТИКА",14)
- hint.position=Vector2(385,448)
- hint.add_theme_color_override("font_color",Color("#8fb2b8"))
- menu_layer.add_child(hint)
- var deploy:=_button("▶  НАЧАТЬ ОПЕРАЦИЮ")
- deploy.position=Vector2(385,516)
- deploy.custom_minimum_size=Vector2(510,78)
- deploy.add_theme_font_size_override("font_size",23)
- deploy.pressed.connect(func(): _start(false))
- menu_layer.add_child(deploy)
- var side:=_panel(Vector2(959,100),Vector2(294,548),Color("#10212b"))
- menu_layer.add_child(side)
- var operator_title:=_label("ОПЕРАТОР  /  03",21)
- operator_title.position=Vector2(981,130)
- menu_layer.add_child(operator_title)
- var operator_details:=_label("СТАТУС   ГОТОВ\n\nОПЫТ   %d\n\nАРСЕНАЛ   03"%xp,18)
- operator_details.position=Vector2(981,197)
- menu_layer.add_child(operator_details)
- var credits_label:=_label("◈   %d КРЕДИТОВ"%credits,21)
- credits_label.position=Vector2(981,402)
- credits_label.add_theme_color_override("font_color",Color("#ffd28a"))
- menu_layer.add_child(credits_label)
- var story:=_label("ЦЕЛЬ: ПОЛУЧИТЬ ОТПУСК ДО НОВОГО ГОДА",14)
- story.position=Vector2(981,512)
- story.custom_minimum_size=Vector2(250,65)
- story.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- menu_layer.add_child(story)
- var footer:=_label("ОТПУСК / TACTICAL     •     GODOT 4.3     •     MOBILE",13)
- footer.position=Vector2(29,679)
- footer.add_theme_color_override("font_color",Color("#719ca7"))
- menu_layer.add_child(footer)
+ preview_stage=stage
+ _briefing().lobby()
+
+func _navigate(section:String)->void:
+ match section:
+  "ЛОББИ": _show_menu()
+  "ИНВЕНТАРЬ": _show_collection()
+  "СНАРЯЖЕНИЕ": _show_loadout()
+  "МАГАЗИН": _show_cases()
+  "ПРОФИЛЬ": _show_file()
+  "НАСТРОЙКИ": _show_settings()
+  _:
+   if section.begins_with("этап"):
+    preview_stage=int(section.trim_prefix("этап"))
+   var screen:=_briefing()
+   screen.infinite=section=="БЕСКОНЕЧНЫЙ"
+   screen.operations()
 
 func _show_cases()->void:
  _show_subpage("МАГАЗИН / КЕЙСЫ")
@@ -976,7 +927,7 @@ func _show_case_roulette(item_id:int)->void:
  skip.custom_minimum_size=Vector2(470,47)
  skip.pressed.connect(_finish_case_spin.bind(item_id))
  menu_layer.add_child(skip)
- case_spin_tween=create_tween()
+ case_spin_tween=frame.create_tween()
  for step in range(1,steps+1):
   var delay:float=0.045+0.008*float(step*step)/float(steps)
   case_spin_tween.tween_interval(delay)
@@ -1210,10 +1161,13 @@ func _show_collection()->void:
  menu_layer.add_child(next)
 
 func _show_subpage(title_text:String)->void:
- _show_menu()
- # Replace the mission card with a dedicated opaque subpage.
+ var screen:=_briefing()
+ screen.picture("lobby",Vector2.ZERO,Vector2(1280,720))
+ screen.panel(Vector2.ZERO,Vector2(1280,720),Color("#121a23c9"))
+ screen.chrome(title_text.get_slice(" /",0))
+ # Existing inventory and shop controls occupy the right-hand panel.
  var content:=_panel(Vector2(356,100),Vector2(897,548),Color("#0c1a24"))
- content.add_theme_stylebox_override("panel",_rarity_panel_style(Color("#327f89")))
+ content.add_theme_stylebox_override("panel",_rarity_panel_style(Color("#a4814c")))
  menu_layer.add_child(content)
  var heading:=_label(title_text,27)
  heading.position=Vector2(385,124)
@@ -1294,20 +1248,37 @@ func _save_settings()->void:
  var file:=FileAccess.open(SETTINGS_PATH,FileAccess.WRITE)
  file.store_string(JSON.stringify({"graphics":graphics_level,"fps":fps_limit,"auto_fire":auto_fire}))
 
-func _start(is_endless:bool)->void:
+func _start(is_endless:bool, mission:=-1)->void:
+ active_stage=stage if is_endless or mission<0 else clampi(mission,0,stage)
+ hero.position=Vector3(0,0,4)
+ hero.rotation=Vector3.ZERO
+ pitch=0
+ elapsed=0
+ recoil_timer=0
+ look_touch_id=-1
+ if not DisplayServer.is_touchscreen_available() and DisplayServer.get_name()!="headless":
+  Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
  endless=is_endless
  kills=0
  hp=100
  damage_flash=0.0
  camera_kick=0.0
+ _update_camera(0)
  enemy_timer=0
  for e in enemies:
   if is_instance_valid(e): e.queue_free()
  enemies.clear()
  _clear_menu()
  playing=true
+ world_root.show()
  menu_layer.hide()
  hud.show()
+ hud.get_node("Balance").text="◈  %d"%credits
+ hp_label.text="✚ 100"
+ health_bar.value=100
+ timer_label.text="00:00"
+ damage_overlay.color=Color.TRANSPARENT
+ hit_marker.hide()
  fire_button.visible=not auto_fire
  fire_touch_id=-1
  fire_requested=false
@@ -1321,14 +1292,14 @@ func _start(is_endless:bool)->void:
  _refresh_ammo_ui()
  _refresh_weapon_button()
  _apply_weapon_skin()
- status_label.text="∞ БЕСКОНЕЧНЫЙ" if endless else str(Story.mission(stage)["name"])
+ status_label.text="∞ БЕСКОНЕЧНЫЙ" if endless else str(Story.mission(active_stage)["name"])
  kills_label.text="0 / ∞" if endless else "0 / %d"%_target()
 
 func _win()->void:
  playing=false
- if stage >= Story.MISSIONS.size()-1:
+ if active_stage >= Story.MISSIONS.size()-1:
   campaign_complete=true
- else:
+ elif active_stage==stage:
   stage+=1
  credits+=220+stage*45
  _save()
@@ -1338,13 +1309,21 @@ func _show_result(won:bool)->void:
  _show_menu()
  var result_text := "ОПЕРАЦИЯ ПРОВАЛЕНА"
  if won:
-  result_text = "РАПОРТ ПОДПИСАН! ОТПУСК ДО НОВОГО ГОДА!" if campaign_complete else "МИССИЯ ВЫПОЛНЕНА — СЛЕДУЮЩИЙ ЭТАП ОТКРЫТ"
+  result_text = "РАПОРТ ПОДПИСАН! ОТПУСК ДО НОВОГО ГОДА!" if active_stage==Story.MISSIONS.size()-1 else "МИССИЯ ВЫПОЛНЕНА"
  var l:=_label(result_text,26)
- l.position=Vector2(475,480)
+ l.position=Vector2(38,653)
+ l.add_theme_constant_override("outline_size",5)
  menu_layer.add_child(l)
 
 func _input(event:InputEvent)->void:
  if not playing: return
+ if event is InputEventMouseMotion and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+  _turn(event.relative*0.0023)
+ if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
+  fire_requested=true
+ if event is InputEventKey and event.pressed and not event.echo:
+  if event.keycode==KEY_R: _start_reload()
+  if event.keycode==KEY_Q: _cycle_weapon()
  if not auto_fire and event is InputEventKey and event.keycode==KEY_SPACE:
   if event.pressed and not event.echo:
    fire_requested=true
@@ -1370,14 +1349,29 @@ func _input(event:InputEvent)->void:
    touch_id=-1
    joystick=Vector2.ZERO
    _update_joystick_visual()
+  elif event.pressed and event.position.x>=get_viewport().get_visible_rect().size.x*0.45 and look_touch_id==-1:
+   var over_button:=false
+   for control in hud.get_children():
+    if control is Button and control.visible and control.get_global_rect().has_point(event.position):
+     over_button=true
+   if not over_button: look_touch_id=event.index
+  elif not event.pressed and event.index==look_touch_id:
+   look_touch_id=-1
+ if event is InputEventScreenDrag and event.index==look_touch_id:
+  _turn(event.relative*0.004)
  if event is InputEventScreenDrag and event.index==touch_id:
   joystick=((event.position-touch_origin)/65.0).limit_length()
   _update_joystick_visual()
  if event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
   _show_menu()
 
+func _turn(amount:Vector2)->void:
+ hero.rotation.y-=amount.x
+ pitch=clampf(pitch-amount.y,-1.18,1.18)
+
 func _notification(what:int)->void:
  if what==NOTIFICATION_APPLICATION_FOCUS_OUT:
+  look_touch_id=-1
   fire_touch_id=-1
   fire_requested=false
   touch_id=-1
