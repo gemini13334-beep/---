@@ -8,7 +8,7 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
   if(!Number.isFinite(size.y)||size.y<=0)throw new Error('Invalid GLTF model size: '+url);
   const factor=height/size.y;model.scale.setScalar(factor);
   const scaled=new THREE.Box3().setFromObject(model);model.position.y=offsetY-scaled.min.y;
-  model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});
+  model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone()}});
   parent.add(model);
   if(replace){for(const item of Array.isArray(replace)?replace:[replace])item.visible=false;}
   assetStatus.loaded++;
@@ -74,7 +74,7 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
 }e.lookAt(hero.position.x,0,hero.position.z);e.userData.motion=(e.userData.motion||0)+dt*7;e.position.y=Math.abs(Math.sin(e.userData.motion))*.035;e.userData.cool-=dt;if(d<2&&!blocked(e.position.x,e.position.z,hero.position.x,hero.position.z,.06)&&e.userData.cool<=0){e.userData.cool=1.25;if(invuln<=0){health=Math.max(0,health-12);invuln=.6;hpEl.textContent='HP '+health}}}
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
 for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;let wallHit=blocked(b.mesh.position.x-b.v.x*dt*28,b.mesh.position.z-b.v.z*dt*28,b.mesh.position.x,b.mesh.position.z,.05);let hit=wallHit?null:enemies.find(e=>Math.hypot(e.position.x-b.mesh.position.x,e.position.z-b.mesh.position.z)<.9);if(wallHit)b.ttl=0;if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;killsEl.textContent=kills+' / 12';if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
-for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){if(!o.userData.baseEmissive)o.userData.baseEmissive=o.material.emissive.clone();o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:1}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
+for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&!Array.isArray(o.material)&&o.material.emissive){if(!o.userData.baseEmissive){o.userData.baseEmissive=o.material.emissive.clone();o.userData.baseIntensity=o.material.emissiveIntensity}o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:o.userData.baseIntensity}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
 if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';showRestart()}}
 function showRestart(){
  if(document.getElementById('restart3d'))return;
@@ -82,10 +82,12 @@ function showRestart(){
  Object.assign(btn.style,{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:'4',padding:'18px 24px',background:'#d5a25d',color:'#15202a',border:'2px solid #fbe3b1',fontWeight:'bold',fontSize:'17px'});
  btn.onclick=()=>location.reload();document.body.append(btn)
 }
-let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();
+let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();let pausedBySystem=false;
 function frame(){
  if(!running3d)return;
  requestAnimationFrame(frame);
+ if(document.hidden){pausedBySystem=true;return}
+ if(pausedBySystem){clock.getDelta();fpsWindowStart=performance.now();frames=0;pausedBySystem=false}
  try{
   update();
   renderer.render(scene,camera);
@@ -118,5 +120,6 @@ renderer.domElement.addEventListener('webglcontextlost',event=>{
  document.body.append(loading);
 });
 renderer.domElement.addEventListener('webglcontextrestored',()=>location.reload());
+document.addEventListener('visibilitychange',()=>{if(document.hidden){move.x=move.y=0;knob.style.transform='';keys.clear();pausedBySystem=true}});
 frame();
 if(running3d)loading.remove();
