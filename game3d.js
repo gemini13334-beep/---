@@ -29,10 +29,20 @@ const floor=mat(0x344452,.85),wall=mat(0x607482),metal=mat(0x223544,.42,.65),amb
 function box(w,h,d,x,y,z,m,solid=false){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);if(solid)obstacles.push({x,z,w,d});return mesh}
 const obstacles=[];box(32,.3,34,0,-.2,0,floor);for(let x=-15;x<=15;x+=2){box(.025,.01,34,x,-.025,0,metal);box(32,.01,.025,0,-.025,x,metal)}
 box(32,5,.7,0,2.5,-17,wall);box(32,5,.7,0,2.5,17,wall);box(.7,5,34,-16,2.5,0,wall);box(.7,5,34,16,2.5,0,wall);
-for(let i=0;i<8;i++){let x=-11+(i%4)*7.3,z=-9+Math.floor(i/4)*17;box(3,1.3,2.4,x,.65,z,metal,true);box(2.6,.08,2,x,1.35,z,wall);if(i===0||i===3){const propAnchor=new THREE.Group();propAnchor.position.set(x,1.38,z);scene.add(propAnchor);loadModel('./models/crate.gltf',propAnchor,{height:1.05,offsetY:0})}box(.7,.9,.09,x,1.95,z-.7,cyan);const light=new THREE.PointLight(0x63cfff,9,7,2);light.position.set(x,2.3,z-.7);scene.add(light)}
-for(let i=0;i<6;i++){let x=-12+i*4.8;box(2.8,.09,.4,x,4.7,0,amber);const light=new THREE.PointLight(0xffdca6,13,10,2);light.position.set(x,4.25,0);scene.add(light)}
+for(let i=0;i<8;i++){let x=-11+(i%4)*7.3,z=-9+Math.floor(i/4)*17;box(3,1.3,2.4,x,.65,z,metal,true);box(2.6,.08,2,x,1.35,z,wall);if(i===0||i===3){const propAnchor=new THREE.Group();propAnchor.position.set(x,1.38,z);scene.add(propAnchor);loadModel('./models/crate.gltf',propAnchor,{height:1.05,offsetY:0})}box(.7,.9,.09,x,1.95,z-.7,cyan);if(i%4===0){const light=new THREE.PointLight(0x63cfff,5,8,2);light.position.set(x,2.3,z-.7);scene.add(light)}}
+for(let i=0;i<6;i++){let x=-12+i*4.8;box(2.8,.09,.4,x,4.7,0,amber);if(i%3===0){const light=new THREE.PointLight(0xffdca6,7,12,2);light.position.set(x,4.25,0);scene.add(light)}}
 function agent(color){const root=new THREE.Group(),suit=mat(color,.65,.25),skin=mat(0xf3c3a6),hair=mat(0xdde8f1);let body=new THREE.Mesh(new THREE.CapsuleGeometry(.43,.75,4,8),suit);body.position.y=1.15;root.add(body);let head=new THREE.Mesh(new THREE.SphereGeometry(.35,12,8),skin);head.position.y=2.05;root.add(head);let cap=new THREE.Mesh(new THREE.SphereGeometry(.37,12,8),hair);cap.position.set(0,2.19,-.07);cap.scale.y=.55;root.add(cap);let gun=new THREE.Mesh(new THREE.BoxGeometry(.17,.18,.9),metal);gun.position.set(.4,1.35,-.48);root.add(gun);root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(root);loadModel(color===0x39769a?'./models/hero.gltf':'./models/enemy.gltf',root,{height:2.45,replace:[...root.children]});return root}
-const hero=agent(0x39769a);hero.position.set(0,0,11);const enemies=[];function spawn(){const a=agent(0x943e48);a.position.set((Math.random()-.5)*25,0,-11+Math.random()*8);a.userData.hp=3;a.userData.cool=0;enemies.push(a)}for(let i=0;i<5;i++)spawn();
+const hero=agent(0x39769a);hero.position.set(0,0,11);const enemies=[];
+function spawn(){
+ const a=agent(0x943e48);let placed=false;
+ for(let tries=0;tries<80;tries++){
+  const x=(Math.random()-.5)*27,z=-12+Math.random()*15;
+  if(canMove(x,z)&&Math.hypot(x-hero.position.x,z-hero.position.z)>7&&!enemies.some(e=>Math.hypot(x-e.position.x,z-e.position.z)<1.6)){a.position.set(x,0,z);placed=true;break}
+ }
+ if(!placed)a.position.set(0,0,-13);
+ a.userData.hp=3;a.userData.cool=0;enemies.push(a)
+}
+for(let i=0;i<5;i++)spawn();
 // Segment versus expanded AABB: cover blocks projectiles and targeting.
 function blocked(ax,az,bx,bz,pad=0){
  for(const o of obstacles){const minX=o.x-o.w/2-pad,maxX=o.x+o.w/2+pad,minZ=o.z-o.d/2-pad,maxZ=o.z+o.d/2+pad;let t0=0,t1=1,dx=bx-ax,dz=bz-az;
@@ -65,5 +75,11 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
 for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;let wallHit=blocked(b.mesh.position.x-b.v.x*dt*28,b.mesh.position.z-b.v.z*dt*28,b.mesh.position.x,b.mesh.position.z,.05);let hit=wallHit?null:enemies.find(e=>Math.hypot(e.position.x-b.mesh.position.x,e.position.z-b.mesh.position.z)<.9);if(wallHit)b.ttl=0;if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;killsEl.textContent=kills+' / 12';if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
 for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){if(!o.userData.baseEmissive)o.userData.baseEmissive=o.material.emissive.clone();o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:1}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
-if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА — обнови страницу':'МИССИЯ ВЫПОЛНЕНА! 3D-ПРОТОТИП ПРОЙДЕН'}}
+if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';showRestart()}}
+function showRestart(){
+ if(document.getElementById('restart3d'))return;
+ const btn=document.createElement('button');btn.id='restart3d';btn.textContent='ИГРАТЬ СНОВА';
+ Object.assign(btn.style,{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:'4',padding:'18px 24px',background:'#d5a25d',color:'#15202a',border:'2px solid #fbe3b1',fontWeight:'bold',fontSize:'17px'});
+ btn.onclick=()=>location.reload();document.body.append(btn)
+}
 function frame(){requestAnimationFrame(frame);update();renderer.render(scene,camera)}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'54px',right:'12px',zIndex:'3',background:'#172838d9',color:'#f4d49d',border:'1px solid #b6c7d2',padding:'8px',fontSize:'11px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);loading.remove();frame();
