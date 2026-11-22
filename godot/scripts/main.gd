@@ -1038,8 +1038,10 @@ func _show_drop_reveal(item_id:int)->void:
  repeat.disabled=credits<repeat_cost
  repeat.pressed.connect(_open_case.bind(last_case_index))
  menu_layer.add_child(repeat)
- var hint:=_label("Предмет сохранён в коллекции. Дубликаты возвращают часть кредитов.",14)
- hint.position=Vector2(502,560)
+ var hint:=_label("Предмет сохранён. За дубликат начислены кредиты." if last_drop_duplicate else "Предмет сохранён в коллекции.",14)
+ hint.position=Vector2(502,557)
+ hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+ hint.set_deferred("size",Vector2(452,0))
  menu_layer.add_child(hint)
 
 func _rarity_panel_style(color:Color)->StyleBoxFlat:

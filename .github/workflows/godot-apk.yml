@@ -110,6 +110,7 @@ jobs:
       - name: Enable KVM
         run: |
           sudo chmod a+rw /dev/kvm
+          python3 -c "from PIL import Image" || python3 -m pip install Pillow
       - name: Install, launch and update on Android 15
         uses: reactivecircus/android-emulator-runner@v2
         with:
