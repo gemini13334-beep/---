@@ -20,6 +20,8 @@ var fire_timer := 0.0
 var joystick := Vector2.ZERO
 var touch_origin := Vector2.ZERO
 var touch_id := -1
+var joystick_base: Panel
+var joystick_knob: Panel
 var hud: Control
 var menu_layer: Control
 var status_label: Label
@@ -341,11 +343,13 @@ func _build_ui()->void:
  weapon.position=Vector2(-215,-90)
  weapon.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();weapon.text="↻ "+str(WEAPONS[weapon_index]["name"]))
  hud.add_child(weapon)
- var stick:=_button("◉  ДВИЖЕНИЕ")
- stick.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
- stick.position=Vector2(28,-90)
- stick.disabled=true
- hud.add_child(stick)
+ joystick_base=_panel(Vector2(32,-166),Vector2(132,132),Color(0.05,0.13,0.16,0.38))
+ joystick_base.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+ joystick_base.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ hud.add_child(joystick_base)
+ joystick_knob=_panel(Vector2(42,42),Vector2(48,48),Color(0.18,0.74,0.70,0.78))
+ joystick_knob.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ joystick_base.add_child(joystick_knob)
  hit_marker=_label("✕",38)
  hit_marker.set_anchors_preset(Control.PRESET_CENTER)
  hit_marker.position=Vector2(-16,-24)
@@ -522,6 +526,9 @@ func _start(is_endless:bool)->void:
  enemies.clear()
  _clear_menu()
  playing=true
+ touch_id=-1
+ joystick=Vector2.ZERO
+ _update_joystick_visual()
  status_label.text="∞ БЕСКОНЕЧНЫЙ" if endless else str(Story.mission(stage)["name"])
  kills_label.text="0 / ∞" if endless else "0 / %d"%_target()
 
@@ -546,17 +553,24 @@ func _show_result(won:bool)->void:
 func _input(event:InputEvent)->void:
  if not playing: return
  if event is InputEventScreenTouch:
-  if event.pressed and event.position.x < get_viewport().get_visible_rect().size.x*0.45:
+  if event.pressed and touch_id==-1 and event.position.x<get_viewport().get_visible_rect().size.x*0.45 and event.position.y>get_viewport().get_visible_rect().size.y*0.35:
    touch_id=event.index
    touch_origin=event.position
+   joystick=Vector2.ZERO
+   _update_joystick_visual()
   elif not event.pressed and event.index==touch_id:
    touch_id=-1
    joystick=Vector2.ZERO
+   _update_joystick_visual()
  if event is InputEventScreenDrag and event.index==touch_id:
-  var diff:Vector2=(event.position-touch_origin)/85.0
-  joystick=diff.limit_length()
+  joystick=((event.position-touch_origin)/65.0).limit_length()
+  _update_joystick_visual()
  if event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
   _show_menu()
+
+func _update_joystick_visual()->void:
+ if is_instance_valid(joystick_knob):
+  joystick_knob.position=Vector2(42,42)+joystick*34.0
 
 func _load()->void:
  if not FileAccess.file_exists(SAVE_PATH): return
