@@ -24,6 +24,8 @@ var last_drop_duplicate := false
 var case_spin_tween: Tween
 var case_spin_finished := false
 var last_case_index := 0
+var collection_filter := -1
+var collection_page := 0
 const SKIN_PALETTE := ["#71818b","#b8a17a","#a3b4bd","#a5e5ee","#36e5ca","#ff9d43","#6178ba","#a07be8","#e1bc6d","#ffca59","#d7515e","#f6d8fa"]
 var loot_rng := RandomNumberGenerator.new()
 var playing := false
@@ -756,28 +758,85 @@ func _equip_skin(item_id:int)->void:
  _save()
  _show_collection()
 
+func _set_collection_filter(value:int)->void:
+ collection_filter=value
+ collection_page=0
+ _show_collection()
+
+func _set_collection_page(value:int)->void:
+ collection_page=maxi(0,value)
+ _show_collection()
+
 func _show_collection()->void:
  _show_menu()
- var title:=_label("КОЛЛЕКЦИЯ  /  %d ИЗ %d"%[inventory.size(),Loot.ITEMS.size()],22)
- title.position=Vector2(475,208)
+ var title:=_label("АРСЕНАЛ / КОЛЛЕКЦИЯ  %d/%d"%[inventory.size(),Loot.ITEMS.size()],22)
+ title.position=Vector2(475,203)
  menu_layer.add_child(title)
  var back:=_button("← К КЕЙСАМ")
- back.position=Vector2(475,250)
- back.custom_minimum_size=Vector2(470,45)
+ back.position=Vector2(475,242)
+ back.custom_minimum_size=Vector2(230,43)
  back.pressed.connect(_show_cases)
  menu_layer.add_child(back)
- for i in range(inventory.size()):
-  var item_id:int=inventory[i]
+ var filters:=["ВСЕ","АВТОМАТ","СТЕПЛЕР","ПАПКА"]
+ for i in range(filters.size()):
+  var filter_value:int=i-1
+  var filter_button:=_button(("● " if collection_filter==filter_value else "")+filters[i])
+  filter_button.position=Vector2(475+i*127,297)
+  filter_button.custom_minimum_size=Vector2(121,40)
+  filter_button.pressed.connect(_set_collection_filter.bind(filter_value))
+  menu_layer.add_child(filter_button)
+ var filtered:Array[int]=[]
+ for item_id in inventory:
+  if collection_filter<0 or int(Loot.ITEMS[item_id]["weapon"])==collection_filter:
+   filtered.append(item_id)
+ filtered.sort_custom(func(a:int,b:int)->bool:
+  return int(Loot.ITEMS[a]["rarity"])>int(Loot.ITEMS[b]["rarity"])
+ )
+ var per_page:=6
+ var page_count:int=maxi(1,int(ceil(float(filtered.size())/float(per_page))))
+ collection_page=clampi(collection_page,0,page_count-1)
+ for i in range(collection_page*per_page,mini(filtered.size(),(collection_page+1)*per_page)):
+  var item_id:int=filtered[i]
   var item:Dictionary=Loot.ITEMS[item_id]
-  var col:int=int(i/8)
-  var row_index:int=i%8
+  var index_on_page:int=i-collection_page*per_page
+  var col:int=index_on_page%2
+  var row_index:int=int(index_on_page/2)
+  var x:float=475+col*260
+  var y:float=351+row_index*75
+  var rarity:int=int(item["rarity"])
+  var rarity_color:=Color(str(Loot.RARITY_COLORS[rarity]))
+  var card:=_panel(Vector2(x,y),Vector2(247,66),Color("#10232d"))
+  card.add_theme_stylebox_override("panel",_rarity_panel_style(rarity_color))
+  menu_layer.add_child(card)
   var equipped:bool=equipped_skins[int(item["weapon"])]==item_id
   var entry:=_button(("✓ " if equipped else "◈ ")+str(item["name"]))
-  entry.position=Vector2(475+col*250,310+row_index*38)
-  entry.custom_minimum_size=Vector2(238,34)
-  entry.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
+  entry.position=Vector2(x+7,y+6)
+  entry.custom_minimum_size=Vector2(233,32)
+  entry.add_theme_color_override("font_color",rarity_color)
   entry.pressed.connect(_equip_skin.bind(item_id))
   menu_layer.add_child(entry)
+  var sub:=_label(str(Loot.RARITY_NAMES[rarity])+("   /   ЭКИПИРОВАН" if equipped else "   /   НАЖМИТЕ ДЛЯ ВЫБОРА"),11)
+  sub.position=Vector2(x+12,y+43)
+  menu_layer.add_child(sub)
+ if filtered.is_empty():
+  var empty:=_label("В ЭТОЙ КАТЕГОРИИ ПОКА НЕТ СКИНОВ",17)
+  empty.position=Vector2(475,408)
+  menu_layer.add_child(empty)
+ var page_label:=_label("СТРАНИЦА %d / %d   •   ПРЕДМЕТОВ: %d"%[collection_page+1,page_count,filtered.size()],15)
+ page_label.position=Vector2(475,604)
+ menu_layer.add_child(page_label)
+ var prev:=_button("←")
+ prev.position=Vector2(800,595)
+ prev.custom_minimum_size=Vector2(72,42)
+ prev.disabled=collection_page==0
+ prev.pressed.connect(_set_collection_page.bind(collection_page-1))
+ menu_layer.add_child(prev)
+ var next:=_button("→")
+ next.position=Vector2(884,595)
+ next.custom_minimum_size=Vector2(72,42)
+ next.disabled=collection_page>=page_count-1
+ next.pressed.connect(_set_collection_page.bind(collection_page+1))
+ menu_layer.add_child(next)
 
 func _show_loadout()->void:
  _show_menu()
