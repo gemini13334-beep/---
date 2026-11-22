@@ -23,10 +23,11 @@ jobs:
         run: |
           node --check game3d.js
           node --check babylon-game.js
+          node --check texture-pack.js
       - name: Copy HTML game to Android assets
         run: |
           mkdir -p app/src/main/assets
-          cp index.html 3d.html game3d.js babylon.html babylon-game.js app/src/main/assets/
+          cp index.html 3d.html game3d.js babylon.html babylon-game.js texture-pack.js app/src/main/assets/
           mkdir -p app/src/main/assets/vendor
           curl --fail --location --retry 3 --silent --show-error https://cdn.jsdelivr.net/npm/babylonjs@7.54.3/babylon.js -o app/src/main/assets/vendor/babylon.js
           test $(wc -c < app/src/main/assets/vendor/babylon.js) -gt 1000000
