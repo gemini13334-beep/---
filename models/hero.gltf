@@ -1,0 +1,300 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "AFTERFALL original low-poly kit"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "armor",
+      "mesh": 0,
+      "translation": [
+        0,
+        1.14,
+        0
+      ],
+      "scale": [
+        0.35,
+        0.48,
+        0.24
+      ]
+    },
+    {
+      "name": "head",
+      "mesh": 1,
+      "translation": [
+        0,
+        2.02,
+        0
+      ],
+      "scale": [
+        0.26,
+        0.3,
+        0.27
+      ]
+    },
+    {
+      "name": "hair",
+      "mesh": 2,
+      "translation": [
+        0,
+        2.29,
+        -0.06
+      ],
+      "scale": [
+        0.3,
+        0.12,
+        0.3
+      ]
+    },
+    {
+      "name": "legL",
+      "mesh": 0,
+      "translation": [
+        -0.19,
+        0.43,
+        0
+      ],
+      "scale": [
+        0.13,
+        0.43,
+        0.15
+      ]
+    },
+    {
+      "name": "legR",
+      "mesh": 0,
+      "translation": [
+        0.19,
+        0.43,
+        0
+      ],
+      "scale": [
+        0.13,
+        0.43,
+        0.15
+      ]
+    },
+    {
+      "name": "armL",
+      "mesh": 0,
+      "translation": [
+        -0.46,
+        1.23,
+        0
+      ],
+      "scale": [
+        0.12,
+        0.39,
+        0.13
+      ]
+    },
+    {
+      "name": "armR",
+      "mesh": 0,
+      "translation": [
+        0.46,
+        1.23,
+        0
+      ],
+      "scale": [
+        0.12,
+        0.39,
+        0.13
+      ]
+    },
+    {
+      "name": "visor",
+      "mesh": 3,
+      "translation": [
+        0,
+        2.08,
+        -0.29
+      ],
+      "scale": [
+        0.23,
+        0.075,
+        0.035
+      ]
+    },
+    {
+      "name": "rifle",
+      "mesh": 3,
+      "translation": [
+        0.36,
+        1.32,
+        -0.43
+      ],
+      "scale": [
+        0.09,
+        0.11,
+        0.52
+      ]
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 1
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 2
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 3
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.13,
+          0.34,
+          0.47,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.92,
+          0.72,
+          0.59,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.79,
+          0.87,
+          0.97,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.06,
+          0.13,
+          0.2,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 168,
+      "uri": "data:application/octet-stream;base64,AACAvwAAgL8AAIC/AACAPwAAgL8AAIC/AACAPwAAgD8AAIC/AACAvwAAgD8AAIC/AACAvwAAgL8AAIA/AACAPwAAgL8AAIA/AACAPwAAgD8AAIA/AACAvwAAgD8AAIA/AAACAAEAAAADAAIABAAFAAYABAAGAAcAAAABAAUAAAAFAAQAAgADAAcAAgAHAAYAAQACAAYAAQAGAAUAAwAAAAQAAwAEAAcA"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 96,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 96,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 8,
+      "type": "VEC3",
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "max": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        7
+      ]
+    }
+  ]
+}
