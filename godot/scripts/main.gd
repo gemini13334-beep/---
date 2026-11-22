@@ -31,6 +31,9 @@ var world_root: Node3D
 var weapon_index := 0
 var hit_flash_timer := 0.0
 var hit_marker: Label
+var damage_overlay: ColorRect
+var damage_flash := 0.0
+var camera_kick := 0.0
 const WEAPONS := [
  {"name":"КАНЦЕЛЯРСКИЙ АВТОМАТ", "damage":26.0, "cooldown":0.22, "range":17.0},
  {"name":"СТЕПЛЕР", "damage":46.0, "cooldown":0.65, "range":11.0},
@@ -202,6 +205,7 @@ func _process(delta: float) -> void:
  if enemy_timer <= 0:
   enemy_timer = maxf(0.6,2.0-stage*0.15)
   _spawn_enemy()
+ var hp_before:=hp
  for e in enemies.duplicate():
   if not is_instance_valid(e): continue
   var diff: Vector3 = hero.position-e.position
@@ -211,6 +215,13 @@ func _process(delta: float) -> void:
   else:
    hp -= delta*float(e.get_meta("damage",12.0))
   e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
+ if hp<hp_before:
+  damage_flash=minf(0.55,damage_flash+delta*0.9)
+  camera_kick=minf(0.28,camera_kick+delta*0.5)
+ damage_flash=maxf(0.0,damage_flash-delta*1.7)
+ camera_kick=maxf(0.0,camera_kick-delta*1.2)
+ if is_instance_valid(damage_overlay):
+  damage_overlay.color=Color(0.82,0.09,0.07,damage_flash*0.5)
  if hit_flash_timer > 0.0:
   hit_flash_timer -= delta
   if hit_flash_timer <= 0.0 and is_instance_valid(hit_marker):
@@ -294,6 +305,8 @@ func _update_camera(delta: float)->void:
  var distance := 10.5 if playing else 8.0
  var desired := hero.position+Vector3(0,distance*0.85,distance)
  cam.position=cam.position.lerp(desired,clampf(delta*5,0,1))
+ if camera_kick>0.0:
+  cam.position+=Vector3(randf_range(-1.0,1.0),randf_range(-0.4,0.4),0)*camera_kick
  cam.look_at(hero.position+Vector3(0,1.0,0),Vector3.UP)
 
 func _build_ui()->void:
@@ -339,6 +352,12 @@ func _build_ui()->void:
  hit_marker.add_theme_color_override("font_color",Color("#62f2de"))
  hit_marker.visible=false
  hud.add_child(hit_marker)
+ damage_overlay=ColorRect.new()
+ damage_overlay.color=Color(0.82,0.09,0.07,0.0)
+ damage_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ damage_overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ hud.add_child(damage_overlay)
+ hud.move_child(damage_overlay,0)
  menu_layer=Control.new()
  menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  layer.add_child(menu_layer)
@@ -495,6 +514,8 @@ func _start(is_endless:bool)->void:
  endless=is_endless
  kills=0
  hp=100
+ damage_flash=0.0
+ camera_kick=0.0
  enemy_timer=0
  for e in enemies:
   if is_instance_valid(e): e.queue_free()
