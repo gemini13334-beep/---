@@ -80,8 +80,8 @@ func _build_world() -> void:
  for x in [-19.7,19.7]:
   _box(world_root,"Outer wall",Vector3(x,2.1,0),Vector3(0.65,4.2,42),Color("#b5aa94"),true)
  for i in range(18):
-  var x := float((i*13)%31)-15.0
-  var z := float((i*17)%33)-16.0
+  var x: float = float((i*13)%31)-15.0
+  var z: float = float((i*17)%33)-16.0
   if Vector2(x,z).length() < 5.0:
    continue
   _box(world_root,"Filing cabinet %d"%i,Vector3(x,0.9,z),Vector3(2.1,1.8,1.2),Color("#52616a") if i%3==0 else Color("#aa9c80"),true)
@@ -125,7 +125,7 @@ func _process(delta: float) -> void:
    hero.rotation.y = sin(Time.get_ticks_msec()*0.0005)*0.12
   _update_camera(delta)
   return
- var move := joystick
+ var move: Vector2 = joystick
  if Input.is_key_pressed(KEY_A): move.x -= 1
  if Input.is_key_pressed(KEY_D): move.x += 1
  if Input.is_key_pressed(KEY_W): move.y -= 1
@@ -139,7 +139,7 @@ func _process(delta: float) -> void:
   _spawn_enemy()
  for e in enemies.duplicate():
   if not is_instance_valid(e): continue
-  var diff := hero.position-e.position
+  var diff: Vector3 = hero.position-e.position
   diff.y = 0
   if diff.length()>1.4:
    e.position += diff.normalized()*delta*(1.6+stage*0.08)
@@ -149,17 +149,17 @@ func _process(delta: float) -> void:
  fire_timer -= delta
  if fire_timer<=0:
   var nearest: Node3D = null
-  var distance := float(WEAPONS[weapon_index]["range"])
+  var distance: float = float(WEAPONS[weapon_index]["range"])
   for e in enemies:
    if not is_instance_valid(e): continue
-   var d := hero.position.distance_to(e.position)
+   var d: float = hero.position.distance_to(e.position)
    if d<distance:
     distance=d
     nearest=e
   if nearest != null:
    fire_timer=float(WEAPONS[weapon_index]["cooldown"])
    hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
-   var remaining := float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
+   var remaining: float = float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
    nearest.set_meta("hp",remaining)
    if remaining<=0:
     enemies.erase(nearest)
