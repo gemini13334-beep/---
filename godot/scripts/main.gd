@@ -656,16 +656,17 @@ func _show_case_roulette(item_id:int)->void:
  for step in range(1,steps+1):
   var delay:float=0.045+0.008*float(step*step)/float(steps)
   tween.tween_interval(delay)
-  tween.tween_callback(func(current_step:int=step):
-   if not is_instance_valid(frame): return
-   for j in range(5):
-    if is_instance_valid(slots[j]):
-     _update_reel_slot(slots[j],reel[current_step+j])
-  )
+  tween.tween_callback(_advance_case_reel.bind(frame,slots,reel,step))
  tween.tween_interval(0.45)
  tween.tween_callback(func():
   if is_instance_valid(frame): _show_drop_reveal(item_id)
  )
+
+func _advance_case_reel(frame:Panel,slots:Array[Label],reel:Array[int],step:int)->void:
+ if not is_instance_valid(frame): return
+ for j in range(5):
+  if is_instance_valid(slots[j]):
+   _update_reel_slot(slots[j],reel[step+j])
 
 func _update_reel_slot(slot:Label,item_id:int)->void:
  var item:Dictionary=Loot.ITEMS[item_id]
