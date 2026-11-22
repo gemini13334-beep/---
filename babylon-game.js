@@ -37,7 +37,7 @@ function agent(name,x,z,hostile=false){const root=new B.TransformNode(name,scene
 const torso=B.MeshBuilder.CreateCapsule(name+' torso',{radius:.38,height:1.18,tessellation:12},scene);torso.parent=root;torso.position.y=1.23;torso.material=armor;shadow.addShadowCaster(torso);
 const head=B.MeshBuilder.CreateSphere(name+' helmet',{diameter:.65,segments:12},scene);head.parent=root;head.position.y=2.12;head.scaling.y=.78;head.material=dark;shadow.addShadowCaster(head);
 const visor=box(name+' visor',.5,.15,.12,0,0,0,metal);visor.parent=root;visor.position.set(0,2.1,-.31);
-for(const side of [-1,1]){const leg=box(name+' leg',.26,.72,.29,0,0,0,armor);leg.parent=root;leg.position.set(side*.22,.4,0);const arm=box(name+' arm',.23,.75,.26,0,0,0,armor);arm.parent=root;arm.position.set(side*.49,1.34,-.1)}
+const legs=[],arms=[];for(const side of [-1,1]){const leg=box(name+' leg',.26,.72,.29,0,0,0,armor);leg.parent=root;leg.position.set(side*.22,.4,0);legs.push(leg);const arm=box(name+' arm',.23,.75,.26,0,0,0,armor);arm.parent=root;arm.position.set(side*.49,1.34,-.1);arms.push(arm)}
 const vest=box(name+' ballistic vest',.79,.73,.38,0,0,0,dark);vest.parent=root;vest.position.set(0,1.4,-.16);
 for(const side of [-1,1]){
  const pad=box(name+' shoulder armor',.33,.28,.4,0,0,0,armor);pad.parent=root;pad.position.set(side*.52,1.7,-.07);
@@ -51,7 +51,16 @@ const stock=box(name+' rifle stock',.24,.2,.38,0,0,0,dark);stock.parent=root;sto
 const barrel=box(name+' rifle barrel',.08,.08,.7,0,0,0,metal);barrel.parent=root;barrel.position.set(.42,1.44,-1.22);
 const sight=box(name+' optic',.13,.14,.2,0,0,0,dark);sight.parent=root;sight.position.set(.42,1.62,-.63);
 const magazine=box(name+' magazine',.15,.34,.18,0,0,0,dark);magazine.parent=root;magazine.position.set(.42,1.19,-.59);magazine.rotation.x=-.2;
-return {root,hp:hostile?3:100,cool:0}}
+return {root,hp:hostile?3:100,cool:0,legs,arms,walkPhase:0,lastX:x,lastZ:z,recoil:0}}
+function animateAgent(a,dt){
+ const p=a.root.position,travel=Math.hypot(p.x-a.lastX,p.z-a.lastZ);a.lastX=p.x;a.lastZ=p.z;
+ const moving=Math.min(1,travel/Math.max(.001,dt*3));a.walkPhase+=travel*9;
+ const stride=Math.sin(a.walkPhase)*.42*moving;
+ a.legs[0].rotation.x=stride;a.legs[1].rotation.x=-stride;
+ a.arms[0].rotation.x=-stride*.35;a.arms[1].rotation.x=stride*.35;
+ a.recoil=Math.max(0,a.recoil-dt*5);
+ a.root.position.y=Math.abs(Math.sin(a.walkPhase))*.035*moving;
+}
 const player=agent('operator',0,12);const enemies=[];let kills=0,stage=Number(localStorage.getItem('babylon_stage')||1),mode=localStorage.getItem('babylon_mode')||'campaign',playing=false,over=false;
 const objective=()=>mode==='endless'?Infinity:12+(stage-1)*6;
 const killsEl=document.getElementById('kills'),healthEl=document.getElementById('health'),objectiveEl=document.getElementById('objective');
@@ -85,11 +94,11 @@ function updateWeapon(){if(weaponLabel)weaponLabel.textContent=weaponTypes[weapo
 function cycleWeapon(){weaponIndex=(weaponIndex+1)%weaponTypes.length;updateWeapon();shot=0}
 const weaponButton=document.getElementById('weaponSwitch');if(weaponButton)weaponButton.onclick=()=>{if(playing)cycleWeapon()};
 updateWeapon();
-function fire(from,to){const mesh=B.MeshBuilder.CreateSphere('shot',{diameter:.12,segments:6},scene);mesh.material=tracerMaterial;mesh.position.copyFrom(from);const v=to.subtract(from).normalize();projectiles.push({mesh,v,ttl:1,damage:weaponTypes[weaponIndex].damage,speed:weaponTypes[weaponIndex].speed})}
+function fire(from,to){player.recoil=.22;const mesh=B.MeshBuilder.CreateSphere('shot',{diameter:.12,segments:6},scene);mesh.material=tracerMaterial;mesh.position.copyFrom(from);const v=to.subtract(from).normalize();projectiles.push({mesh,v,ttl:1,damage:weaponTypes[weaponIndex].damage,speed:weaponTypes[weaponIndex].speed})}
 engine.runRenderLoop(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;
 if(playing){let x=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),z=move.z+(keys.has('s')?1:0)-(keys.has('w')?1:0),len=Math.hypot(x,z);if(len>1){x/=len;z/=len}
-const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p.x,p.z+z*dt*5))p.z+=z*dt*5;
-let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8){const vx=(p.x-ep.x)/d,vz=(p.z-ep.z)/d;if(canMove(ep.x+vx*dt*1.65,ep.z+vz*dt*1.65))ep.x+=vx*dt*1.65;if(canMove(ep.x,ep.z+vz*dt*1.65))ep.z+=vz*dt*1.65}e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;updateHUD();if(player.hp<=0)result(false)}}
+const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p.x,p.z+z*dt*5))p.z+=z*dt*5;animateAgent(player,dt);
+let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8){const vx=(p.x-ep.x)/d,vz=(p.z-ep.z)/d;if(canMove(ep.x+vx*dt*1.65,ep.z+vz*dt*1.65))ep.x+=vx*dt*1.65;if(canMove(ep.x,ep.z+vz*dt*1.65))ep.z+=vz*dt*1.65}e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;updateHUD();if(player.hp<=0)result(false)}}
 shot-=dt;if(closest&&dist<weaponTypes[weaponIndex].range&&shot<=0){shot=weaponTypes[weaponIndex].delay;player.root.rotation.y=Math.atan2(closest.root.position.x-p.x,-(closest.root.position.z-p.z));fire(p.add(new B.Vector3(0,1.4,0)),closest.root.position.add(new B.Vector3(0,1.3,0)))}
 for(let i=projectiles.length-1;i>=0;i--){const b=projectiles[i],prev=b.mesh.position.clone();b.mesh.position.addInPlace(b.v.scale(dt*b.speed));b.ttl-=dt;const hit=enemies.find(e=>{const center=e.root.position.add(new B.Vector3(0,1.3,0));const segment=b.mesh.position.subtract(prev),len2=segment.lengthSquared();const t=len2>0?Math.max(0,Math.min(1,B.Vector3.Dot(center.subtract(prev),segment)/len2)):0;return B.Vector3.DistanceSquared(center,prev.add(segment.scale(t)))<.58});if(hit){hit.hp-=b.damage;b.ttl=0;if(hit.hp<=0){hit.root.getChildMeshes().forEach(m=>m.dispose());hit.root.dispose();enemies.splice(enemies.indexOf(hit),1);kills++;updateHUD();if(kills>=objective())result(true);else if(enemies.length<5)spawn()}}if(b.ttl<=0){b.mesh.dispose();projectiles.splice(i,1)}}
 camera.target=B.Vector3.Lerp(camera.target,p.add(new B.Vector3(0,1,0)),Math.min(1,dt*5));camera.alpha=-Math.PI/2;camera.beta=1.02}
