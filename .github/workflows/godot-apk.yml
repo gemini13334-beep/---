@@ -35,7 +35,7 @@ jobs:
           export ANDROID_SDK_ROOT=/opt/android-sdk
           export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --sdk_root=/opt/android-sdk --licenses >/dev/null || true
-          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-34" "build-tools;33.0.2" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-33" "platforms;android-34" "build-tools;33.0.2" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
           echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> "$GITHUB_ENV"
           mkdir -p /github/home/.local/share/godot/export_templates
@@ -67,7 +67,7 @@ jobs:
           echo "=== GODOT SETTINGS ==="
           grep -E "export/android|debug_keystore|java_sdk" /root/.config/godot/editor_settings-4.3.tres || true
           strace -f -e trace=file -o /tmp/godot-file-access.log godot --headless --verbose --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk 2>&1 | tee /tmp/godot-export.log
-          echo "=== MISSING ANDROID FILES ==="
+          echo "=== MISSING ANDROID FILES (diagnostic only; loader probes may be harmless) ==="
           grep "ENOENT" /tmp/godot-file-access.log | grep -E "android|sdk|godot|keystore|java|build-tools|apk" | tail -70 || true
           if grep -E "Cannot export|Project export.*failed|ERROR:" /tmp/godot-export.log; then exit 1; fi
           test -s godot/build/Otpusk-Tactical-Godot.apk
