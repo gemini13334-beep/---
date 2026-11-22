@@ -27,6 +27,7 @@ var menu_layer: Control
 var status_label: Label
 var hp_label: Label
 var health_bar: ProgressBar
+var weapon_button: Button
 var kills_label: Label
 var hero: Node3D
 var cam: Camera3D
@@ -345,7 +346,7 @@ func _build_ui()->void:
  layer.add_child(hud)
  var bar:=HBoxContainer.new()
  bar.position=Vector2(28,20)
- var hud_strip:=_panel(Vector2(18,12),Vector2(390,60),Color(0.025,0.065,0.085,0.82))
+ var hud_strip:=_panel(Vector2(18,12),Vector2(475,60),Color(0.025,0.065,0.085,0.82))
  hud.add_child(hud_strip)
  hud.move_child(hud_strip,0)
  hud.add_child(bar)
@@ -370,11 +371,12 @@ func _build_ui()->void:
  pause.position=Vector2(-190,14)
  pause.pressed.connect(_show_menu)
  hud.add_child(pause)
- var weapon:=_button("↻ ОРУЖИЕ")
- weapon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
- weapon.position=Vector2(-215,-90)
- weapon.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();weapon.text="↻ "+str(WEAPONS[weapon_index]["name"]))
- hud.add_child(weapon)
+ weapon_button=_button("↻ "+str(WEAPONS[weapon_index]["name"]))
+ weapon_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ weapon_button.position=Vector2(-290,-90)
+ weapon_button.custom_minimum_size=Vector2(275,58)
+ weapon_button.pressed.connect(_cycle_weapon)
+ hud.add_child(weapon_button)
  joystick_base=_panel(Vector2(32,-166),Vector2(132,132),Color(0.05,0.13,0.16,0.38))
  joystick_base.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
  joystick_base.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -397,6 +399,14 @@ func _build_ui()->void:
  menu_layer=Control.new()
  menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  layer.add_child(menu_layer)
+
+func _cycle_weapon()->void:
+ weapon_index=(weapon_index+1)%WEAPONS.size()
+ _refresh_weapon_button()
+
+func _refresh_weapon_button()->void:
+ if is_instance_valid(weapon_button):
+  weapon_button.text="↻ "+str(WEAPONS[weapon_index]["name"])
 
 func _panel(pos:Vector2,dimensions:Vector2,tint:Color)->Panel:
  var p:=Panel.new()
@@ -561,6 +571,8 @@ func _start(is_endless:bool)->void:
  touch_id=-1
  joystick=Vector2.ZERO
  _update_joystick_visual()
+ weapon_index=0
+ _refresh_weapon_button()
  status_label.text="∞ БЕСКОНЕЧНЫЙ" if endless else str(Story.mission(stage)["name"])
  kills_label.text="0 / ∞" if endless else "0 / %d"%_target()
 
