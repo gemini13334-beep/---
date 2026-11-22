@@ -28,6 +28,7 @@ var status_label: Label
 var hp_label: Label
 var health_bar: ProgressBar
 var weapon_button: Button
+var weapon_status: Label
 var kills_label: Label
 var hero: Node3D
 var cam: Camera3D
@@ -380,6 +381,11 @@ func _build_ui()->void:
  weapon_button.custom_minimum_size=Vector2(275,66)
  weapon_button.pressed.connect(_cycle_weapon)
  hud.add_child(weapon_button)
+ weapon_status=_label("АВТО • "+str(WEAPONS[weapon_index]["name"]),14)
+ weapon_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ weapon_status.position=Vector2(-290,-126)
+ weapon_status.add_theme_color_override("font_color",Color("#83e9df"))
+ hud.add_child(weapon_status)
  joystick_base=_panel(Vector2(32,-166),Vector2(132,132),Color(0.05,0.13,0.16,0.38))
  joystick_base.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
  joystick_base.mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -410,6 +416,8 @@ func _cycle_weapon()->void:
 func _refresh_weapon_button()->void:
  if is_instance_valid(weapon_button):
   weapon_button.text="↻ "+str(WEAPONS[weapon_index]["name"])
+ if is_instance_valid(weapon_status):
+  weapon_status.text=("АВТО • " if auto_fire else "РУЧНОЙ • ")+str(WEAPONS[weapon_index]["name"])
 
 func _panel(pos:Vector2,dimensions:Vector2,tint:Color)->Panel:
  var p:=Panel.new()
@@ -463,6 +471,19 @@ func _show_menu()->void:
  shade.color=Color(0.018,0.035,0.055,0.94)
  shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  menu_layer.add_child(shade)
+ var header_strip:=ColorRect.new()
+ header_strip.color=Color(0.035,0.09,0.115,0.94)
+ header_strip.position=Vector2(0,0)
+ header_strip.size=Vector2(1280,36)
+ header_strip.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(header_strip)
+ var nav:=_label("ОПЕРАЦИИ     /     АРСЕНАЛ     /     ПРОФИЛЬ     /     ПАРАМЕТРЫ",14)
+ nav.position=Vector2(55,8)
+ nav.add_theme_color_override("font_color",Color("#81cfc9"))
+ menu_layer.add_child(nav)
+ var build_tag:=_label("TACTICAL  •  ANDROID",13)
+ build_tag.position=Vector2(1050,8)
+ menu_layer.add_child(build_tag)
  var accent:=ColorRect.new()
  accent.color=Color("#36d4c6")
  accent.position=Vector2(55,93)
@@ -482,6 +503,13 @@ func _show_menu()->void:
   b.position=Vector2(55,215+i*62)
   b.custom_minimum_size=Vector2(360,49)
   menu_layer.add_child(b)
+  if i==0:
+   var primary:=StyleBoxFlat.new()
+   primary.bg_color=Color("#258f8b")
+   primary.set_corner_radius_all(8)
+   primary.border_width_left=4
+   primary.border_color=Color("#a7fff0")
+   b.add_theme_stylebox_override("normal",primary)
   match i:
    0: b.pressed.connect(func(): _start(false))
    1: b.pressed.connect(func(): _start(true))
@@ -498,6 +526,18 @@ func _show_menu()->void:
  briefing.custom_minimum_size=Vector2(500,100)
  briefing.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  menu_layer.add_child(briefing)
+ var operator_panel:=_panel(Vector2(1030,198),Vector2(215,205),Color(0.055,0.12,0.15,0.90))
+ menu_layer.add_child(operator_panel)
+ var operator_title:=_label("ОПЕРАТОР",19)
+ operator_title.position=Vector2(1050,216)
+ menu_layer.add_child(operator_title)
+ var operator_details:=_label("СТАТУС: ГОТОВ\nАРСЕНАЛ: 03\nОПЫТ: %d"%xp,15)
+ operator_details.position=Vector2(1050,259)
+ menu_layer.add_child(operator_details)
+ var footer:=_label("ОТПУСК / TACTICAL    •    МОБИЛЬНАЯ ОПЕРАЦИЯ    •    GODOT 4",13)
+ footer.position=Vector2(55,655)
+ footer.add_theme_color_override("font_color",Color("#83b7b8"))
+ menu_layer.add_child(footer)
 
 func _show_loadout()->void:
  _show_menu()
