@@ -18,9 +18,24 @@ jobs:
           echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
           echo "JAVA_HOME=${JAVA_HOME:-unset}"
           ls -la /root/.local/share/godot/export_templates/ || true
+      - name: Configure Android SDK, templates and debug signing
+        run: |
+          set -eu
+          export HOME=/root
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+          echo "HOME=/root" >> "$GITHUB_ENV"
+          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=/usr/lib/android-sdk" >> "$GITHUB_ENV"
+          mkdir -p /github/home/.local/share/godot/export_templates
+          cp -r /root/.local/share/godot/export_templates/4.3.stable /github/home/.local/share/godot/export_templates/
+          mkdir -p /github/home/.android
+          keytool -genkeypair -v -keystore /github/home/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          mkdir -p /github/home/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/usr/lib/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/github/home/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /github/home/.config/godot/editor_settings-4.tres
       - name: Import project and check scripts
         run: |
-          godot --headless --path godot --editor --quit
+          godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/godot-import.log; then exit 1; fi
           godot --headless --path godot --quit-after 2
       - name: Export debug Android APK
         run: |
