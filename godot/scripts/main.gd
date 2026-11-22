@@ -616,7 +616,61 @@ func _open_case(index:int)->void:
  else:
   inventory.append(item_id)
  _save()
- _show_drop_reveal(item_id)
+ _show_case_roulette(item_id)
+
+func _show_case_roulette(item_id:int)->void:
+ _show_menu()
+ var title:=_label("ВСКРЫТИЕ КЕЙСА  /  СКАНИРОВАНИЕ",23)
+ title.position=Vector2(475,218)
+ menu_layer.add_child(title)
+ var frame:=_panel(Vector2(472,280),Vector2(515,170),Color("#0b1e29"))
+ menu_layer.add_child(frame)
+ var slots:Array[Label]=[]
+ for i in range(5):
+  var card:=_panel(Vector2(488+i*100,304),Vector2(92,110),Color("#20313e"))
+  menu_layer.add_child(card)
+  var name_label:=_label("...",12)
+  name_label.position=Vector2(494+i*100,340)
+  name_label.custom_minimum_size=Vector2(80,65)
+  name_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+  name_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  menu_layer.add_child(name_label)
+  slots.append(name_label)
+ var marker:=ColorRect.new()
+ marker.color=Color("#65f2dd")
+ marker.position=Vector2(731,290)
+ marker.size=Vector2(3,140)
+ marker.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(marker)
+ var hint:=_label("ИДЁТ ВЫБОР НАГРАДЫ...",16)
+ hint.position=Vector2(475,490)
+ menu_layer.add_child(hint)
+ var steps:=24
+ var reel:Array[int]=[]
+ for i in range(steps+5):
+  reel.append(loot_rng.randi_range(0,Loot.ITEMS.size()-1))
+ reel[steps+2]=item_id
+ for j in range(5):
+  _update_reel_slot(slots[j],reel[j])
+ var tween:=create_tween()
+ for step in range(1,steps+1):
+  var delay:float=0.045+0.008*float(step*step)/float(steps)
+  tween.tween_interval(delay)
+  tween.tween_callback(func(current_step:int=step):
+   if not is_instance_valid(frame): return
+   for j in range(5):
+    if is_instance_valid(slots[j]):
+     _update_reel_slot(slots[j],reel[current_step+j])
+  )
+ tween.tween_interval(0.45)
+ tween.tween_callback(func():
+  if is_instance_valid(frame): _show_drop_reveal(item_id)
+ )
+
+func _update_reel_slot(slot:Label,item_id:int)->void:
+ var item:Dictionary=Loot.ITEMS[item_id]
+ slot.text=str(item["name"])
+ slot.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
 
 func _show_drop_reveal(item_id:int)->void:
  _show_menu()
