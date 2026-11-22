@@ -29,6 +29,8 @@ var hero: Node3D
 var cam: Camera3D
 var world_root: Node3D
 var weapon_index := 0
+var hit_flash_timer := 0.0
+var hit_marker: Label
 const WEAPONS := [
  {"name":"КАНЦЕЛЯРСКИЙ АВТОМАТ", "damage":26.0, "cooldown":0.22, "range":17.0},
  {"name":"СТЕПЛЕР", "damage":46.0, "cooldown":0.65, "range":11.0},
@@ -172,6 +174,10 @@ func _process(delta: float) -> void:
   else:
    hp -= delta*12.0
   e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
+ if hit_flash_timer > 0.0:
+  hit_flash_timer -= delta
+  if hit_flash_timer <= 0.0 and is_instance_valid(hit_marker):
+   hit_marker.visible=false
  fire_timer -= delta
  if auto_fire and fire_timer<=0:
   var nearest: Node3D = null
@@ -187,6 +193,7 @@ func _process(delta: float) -> void:
    hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
    var remaining: float = float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
    nearest.set_meta("hp",remaining)
+   _show_hit_feedback(nearest)
    if remaining<=0:
     enemies.erase(nearest)
     nearest.queue_free()
@@ -200,6 +207,15 @@ func _process(delta: float) -> void:
   _show_result(false)
  hp_label.text="✚ %d"%ceili(maxf(hp,0))
  _update_camera(delta)
+
+func _show_hit_feedback(target:Node3D)->void:
+ hit_flash_timer=0.13
+ if is_instance_valid(hit_marker):
+  hit_marker.visible=true
+ var flash:=_box(target,"Hit flash",Vector3(0,1.4,-0.42),Vector3(0.92,0.65,0.08),Color("#ff7759"))
+ var tween:=create_tween()
+ tween.tween_property(flash,"scale",Vector3(0.1,0.1,0.1),0.18)
+ tween.tween_callback(flash.queue_free)
 
 func _target()->int:
  return int(Story.mission(stage)["kills"])
@@ -248,6 +264,12 @@ func _build_ui()->void:
  stick.position=Vector2(28,-90)
  stick.disabled=true
  hud.add_child(stick)
+ hit_marker=_label("✕",38)
+ hit_marker.set_anchors_preset(Control.PRESET_CENTER)
+ hit_marker.position=Vector2(-16,-24)
+ hit_marker.add_theme_color_override("font_color",Color("#62f2de"))
+ hit_marker.visible=false
+ hud.add_child(hit_marker)
  menu_layer=Control.new()
  menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  layer.add_child(menu_layer)
