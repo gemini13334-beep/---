@@ -203,30 +203,51 @@ func _build_ui()->void:
  hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
  layer.add_child(hud)
  var bar:=HBoxContainer.new()
- bar.position=Vector2(18,12)
+ bar.position=Vector2(28,20)
+ var hud_strip:=_panel(Vector2(18,12),Vector2(390,60),Color(0.025,0.065,0.085,0.82))
+ hud.add_child(hud_strip)
+ hud.move_child(hud_strip,0)
  hud.add_child(bar)
  hp_label=_label("✚ 100",27)
  bar.add_child(hp_label)
  kills_label=_label("0 / %d"%_target(),22)
  bar.add_child(kills_label)
  status_label=_label("ОПЕРАЦИЯ",17)
- status_label.position=Vector2(470,12)
+ status_label.position=Vector2(475,22)
  hud.add_child(status_label)
  var pause:=_button("Ⅱ  МЕНЮ")
- pause.position=Vector2(1110,12)
+ pause.position=Vector2(1080,14)
+ pause.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+ pause.position=Vector2(-190,14)
  pause.pressed.connect(_show_menu)
  hud.add_child(pause)
  var weapon:=_button("↻ ОРУЖИЕ")
- weapon.position=Vector2(1090,610)
+ weapon.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ weapon.position=Vector2(-215,-90)
  weapon.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();weapon.text="↻ "+str(WEAPONS[weapon_index]["name"]))
  hud.add_child(weapon)
  var stick:=_button("◉  ДВИЖЕНИЕ")
- stick.position=Vector2(28,610)
+ stick.set_anchors_preset(Control.PRESET_BOTTOM_LEFT)
+ stick.position=Vector2(28,-90)
  stick.disabled=true
  hud.add_child(stick)
  menu_layer=Control.new()
  menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  layer.add_child(menu_layer)
+
+func _panel(pos:Vector2,dimensions:Vector2,tint:Color)->Panel:
+ var p:=Panel.new()
+ p.position=pos
+ p.custom_minimum_size=dimensions
+ p.size=dimensions
+ p.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ var style:=StyleBoxFlat.new()
+ style.bg_color=tint
+ style.set_corner_radius_all(12)
+ style.border_width_left=2
+ style.border_color=Color("#35d6cb")
+ p.add_theme_stylebox_override("panel",style)
+ return p
 
 func _label(value:String,size:int)->Label:
  var l:=Label.new()
@@ -240,6 +261,19 @@ func _button(value:String)->Button:
  b.text=value
  b.custom_minimum_size=Vector2(160,45)
  b.add_theme_font_size_override("font_size",16)
+ b.add_theme_color_override("font_color",Color("#e8f3f5"))
+ b.add_theme_color_override("font_hover_color",Color("#ffffff"))
+ var normal:=StyleBoxFlat.new()
+ normal.bg_color=Color("#18303c")
+ normal.set_corner_radius_all(8)
+ normal.border_width_left=3
+ normal.border_color=Color("#2ebcb8")
+ b.add_theme_stylebox_override("normal",normal)
+ var hover:=normal.duplicate()
+ hover.bg_color=Color("#255363")
+ b.add_theme_stylebox_override("hover",hover)
+ b.add_theme_stylebox_override("pressed",hover)
+ b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
  return b
 
 func _clear_menu()->void:
@@ -250,9 +284,14 @@ func _show_menu()->void:
  playing=false
  _clear_menu()
  var shade:=ColorRect.new()
- shade.color=Color(0.04,0.09,0.13,0.88)
+ shade.color=Color(0.018,0.035,0.055,0.94)
  shade.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  menu_layer.add_child(shade)
+ var accent:=ColorRect.new()
+ accent.color=Color("#36d4c6")
+ accent.position=Vector2(55,93)
+ accent.size=Vector2(360,3)
+ menu_layer.add_child(accent)
  var title:=_label("ОТПУСК / TACTICAL",37)
  title.position=Vector2(55,42)
  menu_layer.add_child(title)
@@ -273,8 +312,13 @@ func _show_menu()->void:
    2: b.pressed.connect(_show_loadout)
    3: b.pressed.connect(_show_file)
    4: b.pressed.connect(_show_settings)
+ var mission_panel:=_panel(Vector2(455,198),Vector2(545,205),Color(0.065,0.13,0.16,0.88))
+ menu_layer.add_child(mission_panel)
+ var mission_title:=_label("ОПЕРАЦИЯ / %02d  ·  %s"%[stage+1,str(Story.mission(stage)["name"])],22)
+ mission_title.position=Vector2(475,214)
+ menu_layer.add_child(mission_title)
  var briefing:=_label(str(Story.mission(stage)["brief"]),17)
- briefing.position=Vector2(475,220)
+ briefing.position=Vector2(475,260)
  briefing.custom_minimum_size=Vector2(500,100)
  briefing.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  menu_layer.add_child(briefing)
