@@ -119,11 +119,18 @@ function showRestart(){
 }
 let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();let pausedBySystem=false,pausedByPlayer=false;
 const pauseButton=document.getElementById('pause3d'),pauseOverlay=document.createElement('div');
-pauseOverlay.style.cssText='position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;background:#0a1420df;color:#f5d69b;font:bold 24px Arial;flex-direction:column;gap:20px';
-const pauseTitle=document.createElement('div');pauseTitle.textContent='ПАУЗА';
+pauseOverlay.style.cssText='position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;background:linear-gradient(115deg,#0a1420f5,#263846eb);color:#f1e6ce;font:bold 20px Arial;flex-direction:column;gap:16px;padding:24px;text-align:center';
+const pauseTitle=document.createElement('div');pauseTitle.textContent='ОПЕРАЦИЯ ПРИОСТАНОВЛЕНА';pauseTitle.style.cssText='font-size:clamp(18px,4vw,30px);letter-spacing:3px;color:#e6b65b';
+const pauseDetails=document.createElement('div');pauseDetails.style.cssText='font:12px Arial;color:#b9c8cf;letter-spacing:2px';pauseDetails.textContent='ТАКТИЧЕСКИЙ РЕЖИМ · 3D';
 const resumeButton=document.createElement('button');resumeButton.textContent='ПРОДОЛЖИТЬ';resumeButton.style.cssText='padding:16px 24px;background:#d9a75e;color:#14202a;border:0;font-weight:bold';
-pauseOverlay.append(pauseTitle,resumeButton);document.body.append(pauseOverlay);
-function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
+const pausePanel=document.createElement('div');pausePanel.style.cssText='display:flex;flex-direction:column;gap:12px;width:min(350px,92vw);padding:22px;border:1px solid #8da0a866;background:#12202bea;box-shadow:0 12px 50px #0008';
+const pauseStats=document.createElement('div');pauseStats.style.cssText='font:13px Arial;color:#c5d1d7;letter-spacing:1px';
+const pauseQuality=document.createElement('button');pauseQuality.style.cssText='padding:13px;background:#273b49;color:#e5d7b9;border:1px solid #708795;font-weight:bold';
+pauseQuality.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};
+const pauseRestart=document.createElement('button');pauseRestart.textContent='НАЧАТЬ ЗАНОВО';pauseRestart.style.cssText='padding:13px;background:#24313a;color:#d4c9ba;border:1px solid #566977;font-weight:bold';pauseRestart.onclick=()=>location.reload();
+resumeButton.style.cssText='padding:15px;background:#dcae62;color:#15202a;border:0;font-weight:900;letter-spacing:1px';
+pausePanel.append(pauseTitle,pauseDetails,pauseStats,resumeButton,pauseQuality,pauseRestart);pauseOverlay.append(pausePanel);document.body.append(pauseOverlay);
+function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';if(pausedByPlayer){pauseStats.textContent='ЗДОРОВЬЕ '+health+'  |  БРОНЯ '+armor+'  |  ЦЕЛИ '+kills+'/12';pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase()}pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
 pauseButton.addEventListener('click',togglePause);resumeButton.addEventListener('click',togglePause);
 function frame(){
  if(!running3d)return;
