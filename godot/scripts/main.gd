@@ -26,6 +26,7 @@ var hud: Control
 var menu_layer: Control
 var status_label: Label
 var hp_label: Label
+var health_bar: ProgressBar
 var kills_label: Label
 var hero: Node3D
 var cam: Camera3D
@@ -277,6 +278,9 @@ func _process(delta: float) -> void:
   playing=false
   _show_result(false)
  hp_label.text="✚ %d"%ceili(maxf(hp,0))
+ if is_instance_valid(health_bar):
+  health_bar.value=clampf(hp,0.0,100.0)
+  health_bar.modulate=Color("#e96c62") if hp<=30.0 else Color("#68e0c1")
  _update_camera(delta)
 
 func _animate_enemy_defeat(target:Node3D)->void:
@@ -347,6 +351,14 @@ func _build_ui()->void:
  hud.add_child(bar)
  hp_label=_label("✚ 100",27)
  bar.add_child(hp_label)
+ health_bar=ProgressBar.new()
+ health_bar.custom_minimum_size=Vector2(122,20)
+ health_bar.max_value=100.0
+ health_bar.value=100.0
+ health_bar.show_percentage=false
+ health_bar.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ health_bar.modulate=Color("#68e0c1")
+ bar.add_child(health_bar)
  kills_label=_label("0 / %d"%_target(),22)
  bar.add_child(kills_label)
  status_label=_label("ОПЕРАЦИЯ",17)
