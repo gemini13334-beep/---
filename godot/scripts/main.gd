@@ -443,7 +443,32 @@ func _apply_weapon_skin()->void:
   material.metallic=0.38 if skin_id>=0 else 0.0
   material.roughness=0.38 if skin_id>=0 else 0.9
   part.material_override=material
+ _update_weapon_silhouette()
  _add_skin_details(skin_id)
+
+func _update_weapon_silhouette()->void:
+ if not is_instance_valid(hero): return
+ var body:=hero.get_node_or_null("Weapon") as MeshInstance3D
+ var barrel:=hero.get_node_or_null("Weapon barrel") as MeshInstance3D
+ var magazine:=hero.get_node_or_null("Weapon magazine") as MeshInstance3D
+ var sight:=hero.get_node_or_null("Weapon sight") as MeshInstance3D
+ if body==null or barrel==null or magazine==null or sight==null: return
+ match weapon_index:
+  0:
+   body.scale=Vector3.ONE
+   barrel.scale=Vector3.ONE
+   magazine.visible=true
+   sight.visible=true
+  1:
+   body.scale=Vector3(1.55,1.2,0.64)
+   barrel.scale=Vector3(1.4,1.2,0.48)
+   magazine.visible=false
+   sight.visible=false
+  2:
+   body.scale=Vector3(2.7,0.5,1.15)
+   barrel.scale=Vector3(1.0,0.7,0.45)
+   magazine.visible=false
+   sight.visible=true
 
 func _clear_skin_details()->void:
  if not is_instance_valid(hero): return
