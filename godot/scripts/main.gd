@@ -2,6 +2,7 @@ extends Node3D
 
 const Story = preload("res://scripts/story.gd")
 const Loot = preload("res://scripts/loot.gd")
+const TacticalCamera = preload("res://scripts/tactical_camera.gd")
 const SAVE_PATH := "user://vacation_save.json"
 const SETTINGS_PATH := "user://tactical_settings.json"
 var graphics_level := 1
@@ -278,7 +279,7 @@ func _process(delta: float) -> void:
    if d<distance:
     distance=d
     nearest=e
-  if nearest != null:
+  if nearest != null and _has_clear_shot(nearest):
    fire_timer=float(WEAPONS[weapon_index]["cooldown"])
    hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
    _show_shot_feedback(nearest)
@@ -301,6 +302,17 @@ func _process(delta: float) -> void:
   health_bar.value=clampf(hp,0.0,100.0)
   health_bar.modulate=Color("#e96c62") if hp<=30.0 else Color("#68e0c1")
  _update_camera(delta)
+
+func _has_clear_shot(target:Node3D)->bool:
+ # OpenFPS-style hitscan visibility check; enemy health remains lightweight.
+ # Props/walls are StaticBody3D and block shots; the target has no collider.
+ if not is_instance_valid(target) or not is_instance_valid(hero): return false
+ var from:Vector3=hero.global_position+Vector3(0.33,1.25,0.0)
+ var to:Vector3=target.global_position+Vector3(0.0,1.3,0.0)
+ var params:=PhysicsRayQueryParameters3D.create(from,to)
+ params.collide_with_areas=false
+ var hit:Dictionary=get_world_3d().direct_space_state.intersect_ray(params)
+ return hit.is_empty()
 
 func _animate_enemy_defeat(target:Node3D)->void:
  if not is_instance_valid(target): return
@@ -347,12 +359,7 @@ func _target()->int:
 
 func _update_camera(delta: float)->void:
  if not is_instance_valid(hero) or not is_instance_valid(cam): return
- var distance := 10.5 if playing else 8.0
- var desired := hero.position+Vector3(0,distance*0.85,distance)
- cam.position=cam.position.lerp(desired,clampf(delta*5,0,1))
- if camera_kick>0.0:
-  cam.position+=Vector3(randf_range(-1.0,1.0),randf_range(-0.4,0.4),0)*camera_kick
- cam.look_at(hero.position+Vector3(0,1.0,0),Vector3.UP)
+ TacticalCamera.follow(cam,hero,delta,playing,camera_kick)
 
 func _build_ui()->void:
  var layer := CanvasLayer.new()
