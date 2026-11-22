@@ -70,6 +70,18 @@ jobs:
           grep "ENOENT" /tmp/godot-file-access.log | grep -E "android|sdk|godot|keystore|java|build-tools|apk" | tail -70 || true
           if grep -E "Cannot export|Project export.*failed|ERROR:" /tmp/godot-export.log; then exit 1; fi
           test -s godot/build/Otpusk-Tactical-Godot.apk
+      - name: Verify APK integrity and Android signature
+        run: |
+          set -eu
+          APK="godot/build/Otpusk-Tactical-Godot.apk"
+          test -s "$APK"
+          unzip -t "$APK" | tail -2
+          APKSIGNER="/opt/android-sdk/build-tools/34.0.0/apksigner"
+          AAPT="/opt/android-sdk/build-tools/34.0.0/aapt"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          "$AAPT" dump badging "$APK" | head -12
+          sha256sum "$APK"
       - name: Upload Godot APK
         uses: actions/upload-artifact@v4
         with:
