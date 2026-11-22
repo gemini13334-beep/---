@@ -1,0 +1,246 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "AFTERFALL original low-poly kit"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "vest",
+      "mesh": 0,
+      "translation": [
+        0,
+        1.16,
+        0
+      ],
+      "scale": [
+        0.38,
+        0.49,
+        0.25
+      ]
+    },
+    {
+      "name": "helmet",
+      "mesh": 1,
+      "translation": [
+        0,
+        2.07,
+        0
+      ],
+      "scale": [
+        0.29,
+        0.29,
+        0.28
+      ]
+    },
+    {
+      "name": "legL",
+      "mesh": 0,
+      "translation": [
+        -0.2,
+        0.43,
+        0
+      ],
+      "scale": [
+        0.14,
+        0.43,
+        0.15
+      ]
+    },
+    {
+      "name": "legR",
+      "mesh": 0,
+      "translation": [
+        0.2,
+        0.43,
+        0
+      ],
+      "scale": [
+        0.14,
+        0.43,
+        0.15
+      ]
+    },
+    {
+      "name": "armL",
+      "mesh": 0,
+      "translation": [
+        -0.48,
+        1.28,
+        0
+      ],
+      "scale": [
+        0.13,
+        0.38,
+        0.13
+      ]
+    },
+    {
+      "name": "armR",
+      "mesh": 0,
+      "translation": [
+        0.48,
+        1.28,
+        0
+      ],
+      "scale": [
+        0.13,
+        0.38,
+        0.13
+      ]
+    },
+    {
+      "name": "visor",
+      "mesh": 2,
+      "translation": [
+        0,
+        2.1,
+        -0.29
+      ],
+      "scale": [
+        0.24,
+        0.07,
+        0.04
+      ]
+    }
+  ],
+  "meshes": [
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 1
+        }
+      ]
+    },
+    {
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0
+          },
+          "indices": 1,
+          "material": 2
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.44,
+          0.14,
+          0.19,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.15,
+          0.17,
+          0.22,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    },
+    {
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          0.95,
+          0.4,
+          0.25,
+          1
+        ],
+        "metallicFactor": 0.22,
+        "roughnessFactor": 0.68
+      },
+      "doubleSided": true
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 168,
+      "uri": "data:application/octet-stream;base64,AACAvwAAgL8AAIC/AACAPwAAgL8AAIC/AACAPwAAgD8AAIC/AACAvwAAgD8AAIC/AACAvwAAgL8AAIA/AACAPwAAgL8AAIA/AACAPwAAgD8AAIA/AACAvwAAgD8AAIA/AAACAAEAAAADAAIABAAFAAYABAAGAAcAAAABAAUAAAAFAAQAAgADAAcAAgAHAAYAAQACAAYAAQAGAAUAAwAAAAQAAwAEAAcA"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 96,
+      "target": 34962
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 96,
+      "byteLength": 72,
+      "target": 34963
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 8,
+      "type": "VEC3",
+      "min": [
+        -1,
+        -1,
+        -1
+      ],
+      "max": [
+        1,
+        1,
+        1
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR",
+      "min": [
+        0
+      ],
+      "max": [
+        7
+      ]
+    }
+  ]
+}
