@@ -5,6 +5,9 @@ on:
       - 'godot/**'
       - '.github/workflows/godot-apk.yml'
   workflow_dispatch:
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -76,3 +79,22 @@ jobs:
         with:
           name: Otpusk-Tactical-Godot-APK
           path: godot/build/Otpusk-Tactical-Godot.apk
+
+  publish:
+    name: Publish direct APK download
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download built APK
+        uses: actions/download-artifact@v4
+        with:
+          name: Otpusk-Tactical-Godot-APK
+          path: dist
+      - name: Publish APK to GitHub Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test -s dist/Otpusk-Tactical-Godot.apk
+          gh release create "android-build-${{ github.run_number }}" dist/Otpusk-Tactical-Godot.apk --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "ОТПУСК TACTICAL — Android build ${{ github.run_number }}" --notes "Native Godot 4.3 Android debug APK. Download the APK file below and install on Android." --latest
