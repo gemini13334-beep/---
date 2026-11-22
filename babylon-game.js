@@ -38,6 +38,51 @@ for(const z of [-21.27,21.27])for(let x=-17;x<19;x+=7){box('window inset',2.7,1.
 for(let i=0;i<8;i++){const x=-17+(i%4)*11,z=-18+Math.floor(i/4)*36;const drum=B.MeshBuilder.CreateCylinder('metal barrel',{height:1,diameter:.83,tessellation:12},scene);drum.position.set(x,.5,z);drum.material=metal;drum.receiveShadows=true;shadow.addShadowCaster(drum);for(const y of [.23,.78]){const rim=B.MeshBuilder.CreateTorus('barrel rim',{diameter:.86,thickness:.07,tessellation:12},scene);rim.position.set(x,y,z);rim.material=dark}}
 for(let i=0;i<6;i++){const x=-15+i*6;box('upper facade',4.5,.35,.55,x,5.75,-21.4,trim);box('column',.45,5.4,.6,x-2,2.7,-21.2,trim)}
 
+
+const barricade=material('barricade','#827361'),warning=material('warning','#b98b48'),cargo=material('cargo','#56646a');
+for(const side of [-1,1]){
+ for(const z of [-5,4]){
+  const x=side*8;
+  box('tactical divider',.75,2.8,7,x,1.4,z,stone,true);
+  box('divider cap',1,.2,7.3,x,2.86,z,trim);
+ }
+ for(const z of [-14,13]){
+  const x=side*12;
+  box('stacked cargo',2.3,1.7,2.4,x,.85,z,cargo,true);
+  box('cargo stripe',2.4,.12,2.5,x,1.78,z,warning);
+ }
+}
+for(const z of [-7,7]){
+ box('central low wall',5.4,1.35,.8,0,.675,z,barricade,true);
+ box('central wall trim',5.6,.13,1,0,1.41,z,trim);
+}
+function steerEnemy(ep,target,dt){
+ const dx=target.x-ep.x,dz=target.z-ep.z,dist=Math.hypot(dx,dz);
+ if(dist<1.8)return;
+ const speed=1.65*dt,angle=Math.atan2(dz,dx);
+ const choices=[0,.4,-.4,.85,-.85,1.4,-1.4,Math.PI];
+ let best=null,bestScore=-Infinity;
+ for(const delta of choices){
+  const a=angle+delta,nx=ep.x+Math.cos(a)*speed,nz=ep.z+Math.sin(a)*speed;
+  if(!canMove(nx,nz))continue;
+  const score=-Math.hypot(target.x-nx,target.z-nz)-Math.abs(delta)*.035;
+  if(score>bestScore){bestScore=score;best={nx,nz}}
+ }
+ if(best){ep.x=best.nx;ep.z=best.nz}
+}
+function hasLineOfSight(a,b){
+ const dx=b.x-a.x,dz=b.z-a.z;
+ return !solid.some(o=>{
+  const left=o.x-o.w/2-.12,right=o.x+o.w/2+.12,top=o.z-o.d/2-.12,bottom=o.z+o.d/2+.12;
+  let t0=0,t1=1;
+  for(const [p,q] of [[-dx,a.x-left],[dx,right-a.x],[-dz,a.z-top],[dz,bottom-a.z]]){
+   if(Math.abs(p)<1e-8){if(q<0)return false}
+   else{const t=q/p;if(p<0){if(t>t1)return false;t0=Math.max(t0,t)}else{if(t<t0)return false;t1=Math.min(t1,t)}}
+  }
+  return t0<=t1&&t1>=0&&t0<=1;
+ });
+}
+
 function agent(name,x,z,hostile=false){const root=new B.TransformNode(name,scene);root.position.set(x,0,z);const armor=hostile?enemyMat:blue;
 const torso=B.MeshBuilder.CreateCapsule(name+' torso',{radius:.38,height:1.18,tessellation:12},scene);torso.parent=root;torso.position.y=1.23;torso.material=armor;shadow.addShadowCaster(torso);
 const head=B.MeshBuilder.CreateSphere(name+' helmet',{diameter:.65,segments:12},scene);head.parent=root;head.position.y=2.12;head.scaling.y=.78;head.material=dark;shadow.addShadowCaster(head);
@@ -116,8 +161,8 @@ function fire(from,to){player.recoil=.22;flashTime=.065;muzzle.position.copyFrom
 engine.runRenderLoop(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;updateFlash(dt);hitTimer=Math.max(0,hitTimer-dt);damageTimer=Math.max(0,damageTimer-dt);if(hitMarker)hitMarker.style.opacity=hitTimer>0?'1':'0';if(damageFlash)damageFlash.style.opacity=String(damageTimer*1.8);
 if(playing){let x=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),z=move.z+(keys.has('s')?1:0)-(keys.has('w')?1:0),len=Math.hypot(x,z);if(len>1){x/=len;z/=len}
 const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p.x,p.z+z*dt*5))p.z+=z*dt*5;animateAgent(player,dt);
-let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8){const vx=(p.x-ep.x)/d,vz=(p.z-ep.z)/d;if(canMove(ep.x+vx*dt*1.65,ep.z+vz*dt*1.65))ep.x+=vx*dt*1.65;if(canMove(ep.x,ep.z+vz*dt*1.65))ep.z+=vz*dt*1.65}e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;registerDamage();updateHUD();if(player.hp<=0)result(false)}}
-shot-=dt;if(closest&&dist<weaponTypes[weaponIndex].range&&shot<=0){shot=weaponTypes[weaponIndex].delay;player.root.rotation.y=Math.atan2(closest.root.position.x-p.x,-(closest.root.position.z-p.z));fire(p.add(new B.Vector3(0,1.4,0)),closest.root.position.add(new B.Vector3(0,1.3,0)))}
+let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8)steerEnemy(ep,p,dt)e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;registerDamage();updateHUD();if(player.hp<=0)result(false)}}
+shot-=dt;if(closest&&dist<weaponTypes[weaponIndex].range&&hasLineOfSight(p,closest.root.position)&&shot<=0){shot=weaponTypes[weaponIndex].delay;player.root.rotation.y=Math.atan2(closest.root.position.x-p.x,-(closest.root.position.z-p.z));fire(p.add(new B.Vector3(0,1.4,0)),closest.root.position.add(new B.Vector3(0,1.3,0)))}
 for(let i=projectiles.length-1;i>=0;i--){const b=projectiles[i],prev=b.mesh.position.clone();b.mesh.position.addInPlace(b.v.scale(dt*b.speed));b.ttl-=dt;const hit=enemies.find(e=>{const center=e.root.position.add(new B.Vector3(0,1.3,0));const segment=b.mesh.position.subtract(prev),len2=segment.lengthSquared();const t=len2>0?Math.max(0,Math.min(1,B.Vector3.Dot(center.subtract(prev),segment)/len2)):0;return B.Vector3.DistanceSquared(center,prev.add(segment.scale(t)))<.58});if(hit){registerHit();hit.hp-=b.damage;b.ttl=0;if(hit.hp<=0){hit.root.getChildMeshes().forEach(m=>m.dispose());hit.root.dispose();enemies.splice(enemies.indexOf(hit),1);kills++;updateHUD();if(kills>=objective())result(true);else if(enemies.length<5)spawn()}}if(b.ttl<=0){b.mesh.dispose();projectiles.splice(i,1)}}
 camera.target=B.Vector3.Lerp(camera.target,p.add(new B.Vector3(0,1,0)),Math.min(1,dt*5));camera.alpha+=(cameraAngle-camera.alpha)*Math.min(1,dt*6);camera.beta+=(cameraPitch-camera.beta)*Math.min(1,dt*6);camera.radius+=(cameraZoom-camera.radius)*Math.min(1,dt*6)}
 scene.render()});
