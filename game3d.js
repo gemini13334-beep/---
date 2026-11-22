@@ -50,6 +50,12 @@ function blocked(ax,az,bx,bz,pad=0){
   if(t0<=t1&&t0<=1&&t1>=0)return true
  }return false
 }
+function segmentDistanceSq(ax,az,bx,bz,px,pz){
+ const dx=bx-ax,dz=bz-az,len=dx*dx+dz*dz;
+ const t=len>0?Math.max(0,Math.min(1,((px-ax)*dx+(pz-az)*dz)/len)):0;
+ const ex=ax+dx*t-px,ez=az+dz*t-pz;
+ return ex*ex+ez*ez
+}
 const bullets=[];let health=100,kills=0,fire=0,invuln=0,ended=false;const damageOverlay=document.createElement('div');damageOverlay.style.cssText='position:fixed;inset:0;z-index:2;pointer-events:none;background:radial-gradient(ellipse at center,transparent 40%,#c71928 100%);opacity:0;transition:opacity 90ms';document.body.append(damageOverlay);const move={x:0,y:0},stick=document.getElementById('stick'),knob=document.getElementById('knob');let pointer=null;
 function joystick(e){let r=stick.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),len=Math.hypot(x,y),v=Math.min(1,len/47);move.x=len?x/len*v:0;move.y=len?y/len*v:0;knob.style.transform='translate('+move.x*39+'px,'+move.y*39+'px)'}
 stick.addEventListener('pointerdown',e=>{pointer=e.pointerId;stick.setPointerCapture(pointer);joystick(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===pointer)joystick(e)});function release(e){if(e.pointerId===pointer){pointer=null;move.x=move.y=0;knob.style.transform=''}}stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
@@ -73,7 +79,9 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
  if(canMove(e.position.x,e.position.z+tz*step))e.position.z+=tz*step;
 }e.lookAt(hero.position.x,0,hero.position.z);e.userData.motion=(e.userData.motion||0)+dt*7;e.position.y=Math.abs(Math.sin(e.userData.motion))*.035;e.userData.cool-=dt;if(d<2&&!blocked(e.position.x,e.position.z,hero.position.x,hero.position.z,.06)&&e.userData.cool<=0){e.userData.cool=1.25;if(invuln<=0){health=Math.max(0,health-12);invuln=.6;hpEl.textContent='HP '+health;damageOverlay.style.opacity='.62'}}}
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
-for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;let wallHit=blocked(b.mesh.position.x-b.v.x*dt*28,b.mesh.position.z-b.v.z*dt*28,b.mesh.position.x,b.mesh.position.z,.05);let hit=wallHit?null:enemies.find(e=>Math.hypot(e.position.x-b.mesh.position.x,e.position.z-b.mesh.position.z)<.9);if(wallHit)b.ttl=0;if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;killsEl.textContent=kills+' / 12';if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
+for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;const prevX=b.mesh.position.x-b.v.x*dt*28,prevZ=b.mesh.position.z-b.v.z*dt*28;
+ let wallHit=blocked(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,.05);
+ let hit=wallHit?null:enemies.find(e=>segmentDistanceSq(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,e.position.x,e.position.z)<.75*.75);if(wallHit)b.ttl=0;if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;killsEl.textContent=kills+' / 12';if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
 for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&!Array.isArray(o.material)&&o.material.emissive){if(!o.userData.baseEmissive){o.userData.baseEmissive=o.material.emissive.clone();o.userData.baseIntensity=o.material.emissiveIntensity}o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:o.userData.baseIntensity}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
 if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';showRestart()}}
 function showRestart(){
