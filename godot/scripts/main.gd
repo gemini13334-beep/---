@@ -212,11 +212,31 @@ func _process(delta: float) -> void:
   if not is_instance_valid(e): continue
   var diff: Vector3 = hero.position-e.position
   diff.y = 0
-  if diff.length()>1.4:
-   e.position += diff.normalized()*delta*float(e.get_meta("speed",1.6))
+  var distance_to_hero:float=diff.length()
+  if distance_to_hero>1.4:
+   var desired:Vector3=diff.normalized()
+   var separation:=Vector3.ZERO
+   for other in enemies:
+    if other==e or not is_instance_valid(other): continue
+    var away:Vector3=e.position-other.position
+    away.y=0.0
+    var gap:float=away.length()
+    if gap>0.01 and gap<2.2:
+     separation+=away.normalized()*(2.2-gap)/2.2
+   # Light lateral movement gives couriers a different approach pattern.
+   var lateral:=Vector3.ZERO
+   if e.name=="Fast Courier" and distance_to_hero<8.0:
+    lateral=Vector3(-desired.z,0.0,desired.x)*sin(float(Time.get_ticks_msec())*0.0017+float(e.get_instance_id()%17))*0.35
+   var steering:Vector3=desired+separation*1.2+lateral
+   if steering.length_squared()>0.001:
+    var next_position:Vector3=e.position+steering.normalized()*delta*float(e.get_meta("speed",1.6))
+    next_position.x=clampf(next_position.x,-18.7,18.7)
+    next_position.z=clampf(next_position.z,-18.7,18.7)
+    e.position=next_position
   else:
-   hp -= delta*float(e.get_meta("damage",12.0))
-  e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
+   hp-=delta*float(e.get_meta("damage",12.0))
+  if distance_to_hero>0.01:
+   e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
  if hp<hp_before:
   damage_flash=minf(0.55,damage_flash+delta*0.9)
   camera_kick=minf(0.28,camera_kick+delta*0.5)
