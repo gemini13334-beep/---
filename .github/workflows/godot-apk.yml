@@ -35,7 +35,7 @@ jobs:
           export ANDROID_SDK_ROOT=/opt/android-sdk
           export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --sdk_root=/opt/android-sdk --licenses >/dev/null || true
-          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-34" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-34" "build-tools;33.0.2" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
           echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> "$GITHUB_ENV"
           mkdir -p /github/home/.local/share/godot/export_templates
@@ -47,6 +47,8 @@ jobs:
           cp /root/.config/godot/editor_settings-4.tres /github/home/.config/godot/editor_settings-4.tres
           ls -la /opt/android-sdk/build-tools /opt/android-sdk/platforms
           ls -la /root/.config/godot
+          godot --headless --editor --path godot --quit >/tmp/godot-settings-check.log 2>&1 || true
+          cat /tmp/godot-settings-check.log | tail -30
       - name: Import project and check scripts
         run: |
           godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
