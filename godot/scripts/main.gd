@@ -191,6 +191,7 @@ func _process(delta: float) -> void:
   if nearest != null:
    fire_timer=float(WEAPONS[weapon_index]["cooldown"])
    hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
+   _show_shot_feedback(nearest)
    var remaining: float = float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
    nearest.set_meta("hp",remaining)
    _show_hit_feedback(nearest)
@@ -207,6 +208,24 @@ func _process(delta: float) -> void:
   _show_result(false)
  hp_label.text="✚ %d"%ceili(maxf(hp,0))
  _update_camera(delta)
+
+func _show_shot_feedback(target:Node3D)->void:
+ var start:=hero.global_position+Vector3(0.32,1.25,0)
+ var finish:=target.global_position+Vector3(0,1.3,0)
+ var distance:=start.distance_to(finish)
+ if distance<0.1: return
+ var direction:Vector3=(finish-start).normalized()
+ var tracer:=_box(world_root,"Shot tracer",(start+finish)*0.5,Vector3(0.045,0.045,distance),Color("#ffe5a0"))
+ tracer.look_at(finish,Vector3.UP)
+ var muzzle:=_box(world_root,"Muzzle flash",start+direction*0.3,Vector3(0.28,0.28,0.28),Color("#ffc75c"))
+ var shot_tween:=create_tween()
+ shot_tween.set_parallel(true)
+ shot_tween.tween_property(tracer,"scale",Vector3(0.1,0.1,1.0),0.09)
+ shot_tween.tween_property(muzzle,"scale",Vector3.ZERO,0.11)
+ shot_tween.chain().tween_callback(func():
+  if is_instance_valid(tracer): tracer.queue_free()
+  if is_instance_valid(muzzle): muzzle.queue_free()
+ )
 
 func _show_hit_feedback(target:Node3D)->void:
  hit_flash_timer=0.13
