@@ -56,6 +56,7 @@ function segmentDistanceSq(ax,az,bx,bz,px,pz){
  const ex=ax+dx*t-px,ez=az+dz*t-pz;
  return ex*ex+ez*ez
 }
+let noticeTimer=0;function notify(text,duration=2.5){msg.textContent=text;noticeTimer=duration}
 const pickups=[];const medkitGeometry=new THREE.BoxGeometry(.45,.25,.45),medkitMaterial=new THREE.MeshStandardMaterial({color:0x2bc7a4,emissive:0x08795b,emissiveIntensity:.8});
 function dropMedkit(x,z){
  const mesh=new THREE.Mesh(medkitGeometry,medkitMaterial);mesh.position.set(x,.32,z);scene.add(mesh);pickups.push({mesh,ttl:20})
@@ -64,10 +65,16 @@ const bullets=[];let health=100,kills=0,fire=0,invuln=0,ended=false;const damage
 function joystick(e){let r=stick.getBoundingClientRect(),x=e.clientX-(r.left+r.width/2),y=e.clientY-(r.top+r.height/2),len=Math.hypot(x,y),v=Math.min(1,len/47);move.x=len?x/len*v:0;move.y=len?y/len*v:0;knob.style.transform='translate('+move.x*39+'px,'+move.y*39+'px)'}
 stick.addEventListener('pointerdown',e=>{pointer=e.pointerId;stick.setPointerCapture(pointer);joystick(e)});stick.addEventListener('pointermove',e=>{if(e.pointerId===pointer)joystick(e)});function release(e){if(e.pointerId===pointer){pointer=null;move.x=move.y=0;knob.style.transform=''}}stick.addEventListener('pointerup',release);stick.addEventListener('pointercancel',release);
 const keys=new Set();addEventListener('keydown',e=>keys.add(e.key.toLowerCase()));addEventListener('keyup',e=>keys.delete(e.key.toLowerCase()));
-let dash=0;document.getElementById('dash').addEventListener('pointerdown',()=>dash=0.23);
+let dash=0,dashCooldown=0;const dashButton=document.getElementById('dash');
+function triggerDash(){if(ended||dashCooldown>0||dash>0)return;dash=.22;dashCooldown=2.8;dashButton.textContent='РЫВОК';dashButton.style.opacity='0.55'}
+dashButton.addEventListener('pointerdown',triggerDash);
+addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(!e.repeat)triggerDash()}});
 function canMove(x,z){return Math.abs(x)<15.1&&Math.abs(z)<16.1&&!obstacles.some(o=>Math.abs(x-o.x)<o.w/2+.55&&Math.abs(z-o.z)<o.d/2+.55)}
 const clock=new THREE.Clock(),spark=new THREE.SphereGeometry(.12,6,6);let elapsed=0;const tempColor=new THREE.Color();function projectile(from,to,enemy){let v=to.clone().sub(from).normalize(),mesh=new THREE.Mesh(spark,enemy?amber:cyan);mesh.position.copy(from);scene.add(mesh);bullets.push({mesh,v,enemy,ttl:1.3})}
-function update(){let dt=Math.min(clock.getDelta(),.04);elapsed+=dt;for(const item of animationMixers){if(item.owner.parent)item.mixer.update(dt)}if(ended)return;invuln=Math.max(0,invuln-dt);damageOverlay.style.opacity=String(Math.min(.62,Math.max(0,invuln-.12)*.95));let mx=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),mz=move.y+(keys.has('s')?1:0)-(keys.has('w')?1:0),l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}let speed=dash>0?15:6;dash=Math.max(0,dash-dt);hero.userData.motion=(hero.userData.motion||0)+dt*Math.max(0,l)*11;const running=l>.08;hero.position.y=running?Math.abs(Math.sin(hero.userData.motion))*.07:Math.sin(elapsed*2)*.014;let nx=hero.position.x+mx*speed*dt,nz=hero.position.z+mz*speed*dt;if(canMove(nx,hero.position.z))hero.position.x=nx;if(canMove(hero.position.x,nz))hero.position.z=nz;
+function update(){let dt=Math.min(clock.getDelta(),.04);elapsed+=dt;for(const item of animationMixers){if(item.owner.parent)item.mixer.update(dt)}if(ended)return;if(noticeTimer>0){noticeTimer-=dt;if(noticeTimer<=0)msg.textContent='Зачисти помещение. Стрельба автоматическая.'}invuln=Math.max(0,invuln-dt);damageOverlay.style.opacity=String(Math.min(.62,Math.max(0,invuln-.12)*.95));let mx=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),mz=move.y+(keys.has('s')?1:0)-(keys.has('w')?1:0),l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}dashCooldown=Math.max(0,dashCooldown-dt);
+if(dashCooldown===0&&dashButton.style.opacity!=='1'){dashButton.style.opacity='1';dashButton.textContent='РЫВОК'}
+else if(dashCooldown>0)dashButton.textContent=Math.ceil(dashCooldown)+'с';
+let speed=dash>0?15:6;dash=Math.max(0,dash-dt);hero.userData.motion=(hero.userData.motion||0)+dt*Math.max(0,l)*11;const running=l>.08;hero.position.y=running?Math.abs(Math.sin(hero.userData.motion))*.07:Math.sin(elapsed*2)*.014;let nx=hero.position.x+mx*speed*dt,nz=hero.position.z+mz*speed*dt;if(canMove(nx,hero.position.z))hero.position.x=nx;if(canMove(hero.position.x,nz))hero.position.z=nz;
 let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.position.x,dz=hero.position.z-e.position.z,d=Math.hypot(dx,dz);if(d<dist&&!blocked(hero.position.x,hero.position.z,e.position.x,e.position.z,.06)){dist=d;closest=e}if(d>2.7){
  let step=dt*1.65,tx=dx/d,tz=dz/d;
  // Steering: probe lateral routes when direct pursuit is blocked by desks.
@@ -89,7 +96,7 @@ for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledV
 for(let i=pickups.length-1;i>=0;i--){
  const p=pickups[i];p.ttl-=dt;p.mesh.rotation.y+=dt*1.8;p.mesh.position.y=.35+Math.sin(elapsed*4+i)*.08;
  if(Math.hypot(hero.position.x-p.mesh.position.x,hero.position.z-p.mesh.position.z)<1.1&&health<100){
-  health=Math.min(100,health+25);hpEl.textContent='HP '+health;msg.textContent='АПТЕЧКА +25 HP';p.ttl=0
+  health=Math.min(100,health+25);hpEl.textContent='HP '+health;notify('АПТЕЧКА +25 HP');p.ttl=0
  }
  if(p.ttl<=0){scene.remove(p.mesh);pickups.splice(i,1)}
 }
