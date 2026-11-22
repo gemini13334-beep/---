@@ -20,11 +20,16 @@ jobs:
         with:
           gradle-version: '8.9'
       - name: Validate JavaScript syntax
-        run: node --check game.js
+        run: |
+          node --check game.js
+          node --check game3d.js
       - name: Copy HTML game to Android assets
         run: |
           mkdir -p app/src/main/assets
-          cp index.html game.js app/src/main/assets/
+          cp index.html classic.html 3d.html game.js game3d.js app/src/main/assets/
+          mkdir -p app/src/main/assets/vendor
+          curl --fail --location --retry 3 --silent --show-error https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js -o app/src/main/assets/vendor/three.module.js
+          test $(wc -c < app/src/main/assets/vendor/three.module.js) -gt 100000
           if [ -d assets ]; then cp -R assets app/src/main/assets/; fi
       - name: Build debug APK
         run: gradle :app:assembleDebug --no-daemon
