@@ -666,7 +666,7 @@ func _show_collection()->void:
  for i in range(inventory.size()):
   var item_id:int=inventory[i]
   var item:Dictionary=Loot.ITEMS[item_id]
-  var col:int=i/8
+  var col:int=int(i/8)
   var row_index:int=i%8
   var equipped:bool=equipped_skins[int(item["weapon"])]==item_id
   var entry:=_button(("✓ " if equipped else "◈ ")+str(item["name"]))
@@ -692,7 +692,7 @@ func _show_loadout()->void:
  collection_button.position=Vector2(475,485)
  collection_button.custom_minimum_size=Vector2(450,47)
  collection_button.pressed.connect(_show_collection)
- menu_layer.add_child(b)
+ menu_layer.add_child(collection_button)
 
 func _show_file()->void:
  _show_menu()
