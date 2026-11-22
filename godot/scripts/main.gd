@@ -88,15 +88,31 @@ func _box(parent: Node3D, name: String, pos: Vector3, size: Vector3, color: Colo
  mat.roughness = 0.92
  # Imported original SVG texture set; neutral tint preserves authored colors.
  var texture_name: String = ""
- if name.contains("floor") or name.contains("Concrete cover"):
-  texture_name = "concrete_floor"
- elif name.contains("wall") or name.contains("Industrial block"):
+ if name.contains("Window glass"):
+  texture_name = "glass_blue"
+ elif name.contains("Window frame") or name.contains("Checkpoint"):
+  texture_name = "painted_steel"
+ elif name.contains("Roof"):
+  texture_name = "roof_tar"
+ elif name.contains("Industrial block"):
+  texture_name = "plaster_wall"
+ elif name.contains("wall"):
   texture_name = "sandstone_wall"
+ elif name.contains("floor"):
+  texture_name = "concrete_tiles"
+ elif name.contains("Concrete cover") or name.contains("Barricade"):
+  texture_name = "concrete_floor"
  elif name.contains("Crate") or name.contains("crate"):
   texture_name = "crate_wood"
  elif name.contains("Barricade marking") or name.contains("Facade stripe"):
-  texture_name = "hazard_panel"
- elif name.contains("Roof") or name.contains("Window frame") or name.contains("Checkpoint"):
+  texture_name = "yellow_warning"
+ elif name.contains("Boots") or name.contains("glove"):
+  texture_name = "dark_rubber"
+ elif name.contains("Vest") or name.contains("Legs") or name.contains("arm"):
+  texture_name = "military_camo"
+ elif name.contains("Weapon"):
+  texture_name = "painted_steel"
+ elif name.contains("armor") or name.contains("Helmet"):
   texture_name = "industrial_metal"
  if texture_name != "":
   var tex: Texture2D = load("res://assets/textures/" + texture_name + ".svg") as Texture2D
