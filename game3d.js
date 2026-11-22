@@ -110,7 +110,7 @@ for(let i=pickups.length-1;i>=0;i--){
  if(p.ttl<=0){scene.remove(p.mesh);pickups.splice(i,1)}
 }
 for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&!Array.isArray(o.material)&&o.material.emissive){if(!o.userData.baseEmissive){o.userData.baseEmissive=o.material.emissive.clone();o.userData.baseIntensity=o.material.emissiveIntensity}o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:o.userData.baseIntensity}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
-if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';showRestart()}}
+if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';const mission=document.getElementById('mission');if(mission)mission.textContent=health<=0?'ОПЕРАЦИЯ ПРЕРВАНА':'ОПЕРАЦИЯ ЗАВЕРШЕНА';showRestart()}}
 function showRestart(){
  if(document.getElementById('restart3d'))return;
  const btn=document.createElement('button');btn.id='restart3d';btn.textContent='ИГРАТЬ СНОВА';
@@ -155,7 +155,7 @@ function frame(){
   const button=document.createElement('button');button.textContent='ПОВТОРИТЬ ЗАПУСК';button.style.cssText='padding:14px;background:#e4b369;color:#101923';button.onclick=()=>location.reload();
   panel.append(title,details,button);failure.append(panel);document.body.append(failure);
  }
-}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'calc(env(safe-area-inset-top,0px) + 100px)',right:'8px',zIndex:'4',background:'#17242de8',color:'#e6b65b',border:'1px solid #8da0a866',padding:'7px',fontSize:'10px',letterSpacing:'1px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
+}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.setAttribute('aria-label','Изменить качество 3D-графики');Object.assign(qualityButton.style,{position:'fixed',top:'calc(env(safe-area-inset-top,0px) + 100px)',right:'8px',zIndex:'4',background:'#17242de8',color:'#e6b65b',border:'1px solid #8da0a866',padding:'7px',fontSize:'10px',letterSpacing:'1px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
 renderer.domElement.addEventListener('webglcontextlost',event=>{
  event.preventDefault();running3d=false;
  loading.textContent='Потеряно соединение с 3D-видеоускорителем. Перезапусти игру.';
