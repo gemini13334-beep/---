@@ -12,12 +12,27 @@ const sun=new B.DirectionalLight('sun',new B.Vector3(-.5,-1,.35),scene);sun.posi
 const shadow=new B.ShadowGenerator(1024,sun);shadow.useBlurExponentialShadowMap=true;shadow.blurKernel=12;
 function material(name,hex,rough=1){const m=new B.PBRMaterial(name,scene);m.albedoColor=B.Color3.FromHexString(hex);m.metallic=0;m.roughness=rough;return m}
 const sand=material('sand','#b4a28b'),stone=material('stone','#d0b99b'),dark=material('dark','#454d50'),blue=material('blue','#334f5d'),enemyMat=material('enemy','#665044'),metal=material('metal','#3b4145',.55);
+function proceduralStone(){
+ const tex=new B.DynamicTexture('concrete texture',{width:512,height:512},scene,false);
+ const ctx=tex.getContext();ctx.fillStyle='#a89b86';ctx.fillRect(0,0,512,512);
+ let seed=83721;function random(){seed=(seed*1664525+1013904223)>>>0;return seed/4294967296}
+ for(let i=0;i<24000;i++){const c=Math.floor(90+random()*115);ctx.fillStyle='rgba('+c+','+(c-6)+','+(c-17)+','+(.04+random()*.17)+')';ctx.fillRect(random()*512,random()*512,1+random()*4,1+random()*4)}
+ ctx.strokeStyle='rgba(58,53,45,.34)';ctx.lineWidth=2;for(let i=0;i<=512;i+=128){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,512);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(512,i);ctx.stroke()}
+ tex.update(false);tex.wrapU=tex.wrapV=B.Texture.WRAP_ADDRESSMODE;tex.uScale=5;tex.vScale=5;return tex
+}
+sand.albedoTexture=proceduralStone();
+const trim=material('limestone trim','#e0cbb0'),timber=material('timber','#735941'),windowMat=material('window','#273e48',.4);
+
 function box(name,w,h,d,x,y,z,mat,collision=false){const o=B.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);o.position.set(x,y,z);o.material=mat;o.receiveShadows=true;o.checkCollisions=collision;if(collision)solid.push({x,z,w,d});return o}
 const solid=[];
 box('ground',42,.4,44,0,-.22,0,sand);
 for(const z of [-21.7,21.7]){box('wall',42,6,.6,0,3,z,stone);for(let x=-17;x<19;x+=7){box('window',3,2,.07,x,3.4,z+(z>0?-.35:.35),dark)}}
 for(const x of [-20.7,20.7]){box('wall',.6,6,44,x,3,0,stone);for(let z=-16;z<19;z+=8)box('alcove',.07,2.1,3,x+(x>0?-.35:.35),3.5,z,dark)}
 for(let i=0;i<10;i++){const x=-14+i%5*7,z=-12+Math.floor(i/5)*20;box('cover',2.8,1.6,2.2,x,.8,z,stone,true);box('cover top',3,.16,2.4,x,1.65,z,dark)}
+for(const z of [-21.27,21.27])for(let x=-17;x<19;x+=7){box('window inset',2.7,1.75,.06,x,3.4,z,windowMat);box('stone sill',3.4,.15,.35,x,2.38,z,trim);box('window mullion',.12,1.8,.12,x,3.4,z,trim);box('window header',3.5,.16,.38,x,4.48,z,trim)}
+for(let i=0;i<8;i++){const x=-17+(i%4)*11,z=-18+Math.floor(i/4)*36;const drum=B.MeshBuilder.CreateCylinder('metal barrel',{height:1,diameter:.83,tessellation:12},scene);drum.position.set(x,.5,z);drum.material=metal;drum.receiveShadows=true;shadow.addShadowCaster(drum);for(const y of [.23,.78]){const rim=B.MeshBuilder.CreateTorus('barrel rim',{diameter:.86,thickness:.07,tessellation:12},scene);rim.position.set(x,y,z);rim.material=dark}}
+for(let i=0;i<6;i++){const x=-15+i*6;box('upper facade',4.5,.35,.55,x,5.75,-21.4,trim);box('column',.45,5.4,.6,x-2,2.7,-21.2,trim)}
+
 function agent(name,x,z,hostile=false){const root=new B.TransformNode(name,scene);root.position.set(x,0,z);const armor=hostile?enemyMat:blue;
 const torso=B.MeshBuilder.CreateCapsule(name+' torso',{radius:.38,height:1.18,tessellation:12},scene);torso.parent=root;torso.position.y=1.23;torso.material=armor;shadow.addShadowCaster(torso);
 const head=B.MeshBuilder.CreateSphere(name+' helmet',{diameter:.65,segments:12},scene);head.parent=root;head.position.y=2.12;head.scaling.y=.78;head.material=dark;shadow.addShadowCaster(head);
