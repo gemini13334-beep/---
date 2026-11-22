@@ -19,6 +19,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
+      - name: Validate JavaScript syntax
+        run: node --check game.js
       - name: Copy HTML game to Android assets
         run: |
           mkdir -p app/src/main/assets
