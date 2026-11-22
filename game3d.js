@@ -55,7 +55,7 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
  if(!canMove(targetX,e.position.z)||!canMove(e.position.x,targetZ)||blocked(e.position.x,e.position.z,hero.position.x,hero.position.z,.2)){
   let sign=e.userData.flank||((Math.random()<.5)?-1:1);
   let options=[[tx*.35-tz*sign*.94,tz*.35+tx*sign*.94],[tx*.35+tz*sign*.94,tz*.35-tx*sign*.94],[-tz*sign,tx*sign],[tx,tz]];
-  let found=options.find(v=>canMove(e.position.x+v[0]*step*2,e.position.z+v[1]*step*2));
+  let found=options.find(v=>canMove(e.position.x+v[0]*step*2,e.position.z+v[1]*step*2)&&!blocked(e.position.x,e.position.z,e.position.x+v[0]*step*2,e.position.z+v[1]*step*2,.08));
   if(found){tx=found[0];tz=found[1];e.userData.flank=sign}
   else e.userData.flank=-sign
  }
