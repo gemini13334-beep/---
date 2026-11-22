@@ -36,6 +36,7 @@ var fire_timer := 0.0
 var magazine_rounds := [30,12,6]
 var reload_timer := 0.0
 var reload_duration := 1.5
+var reload_progress: ProgressBar
 var ammo_label: Label
 var reload_button: Button
 var recoil_timer := 0.0
@@ -287,12 +288,13 @@ func _process(delta: float) -> void:
   for e in enemies:
    if not is_instance_valid(e): continue
    var d: float = hero.position.distance_to(e.position)
-   if d<distance:
+   if d<distance and _has_clear_shot(e):
     distance=d
     nearest=e
-  if nearest != null and _has_clear_shot(nearest):
+  if nearest != null:
    fire_timer=float(WEAPONS[weapon_index]["cooldown"])
    magazine_rounds[weapon_index]-=1
+   _animate_weapon_recoil()
    camera_kick=minf(0.18,camera_kick+0.045)
    _refresh_ammo_ui()
    hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
@@ -342,6 +344,16 @@ func _animate_enemy_defeat(target:Node3D)->void:
  collapse.chain().tween_callback(func():
   if is_instance_valid(target): target.queue_free()
  )
+
+func _animate_weapon_recoil()->void:
+ if not is_instance_valid(hero): return
+ var weapon:=hero.get_node_or_null("Weapon") as MeshInstance3D
+ if weapon==null: return
+ var baseline:Vector3=Vector3(0.33,1.24,-0.52)
+ var kick:float=0.055 if weapon_index==0 else (0.10 if weapon_index==1 else 0.14)
+ weapon.position=baseline+Vector3(0.0,0.035,kick)
+ var tween:=create_tween()
+ tween.tween_property(weapon,"position",baseline,0.16).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 
 func _show_shot_feedback(target:Node3D)->void:
  var start:=hero.global_position+Vector3(0.32,1.25,0)
@@ -431,6 +443,14 @@ func _build_ui()->void:
  ammo_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
  ammo_label.position=Vector2(-290,-161)
  hud.add_child(ammo_label)
+ reload_progress=ProgressBar.new()
+ reload_progress.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ reload_progress.position=Vector2(-290,-212)
+ reload_progress.size=Vector2(275,5)
+ reload_progress.show_percentage=false
+ reload_progress.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ reload_progress.modulate=Color("#59e0cf")
+ hud.add_child(reload_progress)
  _refresh_ammo_ui()
  weapon_status=_label("АВТО • "+str(WEAPONS[weapon_index]["name"]),14)
  weapon_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
@@ -479,6 +499,9 @@ func _start_reload()->void:
 func _refresh_ammo_ui()->void:
  if is_instance_valid(ammo_label):
   ammo_label.text="ПЕРЕЗАРЯДКА..." if reload_timer>0.0 else "ПАТРОНЫ  %d / %d"%[magazine_rounds[weapon_index],_magazine_capacity()]
+ if is_instance_valid(reload_progress):
+  reload_progress.visible=reload_timer>0.0
+  reload_progress.value=100.0*(1.0-reload_timer/reload_duration)
  if is_instance_valid(reload_button):
   reload_button.disabled=not playing or reload_timer>0.0 or magazine_rounds[weapon_index]>=_magazine_capacity()
 
