@@ -144,9 +144,18 @@ const pausePanel=document.createElement('div');pausePanel.style.cssText='display
 const pauseStats=document.createElement('div');pauseStats.style.cssText='font:13px Arial;color:#c5d1d7;letter-spacing:1px';
 const pauseQuality=document.createElement('button');pauseQuality.style.cssText='padding:13px;background:#273b49;color:#e5d7b9;border:1px solid #708795;font-weight:bold';
 pauseQuality.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};
+const hudSettings=document.createElement('div');hudSettings.style.cssText='display:flex;gap:8px;flex-wrap:wrap;justify-content:center';
+const radarToggle=document.createElement('button'),crosshairToggle=document.createElement('button');
+for(const button of [radarToggle,crosshairToggle])button.style.cssText='flex:1;min-width:115px;padding:12px 8px;background:#273b49;color:#e5d7b9;border:1px solid #708795;font-size:12px;font-weight:bold';
+const radarElement=document.getElementById('radar'),crosshairElement=document.getElementById('crosshair');
+let showRadar=true,showCrosshair=true;
+function syncHudToggles(){radarToggle.textContent='РАДАР: '+(showRadar?'ВКЛ':'ВЫКЛ');crosshairToggle.textContent='ПРИЦЕЛ: '+(showCrosshair?'ВКЛ':'ВЫКЛ');radarElement.style.display=showRadar?'':'none';crosshairElement.style.display=showCrosshair?'':'none'}
+radarToggle.onclick=()=>{showRadar=!showRadar;syncHudToggles()};
+crosshairToggle.onclick=()=>{showCrosshair=!showCrosshair;syncHudToggles()};
+hudSettings.append(radarToggle,crosshairToggle);syncHudToggles();
 const pauseRestart=document.createElement('button');pauseRestart.textContent='НАЧАТЬ ЗАНОВО';pauseRestart.style.cssText='padding:13px;background:#24313a;color:#d4c9ba;border:1px solid #566977;font-weight:bold';pauseRestart.onclick=()=>location.reload();
 resumeButton.style.cssText='padding:15px;background:#dcae62;color:#15202a;border:0;font-weight:900;letter-spacing:1px';
-pausePanel.append(pauseTitle,pauseDetails,pauseStats,resumeButton,pauseQuality,pauseRestart);pauseOverlay.append(pausePanel);document.body.append(pauseOverlay);
+pausePanel.append(pauseTitle,pauseDetails,pauseStats,resumeButton,pauseQuality,hudSettings,pauseRestart);pauseOverlay.append(pausePanel);document.body.append(pauseOverlay);
 function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';if(pausedByPlayer){pauseStats.textContent='ЗДОРОВЬЕ '+health+'  |  БРОНЯ '+armor+'  |  ЦЕЛИ '+kills+'/12';pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase()}pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
 pauseButton.addEventListener('click',togglePause);resumeButton.addEventListener('click',togglePause);
 function frame(){
@@ -156,7 +165,7 @@ function frame(){
  if(pausedBySystem){clock.getDelta();fpsWindowStart=performance.now();frames=0;pausedBySystem=false}
  try{
   update();
-  if(performance.now()-radarLastDraw>90){drawRadar();radarLastDraw=performance.now()}
+  if(showRadar&&performance.now()-radarLastDraw>90){drawRadar();radarLastDraw=performance.now()}
   renderer.render(scene,camera);
   frames++;
   if(frames>=90){
