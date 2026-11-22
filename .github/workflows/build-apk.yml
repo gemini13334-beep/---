@@ -38,6 +38,20 @@ jobs:
           node -e "for(const f of ['hero','enemy','crate']) {const p=JSON.parse(require('fs').readFileSync('app/src/main/assets/models/'+f+'.gltf','utf8'));if(p.asset.version!=='2.0'||!p.buffers[0].uri.startsWith('data:'))throw Error('Invalid embedded glTF '+f)}"
           node -e "const fs=require('fs');const js=fs.readFileSync('app/src/main/assets/vendor/GLTFLoader.js','utf8');if(/from ['\"]three['\"]/.test(js))throw Error('GLTFLoader has unresolved bare imports');if(!js.includes('./three.module.js'))throw Error('GLTFLoader local import missing')"
           test -s app/src/main/assets/game3d.js
+          npx --yes esbuild@0.25.12 app/src/main/assets/game3d.js --bundle --format=iife --target=chrome90 --outfile=app/src/main/assets/game3d.bundle.js
+          node --check app/src/main/assets/game3d.bundle.js
+          test $(wc -c < app/src/main/assets/game3d.bundle.js) -gt 100000
+          node - <<'NODE'
+          const fs=require('fs');
+          const path='app/src/main/assets/3d.html';
+          let html=fs.readFileSync(path,'utf8');
+          const old="import('./game3d.js').then(()=>{completed=true;clearTimeout(watchdog)}).catch(e=>{clearTimeout(watchdog);fail('Не удалось загрузить 3D-модуль: '+(e&&e.message||e))});";
+          if(!html.includes(old))throw Error('Expected module loader not found');
+          const replacement="const script=document.createElement('script');script.src='./game3d.bundle.js';script.onload=()=>{if(!completed){completed=true;clearTimeout(watchdog)}};script.onerror=()=>{clearTimeout(watchdog);fail('Не удалось загрузить 3D-движок. Переустанови APK.')};document.body.append(script);";
+          html=html.replace(old,replacement);
+          fs.writeFileSync(path,html);
+          if(html.includes("import('./game3d.js')"))throw Error('Module loader remains in Android HTML');
+          NODE
           ! grep -R -q 'classic.html' app/src/main/assets/3d.html app/src/main/assets/game3d.js
           if [ -d assets ]; then cp -R assets app/src/main/assets/; fi
       - name: Build debug APK
