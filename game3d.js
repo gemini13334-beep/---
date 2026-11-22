@@ -48,7 +48,31 @@ const concrete=new THREE.MeshStandardMaterial({map:makeConcreteTexture(),roughne
 box(32,.3,34,0,-.2,0,concrete);
 box(32,5,.7,0,2.5,-17,wall);box(32,5,.7,0,2.5,17,wall);box(.7,5,34,-16,2.5,0,wall);box(.7,5,34,16,2.5,0,wall);
 for(let i=0;i<8;i++){let x=-11+(i%4)*7.3,z=-9+Math.floor(i/4)*17;box(3,1.3,2.4,x,.65,z,metal,true);box(2.6,.08,2,x,1.35,z,wall);if(i===0||i===3){const propAnchor=new THREE.Group();propAnchor.position.set(x,1.38,z);scene.add(propAnchor);loadModel('./models/crate.gltf',propAnchor,{height:1.05,offsetY:0})}box(.7,.9,.09,x,1.95,z-.7,cyan);if(i%4===0){const light=new THREE.PointLight(0x63cfff,5,8,2);light.position.set(x,2.3,z-.7);scene.add(light)}}
-for(let i=0;i<6;i++){let x=-12+i*4.8;box(2.8,.09,.4,x,4.7,0,amber);if(i%3===0){const light=new THREE.PointLight(0xffdca6,7,12,2);light.position.set(x,4.25,0);scene.add(light)}}
+const stoneTrim=mat(0xd1bea0,.95),recess=mat(0x39444a,.94),wood=mat(0x7d6045,.92),iron=mat(0x484f4f,.75,.45);
+for(let i=0;i<7;i++){
+ const x=-13+i*4.25;
+ for(const z of [-16.55,16.55]){
+  box(3.3,.22,.16,x,4.6,z,stoneTrim);
+  box(1.5,1.5,.14,x,3.35,z,recess);
+  box(1.7,.15,.25,x,2.55,z,stoneTrim);
+  box(.12,1.4,.19,x,3.35,z,wood);
+  box(1.5,.12,.19,x,3.35,z,wood);
+ }
+}
+for(let i=0;i<5;i++){
+ const z=-12+i*6;
+ for(const x of [-15.55,15.55]){
+  box(.16,.22,3.5,x,4.6,z,stoneTrim);
+  box(.16,1.5,1.45,x,3.35,z,recess);
+  box(.23,.15,1.7,x,2.55,z,stoneTrim);
+ }
+}
+for(let i=0;i<6;i++){
+ const x=-12+i*4.8,z=i%2===0?-13:13;
+ const barrel=new THREE.Mesh(new THREE.CylinderGeometry(.46,.46,.95,12),i%3===0?wood:iron);
+ barrel.position.set(x,.48,z);barrel.castShadow=true;barrel.receiveShadow=true;scene.add(barrel);
+ for(const y of [.22,.75]){const band=new THREE.Mesh(new THREE.TorusGeometry(.46,.035,5,12),iron);band.rotation.x=Math.PI/2;band.position.set(x,y,z);scene.add(band)}
+}
 function agent(color){const root=new THREE.Group(),suit=mat(color,.65,.25),skin=mat(0xf3c3a6),hair=mat(0xdde8f1);let body=new THREE.Mesh(new THREE.CapsuleGeometry(.43,.75,4,8),suit);body.position.y=1.15;root.add(body);let head=new THREE.Mesh(new THREE.SphereGeometry(.35,12,8),skin);head.position.y=2.05;root.add(head);let cap=new THREE.Mesh(new THREE.SphereGeometry(.37,12,8),hair);cap.position.set(0,2.19,-.07);cap.scale.y=.55;root.add(cap);let gun=new THREE.Mesh(new THREE.BoxGeometry(.17,.18,.9),metal);gun.position.set(.4,1.35,-.48);root.add(gun);root.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true}});scene.add(root);loadModel(color===0x39769a?'./models/hero.gltf':'./models/enemy.gltf',root,{height:2.45,replace:[...root.children]});return root}
 const hero=agent(0x39769a);hero.position.set(0,0,11);const enemies=[];
 function spawn(){
