@@ -22,8 +22,11 @@ let renderer;try{renderer=new THREE.WebGLRenderer({antialias:!/Android|iPhone|iP
 const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
 function readSetting(name,fallback){try{const v=localStorage.getItem('tactical3d_'+name);return v===null?fallback:v}catch{return fallback}}
 function saveSetting(name,value){try{localStorage.setItem('tactical3d_'+name,String(value))}catch{}}
-const savedQuality=readSetting('quality',mobile?'balanced':'high');
-let quality=['low','balanced','high'].includes(savedQuality)?savedQuality:(mobile?'balanced':'high');function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='balanced'?1.0:.75));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
+const savedQuality=readSetting('quality',mobile?'high':'high');
+let stage=Math.max(1,Math.min(99,Number(readSetting('stage','1'))||1)),mode=readSetting('mode','campaign');
+const targetKills=mode==='endless'?Infinity:12+(stage-1)*6;
+const targetLabel=()=>Number.isFinite(targetKills)?String(targetKills):'∞';
+let quality=['low','balanced','high'].includes(savedQuality)?savedQuality:(mobile?'high':'high');function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?Math.min(devicePixelRatio,2):quality==='balanced'?1.35:1.0));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1826);scene.fog=new THREE.FogExp2(0x0c1826,.022);
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,150);
 scene.add(new THREE.HemisphereLight(0x9ed8ff,0x16202b,1.8));
@@ -126,7 +129,7 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
 for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;const prevX=b.mesh.position.x-b.v.x*dt*28,prevZ=b.mesh.position.z-b.v.z*dt*28;
  let wallHit=blocked(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,.05);
- let hit=wallHit?null:enemies.find(e=>segmentDistanceSq(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,e.position.x,e.position.z)<.75*.75);if(wallHit)b.ttl=0;if(hit){showHitMarker();hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;if(kills%3===0)dropMedkit(hit.position.x,hit.position.z);killsEl.textContent=kills+' / 12';progressFill.style.width=Math.min(100,kills/12*100)+'%';addKillFeed();if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
+ let hit=wallHit?null:enemies.find(e=>segmentDistanceSq(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,e.position.x,e.position.z)<.75*.75);if(wallHit)b.ttl=0;if(hit){showHitMarker();hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;if(kills%3===0)dropMedkit(hit.position.x,hit.position.z);killsEl.textContent=kills+' / '+targetLabel();progressFill.style.width=Number.isFinite(targetKills)?Math.min(100,kills/targetKills*100)+'%':'100%';addKillFeed();if((mode==='endless'||kills<targetKills)&&enemies.length<Math.min(8,4+stage))spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
 for(let i=pickups.length-1;i>=0;i--){
  const p=pickups[i];p.ttl-=dt;p.mesh.rotation.y+=dt*1.8;p.mesh.position.y=.35+Math.sin(elapsed*4+i)*.08;
  if(Math.hypot(hero.position.x-p.mesh.position.x,hero.position.z-p.mesh.position.z)<1.1&&health<100){
@@ -135,12 +138,20 @@ for(let i=pickups.length-1;i>=0;i--){
  if(p.ttl<=0){scene.remove(p.mesh);pickups.splice(i,1)}
 }
 for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&!Array.isArray(o.material)&&o.material.emissive){if(!o.userData.baseEmissive){o.userData.baseEmissive=o.material.emissive.clone();o.userData.baseIntensity=o.material.emissiveIntensity}o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:o.userData.baseIntensity}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
-if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';const mission=document.getElementById('mission');if(mission)mission.textContent=health<=0?'ОПЕРАЦИЯ ПРЕРВАНА':'ОПЕРАЦИЯ ЗАВЕРШЕНА';showRestart()}}
+if(health<=0||kills>=targetKills){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА!';const mission=document.getElementById('mission');if(mission)mission.textContent=health<=0?'ОПЕРАЦИЯ ПРЕРВАНА':'ОПЕРАЦИЯ ЗАВЕРШЕНА';showRestart()}}
 function showRestart(){
  if(document.getElementById('restart3d'))return;
- const btn=document.createElement('button');btn.id='restart3d';btn.textContent='ИГРАТЬ СНОВА';
- Object.assign(btn.style,{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:'4',padding:'18px 24px',background:'#d5a25d',color:'#15202a',border:'2px solid #fbe3b1',fontWeight:'bold',fontSize:'17px'});
- btn.onclick=()=>location.reload();document.body.append(btn)
+ const overlay=document.createElement('div');overlay.id='restart3d';
+ overlay.style.cssText='position:fixed;inset:0;z-index:12;background:linear-gradient(120deg,#101a24f5,#26343fe8);display:flex;align-items:center;justify-content:center;padding:18px;color:#f2e8d7;font:14px Arial';
+ const panel=document.createElement('div');panel.style.cssText='width:min(94vw,530px);padding:24px;border-top:3px solid #df9f4d;background:#19242ef5;box-shadow:0 20px 70px #0009;display:flex;flex-direction:column;gap:14px';
+ const heading=document.createElement('h2');heading.textContent=health<=0?'ОПЕРАЦИЯ ПРОВАЛЕНА':'МИССИЯ ВЫПОЛНЕНА';heading.style.cssText='margin:0;color:#e7b36c;letter-spacing:2px';
+ const stats=document.createElement('p');stats.textContent='ЭТАП '+stage+' · УСТРАНЕНО '+kills+' · ЗДОРОВЬЕ '+health;stats.style.margin='0';
+ function action(label,callback,primary=false){const b=document.createElement('button');b.textContent=label;b.style.cssText='padding:14px;border:1px solid #9b8a72;background:'+(primary?'#dba456':'#293a47')+';color:'+(primary?'#14212b':'#f0e7d5')+';font-weight:bold;letter-spacing:1px';b.onclick=callback;panel.append(b)}
+ panel.append(heading,stats);
+ if(health>0&&mode!=='endless')action('СЛЕДУЮЩАЯ ОПЕРАЦИЯ →',()=>{saveSetting('stage',stage+1);location.reload()},true);
+ action('ПОВТОРИТЬ МИССИЮ',()=>location.reload(),health<=0);
+ action('ГЛАВНОЕ МЕНЮ',()=>{saveSetting('menu','true');location.reload()});
+ overlay.append(panel);document.body.append(overlay);
 }
 let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();let pausedBySystem=false,pausedByPlayer=false;
 const pauseButton=document.getElementById('pause3d'),pauseOverlay=document.createElement('div');
@@ -209,3 +220,18 @@ renderer.domElement.addEventListener('webglcontextrestored',()=>location.reload(
 document.addEventListener('visibilitychange',()=>{if(document.hidden){move.x=move.y=0;pointer=null;knob.style.transform='';keys.clear();pausedBySystem=true}});
 frame();
 if(running3d)loading.remove();
+const mainMenu=document.createElement('div');mainMenu.id='mainMenu3d';
+mainMenu.style.cssText='position:fixed;inset:0;z-index:15;display:flex;align-items:center;background:linear-gradient(90deg,#101821fa 0%,#172530ed 46%,#101821aa 100%);padding:clamp(16px,5vw,65px);color:#f2e9db;font:14px Arial';
+const menuPanel=document.createElement('div');menuPanel.style.cssText='width:min(94vw,470px);max-height:92vh;overflow:auto;display:flex;flex-direction:column;gap:13px';
+const menuTitle=document.createElement('h1');menuTitle.textContent='ОТПУСК / TACTICAL';menuTitle.style.cssText='font-size:clamp(22px,4vw,38px);margin:0;color:#e9b366;letter-spacing:2px';
+const menuSubtitle=document.createElement('p');menuSubtitle.textContent='ОПЕРАЦИИ · СЕКТОР A · ЭТАП '+stage;menuSubtitle.style.cssText='color:#a7b8c6;letter-spacing:2px;margin:0 0 12px';
+function menuButton(label,click,primary=false){const b=document.createElement('button');b.textContent=label;b.style.cssText='text-align:left;padding:16px;background:'+(primary?'#dda75b':'#263846dd')+';border:1px solid #7c8c96;color:'+(primary?'#13212b':'#eee6da')+';font-weight:800;letter-spacing:1px';b.onclick=click;menuPanel.append(b)}
+menuPanel.append(menuTitle,menuSubtitle);
+menuButton('▶  ПРОДОЛЖИТЬ КАМПАНИЮ',()=>{mode='campaign';saveSetting('mode',mode);mainMenu.remove();pausedByPlayer=false;clock.getDelta()},true);
+menuButton('∞  БЕСКОНЕЧНЫЙ РЕЖИМ',()=>{saveSetting('mode','endless');saveSetting('menu','false');location.reload()});
+menuButton('↻  НАЧАТЬ КАМПАНИЮ СНАЧАЛА',()=>{saveSetting('stage','1');saveSetting('mode','campaign');saveSetting('menu','false');location.reload()});
+const story=document.createElement('p');story.textContent='ЗАДАНИЕ: ликвидировать вооружённые группы в заброшенном секторе. После зачистки открывается следующий этап с большим числом противников.';story.style.cssText='color:#bac5cd;line-height:1.5;max-width:440px';
+menuPanel.append(story);mainMenu.append(menuPanel);document.body.append(mainMenu);
+pausedByPlayer=true;
+if(readSetting('menu','true')==='false'){mainMenu.remove();pausedByPlayer=false}else saveSetting('menu','false');
+
