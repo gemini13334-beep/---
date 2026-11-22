@@ -15,4 +15,9 @@ jobs:
       - name: Import Godot project
         run: godot --headless --path godot --editor --quit
       - name: Validate scene and scripts
-        run: godot --headless --path godot --quit-after 3
+        run: |
+          set -eu
+          godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-check.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/godot-check.log; then exit 1; fi
+          godot --headless --path godot --quit-after 3 2>&1 | tee /tmp/godot-runtime.log
+          if grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/godot-runtime.log; then exit 1; fi
