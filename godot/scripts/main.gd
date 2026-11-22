@@ -21,6 +21,9 @@ var cases_opened := 0
 var last_drop := -1
 var equipped_skins := [-1,-1,-1]
 var last_drop_duplicate := false
+var case_spin_tween: Tween
+var case_spin_finished := false
+var last_case_index := 0
 const SKIN_PALETTE := ["#71818b","#b8a17a","#a3b4bd","#a5e5ee","#36e5ca","#ff9d43","#6178ba","#a07be8","#e1bc6d","#ffca59","#d7515e","#f6d8fa"]
 var loot_rng := RandomNumberGenerator.new()
 var playing := false
@@ -606,6 +609,7 @@ func _open_case(index:int)->void:
  if credits<cost:
   return
  credits-=cost
+ last_case_index=index
  var drop:Dictionary=Loot.roll(index,loot_misses,loot_rng)
  loot_misses=int(drop["misses"])
  var item_id:int=int(drop["id"])
@@ -625,10 +629,13 @@ func _show_case_roulette(item_id:int)->void:
  menu_layer.add_child(title)
  var frame:=_panel(Vector2(472,280),Vector2(515,170),Color("#0b1e29"))
  menu_layer.add_child(frame)
+ case_spin_finished=false
  var slots:Array[Label]=[]
+ var cards:Array[Panel]=[]
  for i in range(5):
   var card:=_panel(Vector2(488+i*100,304),Vector2(92,110),Color("#20313e"))
   menu_layer.add_child(card)
+  cards.append(card)
   var name_label:=_label("...",12)
   name_label.position=Vector2(494+i*100,340)
   name_label.custom_minimum_size=Vector2(80,65)
@@ -652,21 +659,33 @@ func _show_case_roulette(item_id:int)->void:
  reel[steps+2]=item_id
  for j in range(5):
   _update_reel_slot(slots[j],reel[j])
- var tween:=create_tween()
+ var skip:=_button("ПРОПУСТИТЬ АНИМАЦИЮ")
+ skip.position=Vector2(475,537)
+ skip.custom_minimum_size=Vector2(470,47)
+ skip.pressed.connect(_finish_case_spin.bind(item_id))
+ menu_layer.add_child(skip)
+ case_spin_tween=create_tween()
  for step in range(1,steps+1):
   var delay:float=0.045+0.008*float(step*step)/float(steps)
-  tween.tween_interval(delay)
-  tween.tween_callback(_advance_case_reel.bind(frame,slots,reel,step))
- tween.tween_interval(0.45)
- tween.tween_callback(func():
-  if is_instance_valid(frame): _show_drop_reveal(item_id)
- )
+  case_spin_tween.tween_interval(delay)
+  case_spin_tween.tween_callback(_advance_case_reel.bind(frame,slots,cards,reel,step))
+ case_spin_tween.tween_interval(0.45)
+ case_spin_tween.tween_callback(_finish_case_spin.bind(item_id))
 
-func _advance_case_reel(frame:Panel,slots:Array[Label],reel:Array[int],step:int)->void:
+func _finish_case_spin(item_id:int)->void:
+ if case_spin_finished: return
+ case_spin_finished=true
+ if case_spin_tween!=null and case_spin_tween.is_running():
+  case_spin_tween.kill()
+ _show_drop_reveal(item_id)
+
+func _advance_case_reel(frame:Panel,slots:Array[Label],cards:Array[Panel],reel:Array[int],step:int)->void:
  if not is_instance_valid(frame): return
  for j in range(5):
   if is_instance_valid(slots[j]):
    _update_reel_slot(slots[j],reel[step+j])
+   var rarity:int=int(Loot.ITEMS[reel[step+j]]["rarity"])
+   cards[j].add_theme_stylebox_override("panel",_rarity_panel_style(Color(str(Loot.RARITY_COLORS[rarity]))))
 
 func _update_reel_slot(slot:Label,item_id:int)->void:
  var item:Dictionary=Loot.ITEMS[item_id]
@@ -710,8 +729,15 @@ func _show_drop_reveal(item_id:int)->void:
  again.custom_minimum_size=Vector2(215,50)
  again.pressed.connect(_show_cases)
  menu_layer.add_child(again)
+ var repeat_cost:int=int(Loot.CASES[last_case_index]["price"])
+ var repeat:=_button("ЕЩЁ РАЗ  /  %d ◈"%repeat_cost)
+ repeat.position=Vector2(502,501)
+ repeat.custom_minimum_size=Vector2(447,46)
+ repeat.disabled=credits<repeat_cost
+ repeat.pressed.connect(_open_case.bind(last_case_index))
+ menu_layer.add_child(repeat)
  var hint:=_label("Предмет сохранён в коллекции. Дубликаты возвращают часть кредитов.",14)
- hint.position=Vector2(502,524)
+ hint.position=Vector2(502,560)
  menu_layer.add_child(hint)
 
 func _rarity_panel_style(color:Color)->StyleBoxFlat:
