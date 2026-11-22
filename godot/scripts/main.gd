@@ -176,6 +176,14 @@ func _build_world() -> void:
   if Vector2(x,z).length()<5.0: continue
   _box(world_root,"Concrete cover",Vector3(x,0.75,z),Vector3(2.8,1.5,0.65),Color("#7b8586"),true)
   _box(world_root,"Cover edge",Vector3(x,1.54,z),Vector3(2.95,0.12,0.8),Color("#c5aa70"))
+ # Cross-street asphalt and lane markings improve arena legibility.
+ _box(world_root,"Asphalt road",Vector3(0,0.014,0),Vector3(10,0.028,38),Color("#41484c"))
+ for mark in range(10):
+  _box(world_root,"Center line",Vector3(0,0.035,-17.0+float(mark)*3.7),Vector3(0.17,0.014,1.6),Color("#e1c16a"))
+ for side in [-1.0,1.0]:
+  _box(world_root,"Sidewalk",Vector3(side*6.0,0.11,0),Vector3(1.5,0.22,38),Color("#8c9491"))
+  for segment in range(10):
+   _box(world_root,"Sidewalk joint",Vector3(side*6.0,0.228,-17.0+float(segment)*3.8),Vector3(1.48,0.01,0.055),Color("#465157"))
  # Lightweight environmental dressing: checkpoint, lane markings and warning lights.
  for i in range(11):
   var lane_z:float=-17.0+float(i)*3.3
@@ -205,30 +213,51 @@ func _build_world() -> void:
  _update_camera(1.0)
  _apply_settings()
 
+func _capsule_part(root:Node3D,part_name:String,pos:Vector3,radius:float,height:float,tint:Color)->MeshInstance3D:
+ var part:=MeshInstance3D.new()
+ part.name=part_name
+ var shape:=CapsuleMesh.new()
+ shape.radius=radius
+ shape.height=height
+ shape.radial_segments=12
+ shape.rings=5
+ part.mesh=shape
+ var material:=StandardMaterial3D.new()
+ material.albedo_color=tint
+ material.roughness=0.85
+ part.material_override=material
+ part.position=pos
+ root.add_child(part)
+ return part
+
 func _make_operator(root: Node3D, uniform: Color, player: bool) -> void:
- _box(root,"Boots",Vector3(0,0.18,0),Vector3(0.55,0.35,0.37),Color("#222b2b"))
- _box(root,"Legs",Vector3(0,0.62,0),Vector3(0.64,0.65,0.40),uniform)
- _box(root,"Vest",Vector3(0,1.25,0),Vector3(0.9,0.75,0.52),Color("#303c40"))
- _box(root,"Shoulders",Vector3(0,1.45,0),Vector3(1.14,0.22,0.42),uniform)
- _box(root,"Helmet",Vector3(0,1.93,0),Vector3(0.63,0.45,0.65),Color("#28373b"))
- _box(root,"Visor",Vector3(0,1.95,-0.34),Vector3(0.52,0.19,0.08),Color("#151f26"))
- _box(root,"Left arm",Vector3(-0.64,1.18,-0.08),Vector3(0.26,0.68,0.33),uniform)
- _box(root,"Right arm",Vector3(0.64,1.18,-0.08),Vector3(0.26,0.68,0.33),uniform)
- _box(root,"Left glove",Vector3(-0.64,0.77,-0.10),Vector3(0.28,0.22,0.34),Color("#202c2e"))
- _box(root,"Right glove",Vector3(0.64,0.77,-0.10),Vector3(0.28,0.22,0.34),Color("#202c2e"))
- _box(root,"Left knee guard",Vector3(-0.19,0.48,-0.23),Vector3(0.25,0.22,0.09),Color("#303b3b"))
- _box(root,"Right knee guard",Vector3(0.19,0.48,-0.23),Vector3(0.25,0.22,0.09),Color("#303b3b"))
- _box(root,"Chest armor",Vector3(0,1.26,-0.29),Vector3(0.74,0.54,0.13),Color("#36494b"))
- _box(root,"Left pouch",Vector3(-0.31,0.99,-0.39),Vector3(0.23,0.22,0.15),Color("#69705b"))
- _box(root,"Right pouch",Vector3(0.31,0.99,-0.39),Vector3(0.23,0.22,0.15),Color("#69705b"))
- _box(root,"Utility belt",Vector3(0,0.87,-0.05),Vector3(0.77,0.13,0.48),Color("#222b2b"))
- _box(root,"Helmet rim",Vector3(0,1.77,-0.01),Vector3(0.71,0.12,0.72),Color("#1e2b2d"))
- _box(root,"Weapon",Vector3(0.33,1.24,-0.52),Vector3(0.16,0.18,1.05),Color("#1d252b"))
- _box(root,"Weapon barrel",Vector3(0.33,1.24,-1.12),Vector3(0.09,0.09,0.36),Color("#111b20"))
- _box(root,"Weapon sight",Vector3(0.33,1.37,-0.55),Vector3(0.11,0.12,0.19),Color("#303b40"))
- _box(root,"Weapon magazine",Vector3(0.33,1.05,-0.44),Vector3(0.13,0.28,0.19),Color("#303b40"))
+ # Rounded silhouette and articulated equipment replace the block-only operator.
+ var suit:=uniform
+ _capsule_part(root,"Torso",Vector3(0,1.22,0),0.36,0.85,suit)
+ _capsule_part(root,"Left leg",Vector3(-0.21,0.53,0),0.17,0.86,suit.darkened(0.15))
+ _capsule_part(root,"Right leg",Vector3(0.21,0.53,0),0.17,0.86,suit.darkened(0.15))
+ _capsule_part(root,"Left arm",Vector3(-0.53,1.2,-0.02),0.15,0.74,suit)
+ _capsule_part(root,"Right arm",Vector3(0.53,1.2,-0.02),0.15,0.74,suit)
+ _capsule_part(root,"Head",Vector3(0,1.89,0),0.29,0.49,Color("#a28b79"))
+ _capsule_part(root,"Helmet shell",Vector3(0,2.03,0.01),0.33,0.41,Color("#29363c"))
+ _box(root,"Visor",Vector3(0,1.94,-0.31),Vector3(0.5,0.15,0.08),Color("#101d29"))
+ _box(root,"Vest",Vector3(0,1.28,-0.12),Vector3(0.76,0.67,0.48),Color("#36464b"))
+ _box(root,"Chest armor",Vector3(0,1.32,-0.38),Vector3(0.64,0.45,0.10),Color("#50636b"))
+ _box(root,"Utility belt",Vector3(0,0.86,-0.02),Vector3(0.75,0.16,0.45),Color("#222b2b"))
+ for side in [-1.0,1.0]:
+  _box(root,"Boots",Vector3(side*0.21,0.13,-0.08),Vector3(0.32,0.25,0.51),Color("#1b262a"))
+  _box(root,"Knee armor",Vector3(side*0.21,0.54,-0.19),Vector3(0.27,0.26,0.13),Color("#374b51"))
+  _box(root,"Shoulder plate",Vector3(side*0.51,1.5,-0.02),Vector3(0.31,0.23,0.42),Color("#3b4c53"))
+  _box(root,"glove",Vector3(side*0.53,0.82,-0.07),Vector3(0.27,0.21,0.33),Color("#1d292c"))
+  _box(root,"Magazine pouch",Vector3(side*0.3,1.0,-0.38),Vector3(0.23,0.27,0.17),Color("#68776a"))
+ _box(root,"Backpack",Vector3(0,1.22,0.36),Vector3(0.58,0.72,0.29),Color("#334a43"))
+ _box(root,"Weapon",Vector3(0.33,1.24,-0.52),Vector3(0.18,0.21,0.98),Color("#1d252b"))
+ _box(root,"Weapon barrel",Vector3(0.33,1.24,-1.12),Vector3(0.085,0.085,0.42),Color("#111b20"))
+ _box(root,"Weapon sight",Vector3(0.33,1.40,-0.59),Vector3(0.13,0.12,0.20),Color("#303b40"))
+ _box(root,"Weapon magazine",Vector3(0.33,1.01,-0.42),Vector3(0.14,0.29,0.18),Color("#303b40"))
+ _box(root,"Weapon stock",Vector3(0.33,1.2,0.03),Vector3(0.14,0.18,0.35),Color("#252e31"))
  if not player:
-  _box(root,"Clerk badge",Vector3(0,1.42,-0.3),Vector3(0.35,0.22,0.05),Color("#e7d3a0"))
+  _box(root,"Clerk badge",Vector3(0,1.45,-0.45),Vector3(0.26,0.13,0.05),Color("#e7d3a0"))
 
 func _spawn_enemy() -> void:
  if enemies.size() >= 20:
