@@ -35,15 +35,18 @@ jobs:
           export ANDROID_SDK_ROOT=/opt/android-sdk
           export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
           yes | sdkmanager --sdk_root=/opt/android-sdk --licenses >/dev/null || true
-          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-34" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
           echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
           echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> "$GITHUB_ENV"
           mkdir -p /github/home/.local/share/godot/export_templates
           cp -r /root/.local/share/godot/export_templates/4.3.stable /github/home/.local/share/godot/export_templates/
           mkdir -p /github/home/.android
           keytool -genkeypair -v -keystore /github/home/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          mkdir -p /github/home/.config/godot
-          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/opt/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/github/home/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /github/home/.config/godot/editor_settings-4.tres
+          mkdir -p /root/.config/godot /github/home/.config/godot
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/opt/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/github/home/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /root/.config/godot/editor_settings-4.tres
+          cp /root/.config/godot/editor_settings-4.tres /github/home/.config/godot/editor_settings-4.tres
+          ls -la /opt/android-sdk/build-tools /opt/android-sdk/platforms
+          ls -la /root/.config/godot
       - name: Import project and check scripts
         run: |
           godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
