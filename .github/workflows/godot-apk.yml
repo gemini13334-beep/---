@@ -1,0 +1,34 @@
+name: Build Godot 4 Android APK
+on:
+  push:
+    paths:
+      - 'godot/**'
+      - '.github/workflows/godot-apk.yml'
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container:
+      image: barichello/godot-ci:4.3
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check Android build environment
+        run: |
+          godot --version
+          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
+          echo "JAVA_HOME=${JAVA_HOME:-unset}"
+          ls -la /root/.local/share/godot/export_templates/ || true
+      - name: Import project and check scripts
+        run: |
+          godot --headless --path godot --editor --quit
+          godot --headless --path godot --quit-after 2
+      - name: Export debug Android APK
+        run: |
+          mkdir -p godot/build
+          godot --headless --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk
+          test -s godot/build/Otpusk-Tactical-Godot.apk
+      - name: Upload Godot APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Otpusk-Tactical-Godot-APK
+          path: godot/build/Otpusk-Tactical-Godot.apk
