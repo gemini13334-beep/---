@@ -17,6 +17,14 @@ const sun=new B.DirectionalLight('sun',new B.Vector3(-.5,-1,.35),scene);sun.posi
 const shadow=new B.ShadowGenerator(1024,sun);shadow.useBlurExponentialShadowMap=true;shadow.blurKernel=12;
 function material(name,hex,rough=1){const m=new B.PBRMaterial(name,scene);m.albedoColor=B.Color3.FromHexString(hex);m.metallic=0;m.roughness=rough;return m}
 const sand=material('sand','#b4a28b'),stone=material('stone','#d0b99b'),dark=material('dark','#454d50'),blue=material('blue','#334f5d'),enemyMat=material('enemy','#665044'),metal=material('metal','#3b4145',.55);
+function atlasTexture(name,key,scale){
+ const src=window.AF_TEXTURES&&window.AF_TEXTURES[key];
+ if(!src)return null;
+ const texture=new B.Texture(src,scene,false,false,B.Texture.TRILINEAR_SAMPLINGMODE);
+ texture.wrapU=B.Texture.WRAP_ADDRESSMODE;texture.wrapV=B.Texture.WRAP_ADDRESSMODE;
+ texture.uScale=scale;texture.vScale=scale;
+ return texture;
+}
 function proceduralStone(){
  const tex=new B.DynamicTexture('concrete texture',{width:512,height:512},scene,false);
  const ctx=tex.getContext();ctx.fillStyle='#a89b86';ctx.fillRect(0,0,512,512);
@@ -25,7 +33,7 @@ function proceduralStone(){
  ctx.strokeStyle='rgba(58,53,45,.34)';ctx.lineWidth=2;for(let i=0;i<=512;i+=128){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(i,512);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i);ctx.lineTo(512,i);ctx.stroke()}
  tex.update(false);tex.wrapU=tex.wrapV=B.Texture.WRAP_ADDRESSMODE;tex.uScale=5;tex.vScale=5;return tex
 }
-sand.albedoTexture=proceduralStone();
+sand.albedoTexture=atlasTexture('ground atlas','concrete',6)||proceduralStone();stone.albedoTexture=atlasTexture('brick atlas','brick',3);metal.albedoTexture=atlasTexture('metal atlas','metal',2);
 const trim=material('limestone trim','#e0cbb0'),timber=material('timber','#735941'),windowMat=material('window','#273e48',.4);
 
 function box(name,w,h,d,x,y,z,mat,collision=false){const o=B.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);o.position.set(x,y,z);o.material=mat;o.receiveShadows=true;o.checkCollisions=collision;if(collision)solid.push({x,z,w,d});return o}
