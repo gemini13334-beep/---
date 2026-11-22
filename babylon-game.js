@@ -35,13 +35,35 @@ function proceduralStone(){
 }
 sand.albedoTexture=atlasTexture('ground atlas','concrete',6)||proceduralStone();stone.albedoTexture=atlasTexture('brick atlas','brick',3);metal.albedoTexture=atlasTexture('metal atlas','metal',2);
 const trim=material('limestone trim','#e0cbb0'),timber=material('timber','#735941'),windowMat=material('window','#273e48',.4);
+function paintedTexture(name,kind,seed){
+ const tex=new B.DynamicTexture(name,{width:256,height:256},scene,true);
+ const ctx=tex.getContext();let state=seed>>>0;
+ const rand=()=>{state=(Math.imul(state,1664525)+1013904223)>>>0;return state/4294967296};
+ const base={sand:'#b5a185',wood:'#786049',stone:'#c9b39a',fabric:'#7c7867',cargo:'#65747a',hazard:'#85704b'}[kind]||'#999999';
+ ctx.fillStyle=base;ctx.fillRect(0,0,256,256);
+ if(kind==='wood'){for(let y=0;y<256;y+=43){ctx.fillStyle='#403326';ctx.fillRect(0,y,256,3);ctx.fillStyle='rgba(240,203,144,.2)';ctx.fillRect(0,y+4,256,2)}}
+ if(kind==='stone'){ctx.strokeStyle='rgba(70,60,49,.42)';ctx.lineWidth=3;for(let y=0;y<256;y+=64){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(256,y);ctx.stroke();for(let x=(y/64%2)*64;x<256;x+=128){ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x,y+64);ctx.stroke()}}}
+ if(kind==='cargo'){ctx.fillStyle='rgba(24,37,44,.25)';for(let x=0;x<256;x+=23)ctx.fillRect(x,0,5,256)}
+ if(kind==='hazard'){ctx.save();ctx.translate(128,128);ctx.rotate(-Math.PI/4);ctx.fillStyle='#d7a33f';for(let x=-420;x<420;x+=52)ctx.fillRect(x,-400,26,800);ctx.restore()}
+ if(kind==='fabric'){ctx.strokeStyle='rgba(30,31,24,.17)';ctx.lineWidth=1;for(let y=0;y<256;y+=5){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(256,y);ctx.stroke()}for(let x=0;x<256;x+=5){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,256);ctx.stroke()}}
+ for(let i=0;i<6500;i++){const x=rand()*256,y=rand()*256,v=rand();ctx.fillStyle=v>.5?'rgba(255,247,223,'+(rand()*.11)+')':'rgba(25,22,19,'+(rand()*.12)+')';ctx.fillRect(x,y,1+rand()*3,1+rand()*3)}
+ tex.update(false);tex.wrapU=tex.wrapV=B.Texture.WRAP_ADDRESSMODE;tex.uScale=2;tex.vScale=2;return tex
+}
+const groundDetail=material('desert ground','#ffffff'),wallDetail=material('wall stone','#ffffff'),woodDetail=material('weathered wood','#ffffff'),fabricDetail=material('canvas fabric','#ffffff'),cargoDetail=material('corrugated metal','#ffffff'),hazardDetail=material('hazard paint','#ffffff');
+groundDetail.albedoTexture=paintedTexture('sand gravel','sand',119);
+wallDetail.albedoTexture=paintedTexture('cut limestone','stone',221);
+woodDetail.albedoTexture=paintedTexture('wood grain','wood',331);
+fabricDetail.albedoTexture=paintedTexture('canvas weave','fabric',441);
+cargoDetail.albedoTexture=paintedTexture('container ribs','cargo',551);
+hazardDetail.albedoTexture=paintedTexture('warning stripes','hazard',661);
+
 
 function box(name,w,h,d,x,y,z,mat,collision=false){const o=B.MeshBuilder.CreateBox(name,{width:w,height:h,depth:d},scene);o.position.set(x,y,z);o.material=mat;o.receiveShadows=true;o.checkCollisions=collision;if(collision)solid.push({x,z,w,d});return o}
 const solid=[];
-box('ground',42,.4,44,0,-.22,0,sand);
+box('ground',42,.4,44,0,-.22,0,groundDetail);
 for(const z of [-21.7,21.7]){box('wall',42,6,.6,0,3,z,stone);for(let x=-17;x<19;x+=7){box('window',3,2,.07,x,3.4,z+(z>0?-.35:.35),dark)}}
 for(const x of [-20.7,20.7]){box('wall',.6,6,44,x,3,0,stone);for(let z=-16;z<19;z+=8)box('alcove',.07,2.1,3,x+(x>0?-.35:.35),3.5,z,dark)}
-for(let i=0;i<10;i++){const x=-14+i%5*7,z=-12+Math.floor(i/5)*20;box('cover',2.8,1.6,2.2,x,.8,z,stone,true);box('cover top',3,.16,2.4,x,1.65,z,dark)}
+for(let i=0;i<10;i++){const x=-14+i%5*7,z=-12+Math.floor(i/5)*20;box('cover',2.8,1.6,2.2,x,.8,z,wallDetail,true);box('cover top',3,.16,2.4,x,1.65,z,dark)}
 for(const z of [-21.27,21.27])for(let x=-17;x<19;x+=7){box('window inset',2.7,1.75,.06,x,3.4,z,windowMat);box('stone sill',3.4,.15,.35,x,2.38,z,trim);box('window mullion',.12,1.8,.12,x,3.4,z,trim);box('window header',3.5,.16,.38,x,4.48,z,trim)}
 for(let i=0;i<8;i++){const x=-17+(i%4)*11,z=-18+Math.floor(i/4)*36;const drum=B.MeshBuilder.CreateCylinder('metal barrel',{height:1,diameter:.83,tessellation:12},scene);drum.position.set(x,.5,z);drum.material=metal;drum.receiveShadows=true;shadow.addShadowCaster(drum);for(const y of [.23,.78]){const rim=B.MeshBuilder.CreateTorus('barrel rim',{diameter:.86,thickness:.07,tessellation:12},scene);rim.position.set(x,y,z);rim.material=dark}}
 for(let i=0;i<6;i++){const x=-15+i*6;box('upper facade',4.5,.35,.55,x,5.75,-21.4,trim);box('column',.45,5.4,.6,x-2,2.7,-21.2,trim)}
@@ -56,12 +78,12 @@ for(const side of [-1,1]){
  }
  for(const z of [-14,13]){
   const x=side*12;
-  box('stacked cargo',2.3,1.7,2.4,x,.85,z,cargo,true);
-  box('cargo stripe',2.4,.12,2.5,x,1.78,z,warning);
+  box('stacked cargo',2.3,1.7,2.4,x,.85,z,cargoDetail,true);
+  box('cargo stripe',2.4,.12,2.5,x,1.78,z,hazardDetail);
  }
 }
 for(const z of [-7,7]){
- box('central low wall',5.4,1.35,.8,0,.675,z,barricade,true);
+ box('central low wall',5.4,1.35,.8,0,.675,z,wallDetail,true);
  box('central wall trim',5.6,.13,1,0,1.41,z,trim);
 }
 function steerEnemy(ep,target,dt){
@@ -103,7 +125,7 @@ for(const side of [-1,1]){
  const boot=box(name+' boot',.3,.18,.4,0,0,0,dark);boot.parent=root;boot.position.set(side*.22,.14,-.1);
  const earpiece=box(name+' headset',.11,.22,.2,0,0,0,dark);earpiece.parent=root;earpiece.position.set(side*.34,2.08,0);
 }
-for(let i=0;i<3;i++){const pouch=box(name+' magazine pouch',.2,.23,.15,0,0,0,timber);pouch.parent=root;pouch.position.set((i-1)*.23,1.18,-.43)}
+for(let i=0;i<3;i++){const pouch=box(name+' magazine pouch',.2,.23,.15,0,0,0,fabricDetail);pouch.parent=root;pouch.position.set((i-1)*.23,1.18,-.43)}
 const rifle=box(name+' rifle receiver',.2,.22,.73,0,0,0,metal);rifle.parent=root;rifle.position.set(.42,1.42,-.59);
 const stock=box(name+' rifle stock',.24,.2,.38,0,0,0,dark);stock.parent=root;stock.position.set(.42,1.42,.03);
 const barrel=box(name+' rifle barrel',.08,.08,.7,0,0,0,metal);barrel.parent=root;barrel.position.set(.42,1.44,-1.22);
