@@ -77,6 +77,8 @@ function segmentDistanceSq(ax,az,bx,bz,px,pz){
  const ex=ax+dx*t-px,ez=az+dz*t-pz;
  return ex*ex+ez*ez
 }
+let hitMarkerTime=0;const hitMarker=document.getElementById('crosshair');
+function showHitMarker(){hitMarkerTime=.14;hitMarker.classList.add('hit')}
 let noticeTimer=0;function notify(text,duration=2.5){msg.textContent=text;noticeTimer=duration}
 const pickups=[];const medkitGeometry=new THREE.BoxGeometry(.45,.25,.45),medkitMaterial=new THREE.MeshStandardMaterial({color:0x2bc7a4,emissive:0x08795b,emissiveIntensity:.8});
 function dropMedkit(x,z){
@@ -101,7 +103,7 @@ dashButton.addEventListener('pointerdown',triggerDash);
 addEventListener('keydown',e=>{if(e.code==='Space'){e.preventDefault();if(!e.repeat)triggerDash()}});
 function canMove(x,z){return Math.abs(x)<15.1&&Math.abs(z)<16.1&&!obstacles.some(o=>Math.abs(x-o.x)<o.w/2+.55&&Math.abs(z-o.z)<o.d/2+.55)}
 const clock=new THREE.Clock(),spark=new THREE.SphereGeometry(.12,6,6);let elapsed=0;const tempColor=new THREE.Color();function projectile(from,to,enemy){let v=to.clone().sub(from).normalize(),mesh=new THREE.Mesh(spark,enemy?amber:cyan);mesh.position.copy(from);scene.add(mesh);bullets.push({mesh,v,enemy,ttl:1.3})}
-function update(){let dt=Math.min(clock.getDelta(),.04);elapsed+=dt;for(const item of animationMixers){if(item.owner.parent)item.mixer.update(dt)}if(ended)return;if(noticeTimer>0){noticeTimer-=dt;if(noticeTimer<=0)msg.textContent='Зачисти помещение. Стрельба автоматическая.'}invuln=Math.max(0,invuln-dt);damageOverlay.style.opacity=String(Math.min(.62,Math.max(0,invuln-.12)*.95));let mx=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),mz=move.y+(keys.has('s')?1:0)-(keys.has('w')?1:0),l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}dashCooldown=Math.max(0,dashCooldown-dt);
+function update(){let dt=Math.min(clock.getDelta(),.04);elapsed+=dt;for(const item of animationMixers){if(item.owner.parent)item.mixer.update(dt)}if(ended)return;if(hitMarkerTime>0){hitMarkerTime-=dt;if(hitMarkerTime<=0)hitMarker.classList.remove('hit')}if(noticeTimer>0){noticeTimer-=dt;if(noticeTimer<=0)msg.textContent='Зачисти помещение. Стрельба автоматическая.'}invuln=Math.max(0,invuln-dt);damageOverlay.style.opacity=String(Math.min(.62,Math.max(0,invuln-.12)*.95));let mx=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),mz=move.y+(keys.has('s')?1:0)-(keys.has('w')?1:0),l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}dashCooldown=Math.max(0,dashCooldown-dt);
 if(dashCooldown===0&&dashButton.style.opacity!=='1'){dashButton.style.opacity='1';dashButton.textContent='РЫВОК'}
 else if(dashCooldown>0)dashButton.textContent=Math.ceil(dashCooldown)+'с';
 let speed=dash>0?15:6;dash=Math.max(0,dash-dt);hero.userData.motion=(hero.userData.motion||0)+dt*Math.max(0,l)*11;const running=l>.08;hero.position.y=running?Math.abs(Math.sin(hero.userData.motion))*.07:Math.sin(elapsed*2)*.014;let nx=hero.position.x+mx*speed*dt,nz=hero.position.z+mz*speed*dt;if(canMove(nx,hero.position.z))hero.position.x=nx;if(canMove(hero.position.x,nz))hero.position.z=nz;
@@ -122,7 +124,7 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
 for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;const prevX=b.mesh.position.x-b.v.x*dt*28,prevZ=b.mesh.position.z-b.v.z*dt*28;
  let wallHit=blocked(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,.05);
- let hit=wallHit?null:enemies.find(e=>segmentDistanceSq(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,e.position.x,e.position.z)<.75*.75);if(wallHit)b.ttl=0;if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;if(kills%3===0)dropMedkit(hit.position.x,hit.position.z);killsEl.textContent=kills+' / 12';progressFill.style.width=Math.min(100,kills/12*100)+'%';addKillFeed();if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
+ let hit=wallHit?null:enemies.find(e=>segmentDistanceSq(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,e.position.x,e.position.z)<.75*.75);if(wallHit)b.ttl=0;if(hit){showHitMarker();hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;if(kills%3===0)dropMedkit(hit.position.x,hit.position.z);killsEl.textContent=kills+' / 12';progressFill.style.width=Math.min(100,kills/12*100)+'%';addKillFeed();if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
 for(let i=pickups.length-1;i>=0;i--){
  const p=pickups[i];p.ttl-=dt;p.mesh.rotation.y+=dt*1.8;p.mesh.position.y=.35+Math.sin(elapsed*4+i)*.08;
  if(Math.hypot(hero.position.x-p.mesh.position.x,hero.position.z-p.mesh.position.z)<1.1&&health<100){
