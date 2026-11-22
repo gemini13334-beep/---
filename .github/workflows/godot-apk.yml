@@ -26,7 +26,7 @@ jobs:
           echo "HOME=/root" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
-          apt-get update -qq && apt-get install -y -qq curl unzip openjdk-17-jdk-headless ca-certificates >/dev/null
+          apt-get update -qq && apt-get install -y -qq curl unzip strace openjdk-17-jdk-headless ca-certificates >/dev/null
           mkdir -p /opt/android-sdk/cmdline-tools
           curl -fsSL --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/android-tools.zip
           unzip -q /tmp/android-tools.zip -d /tmp/android-cli
@@ -66,7 +66,9 @@ jobs:
           cat godot/export_presets.cfg
           echo "=== GODOT SETTINGS ==="
           grep -E "export/android|debug_keystore|java_sdk" /root/.config/godot/editor_settings-4.3.tres || true
-          godot --headless --verbose --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk 2>&1 | tee /tmp/godot-export.log
+          strace -f -e trace=file -o /tmp/godot-file-access.log godot --headless --verbose --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk 2>&1 | tee /tmp/godot-export.log
+          echo "=== MISSING ANDROID FILES ==="
+          grep "ENOENT" /tmp/godot-file-access.log | grep -E "android|sdk|godot|keystore|java|build-tools|apk" | tail -70 || true
           if grep -E "Cannot export|Project export.*failed|ERROR:" /tmp/godot-export.log; then exit 1; fi
           test -s godot/build/Otpusk-Tactical-Godot.apk
       - name: Upload Godot APK
