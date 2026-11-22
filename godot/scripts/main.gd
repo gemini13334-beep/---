@@ -443,6 +443,37 @@ func _apply_weapon_skin()->void:
   material.metallic=0.38 if skin_id>=0 else 0.0
   material.roughness=0.38 if skin_id>=0 else 0.9
   part.material_override=material
+ _add_skin_details(skin_id)
+
+func _clear_skin_details()->void:
+ if not is_instance_valid(hero): return
+ var old:=hero.get_node_or_null("SkinDetails")
+ if old!=null:
+  hero.remove_child(old)
+  old.queue_free()
+
+func _add_skin_details(skin_id:int)->void:
+ _clear_skin_details()
+ if skin_id<0 or not is_instance_valid(hero): return
+ var details:=Node3D.new()
+ details.name="SkinDetails"
+ hero.add_child(details)
+ var primary:=Color(SKIN_PALETTE[skin_id])
+ var accent:=Color(str(Loot.RARITY_COLORS[int(Loot.ITEMS[skin_id]["rarity"])]))
+ var style_id:int=skin_id%4
+ for i in range(4):
+  var z:float=-0.87+float(i)*0.22
+  var stripe_color:=accent if i%2==0 else primary.lightened(0.36)
+  match style_id:
+   0:
+    _box(details,"Stripe %d"%i,Vector3(0.33,1.337,z),Vector3(0.165,0.018,0.06),stripe_color)
+   1:
+    _box(details,"Circuit %d"%i,Vector3(0.33,1.337,z),Vector3(0.065+float(i%2)*0.08,0.018,0.025),stripe_color)
+   2:
+    _box(details,"Panel %d"%i,Vector3(0.33,1.337,z),Vector3(0.17,0.018,0.11),stripe_color.darkened(0.2))
+   _:
+    _box(details,"Gold line %d"%i,Vector3(0.33,1.337,z),Vector3(0.13,0.018,0.025),accent)
+ _box(details,"Skin emblem",Vector3(0.33,1.35,-0.53),Vector3(0.12,0.02,0.1),accent)
 
 func _refresh_weapon_button()->void:
  if is_instance_valid(weapon_button):
