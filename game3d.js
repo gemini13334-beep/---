@@ -88,7 +88,7 @@ let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.posit
  }
  if(canMove(e.position.x+tx*step,e.position.z))e.position.x+=tx*step;
  if(canMove(e.position.x,e.position.z+tz*step))e.position.z+=tz*step;
-}e.lookAt(hero.position.x,0,hero.position.z);e.userData.motion=(e.userData.motion||0)+dt*7;e.position.y=Math.abs(Math.sin(e.userData.motion))*.035;e.userData.cool-=dt;if(d<2&&!blocked(e.position.x,e.position.z,hero.position.x,hero.position.z,.06)&&e.userData.cool<=0){e.userData.cool=1.25;if(invuln<=0){health=Math.max(0,health-12);invuln=.6;hpEl.textContent='HP '+health;damageOverlay.style.opacity='.62'}}}
+}e.lookAt(hero.position.x,0,hero.position.z);e.userData.motion=(e.userData.motion||0)+dt*7;e.position.y=Math.abs(Math.sin(e.userData.motion))*.035;e.userData.cool-=dt;if(d<2&&!blocked(e.position.x,e.position.z,hero.position.x,hero.position.z,.06)&&e.userData.cool<=0){e.userData.cool=1.25;if(invuln<=0){health=Math.max(0,health-12);invuln=.6;hpEl.textContent=String(health);damageOverlay.style.opacity='.62'}}}
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
 for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;const prevX=b.mesh.position.x-b.v.x*dt*28,prevZ=b.mesh.position.z-b.v.z*dt*28;
  let wallHit=blocked(prevX,prevZ,b.mesh.position.x,b.mesh.position.z,.05);
@@ -96,7 +96,7 @@ for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledV
 for(let i=pickups.length-1;i>=0;i--){
  const p=pickups[i];p.ttl-=dt;p.mesh.rotation.y+=dt*1.8;p.mesh.position.y=.35+Math.sin(elapsed*4+i)*.08;
  if(Math.hypot(hero.position.x-p.mesh.position.x,hero.position.z-p.mesh.position.z)<1.1&&health<100){
-  health=Math.min(100,health+25);hpEl.textContent='HP '+health;notify('АПТЕЧКА +25 HP');p.ttl=0
+  health=Math.min(100,health+25);hpEl.textContent=String(health);notify('АПТЕЧКА +25 HP');p.ttl=0
  }
  if(p.ttl<=0){scene.remove(p.mesh);pickups.splice(i,1)}
 }
@@ -146,7 +146,7 @@ function frame(){
   const button=document.createElement('button');button.textContent='ПОВТОРИТЬ ЗАПУСК';button.style.cssText='padding:14px;background:#e4b369;color:#101923';button.onclick=()=>location.reload();
   panel.append(title,details,button);failure.append(panel);document.body.append(failure);
  }
-}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'54px',right:'12px',zIndex:'3',background:'#172838d9',color:'#f4d49d',border:'1px solid #b6c7d2',padding:'8px',fontSize:'11px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
+}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'calc(env(safe-area-inset-top,0px) + 100px)',right:'8px',zIndex:'4',background:'#17242de8',color:'#e6b65b',border:'1px solid #8da0a866',padding:'7px',fontSize:'10px',letterSpacing:'1px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
 renderer.domElement.addEventListener('webglcontextlost',event=>{
  event.preventDefault();running3d=false;
  loading.textContent='Потеряно соединение с 3D-видеоускорителем. Перезапусти игру.';
