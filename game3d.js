@@ -15,10 +15,10 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
   if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animationMixers.push(mixer)}
  },undefined,error=>{assetStatus.failed++;console.warn('GLTF fallback:',url,error)});
 }
-const animationMixers=[];const motionTime=new THREE.Clock();
+const animationMixers=[];
 
 const loading=document.getElementById('loading'),hpEl=document.getElementById('hp'),killsEl=document.getElementById('kills'),msg=document.getElementById('msg');
-let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});}catch(e){loading.innerHTML='WebGL недоступен. <a href="./index.html">Открыть 2D-версию</a>';throw e}
+let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});}catch(e){loading.innerHTML='WebGL недоступен. <a href="./classic.html">Открыть классический режим</a>';throw e}
 const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);let quality=mobile?'balanced':'high';function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='balanced'?1.15:.85));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1826);scene.fog=new THREE.FogExp2(0x0c1826,.022);
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,150);
