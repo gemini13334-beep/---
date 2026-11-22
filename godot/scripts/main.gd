@@ -86,6 +86,24 @@ func _box(parent: Node3D, name: String, pos: Vector3, size: Vector3, color: Colo
  var mat := StandardMaterial3D.new()
  mat.albedo_color = color
  mat.roughness = 0.92
+ # Imported original SVG texture set; neutral tint preserves authored colors.
+ var texture_name: String = ""
+ if name.contains("floor") or name.contains("Concrete cover"):
+  texture_name = "concrete_floor"
+ elif name.contains("wall") or name.contains("Industrial block"):
+  texture_name = "sandstone_wall"
+ elif name.contains("Crate") or name.contains("crate"):
+  texture_name = "crate_wood"
+ elif name.contains("Barricade marking") or name.contains("Facade stripe"):
+  texture_name = "hazard_panel"
+ elif name.contains("Roof") or name.contains("Window frame") or name.contains("Checkpoint"):
+  texture_name = "industrial_metal"
+ if texture_name != "":
+  var tex: Texture2D = load("res://assets/textures/" + texture_name + ".svg") as Texture2D
+  if tex != null:
+   mat.albedo_texture = tex
+   mat.albedo_color = Color.WHITE
+
  node.material_override = mat
  node.position = pos
  parent.add_child(node)
