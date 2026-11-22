@@ -33,6 +33,12 @@ var playing := false
 var enemies: Array[Node3D] = []
 var enemy_timer := 0.0
 var fire_timer := 0.0
+var magazine_rounds := [30,12,6]
+var reload_timer := 0.0
+var reload_duration := 1.5
+var ammo_label: Label
+var reload_button: Button
+var recoil_timer := 0.0
 var joystick := Vector2.ZERO
 var touch_origin := Vector2.ZERO
 var touch_id := -1
@@ -270,7 +276,12 @@ func _process(delta: float) -> void:
   if hit_flash_timer <= 0.0 and is_instance_valid(hit_marker):
    hit_marker.visible=false
  fire_timer -= delta
- if auto_fire and fire_timer<=0:
+ if reload_timer>0.0:
+  reload_timer=maxf(0.0,reload_timer-delta)
+  if reload_timer==0.0:
+   magazine_rounds[weapon_index]=_magazine_capacity()
+  _refresh_ammo_ui()
+ if auto_fire and fire_timer<=0 and reload_timer<=0.0 and magazine_rounds[weapon_index]>0:
   var nearest: Node3D = null
   var distance: float = float(WEAPONS[weapon_index]["range"])
   for e in enemies:
@@ -281,6 +292,9 @@ func _process(delta: float) -> void:
     nearest=e
   if nearest != null and _has_clear_shot(nearest):
    fire_timer=float(WEAPONS[weapon_index]["cooldown"])
+   magazine_rounds[weapon_index]-=1
+   camera_kick=minf(0.18,camera_kick+0.045)
+   _refresh_ammo_ui()
    hero.look_at(Vector3(nearest.position.x,hero.position.y,nearest.position.z),Vector3.UP)
    _show_shot_feedback(nearest)
    var remaining: float = float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
@@ -294,6 +308,8 @@ func _process(delta: float) -> void:
     kills_label.text="%d / %d"%[kills,_target()]
     if not endless and kills>=_target():
      _win()
+ if playing and magazine_rounds[weapon_index]<=0 and reload_timer<=0.0:
+  _start_reload()
  if hp<=0:
   playing=false
   _show_result(false)
@@ -405,6 +421,17 @@ func _build_ui()->void:
  weapon_button.custom_minimum_size=Vector2(275,66)
  weapon_button.pressed.connect(_cycle_weapon)
  hud.add_child(weapon_button)
+ reload_button=_button("↻ ПЕРЕЗАРЯДКА")
+ reload_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ reload_button.position=Vector2(-290,-205)
+ reload_button.custom_minimum_size=Vector2(275,45)
+ reload_button.pressed.connect(_start_reload)
+ hud.add_child(reload_button)
+ ammo_label=_label("30 / 30",18)
+ ammo_label.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ ammo_label.position=Vector2(-290,-161)
+ hud.add_child(ammo_label)
+ _refresh_ammo_ui()
  weapon_status=_label("АВТО • "+str(WEAPONS[weapon_index]["name"]),14)
  weapon_status.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
  weapon_status.position=Vector2(-290,-126)
@@ -435,8 +462,25 @@ func _build_ui()->void:
 
 func _cycle_weapon()->void:
  weapon_index=(weapon_index+1)%WEAPONS.size()
+ reload_timer=0.0
+ _refresh_ammo_ui()
  _refresh_weapon_button()
  _apply_weapon_skin()
+
+func _magazine_capacity()->int:
+ return [30,12,6][weapon_index]
+
+func _start_reload()->void:
+ if not playing or reload_timer>0.0: return
+ if magazine_rounds[weapon_index]>=_magazine_capacity(): return
+ reload_timer=reload_duration
+ _refresh_ammo_ui()
+
+func _refresh_ammo_ui()->void:
+ if is_instance_valid(ammo_label):
+  ammo_label.text="ПЕРЕЗАРЯДКА..." if reload_timer>0.0 else "ПАТРОНЫ  %d / %d"%[magazine_rounds[weapon_index],_magazine_capacity()]
+ if is_instance_valid(reload_button):
+  reload_button.disabled=not playing or reload_timer>0.0 or magazine_rounds[weapon_index]>=_magazine_capacity()
 
 func _apply_weapon_skin()->void:
  if not is_instance_valid(hero): return
