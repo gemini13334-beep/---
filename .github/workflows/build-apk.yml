@@ -31,6 +31,10 @@ jobs:
           test $(wc -c < app/src/main/assets/vendor/three.module.js) -gt 100000
           curl --fail --location --retry 3 --silent --show-error https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/loaders/GLTFLoader.js -o app/src/main/assets/vendor/GLTFLoader.js
           sed -i "s|from 'three'|from './three.module.js'|g" app/src/main/assets/vendor/GLTFLoader.js
+          mkdir -p app/src/main/assets/utils
+          curl --fail --location --retry 3 --silent --show-error https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/utils/BufferGeometryUtils.js -o app/src/main/assets/utils/BufferGeometryUtils.js
+          sed -i "s|from 'three'|from '../vendor/three.module.js'|g" app/src/main/assets/utils/BufferGeometryUtils.js
+          test -s app/src/main/assets/utils/BufferGeometryUtils.js
           mkdir -p app/src/main/assets/models
           cp models/*.gltf app/src/main/assets/models/
           test -s app/src/main/assets/vendor/GLTFLoader.js
