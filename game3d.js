@@ -43,6 +43,23 @@ function spawn(){
  a.userData.hp=3;a.userData.cool=0;enemies.push(a)
 }
 for(let i=0;i<5;i++)spawn();
+const radarCanvas=document.getElementById('radarcanvas'),radarCtx=radarCanvas.getContext('2d');
+let radarLastDraw=0;
+function drawRadar(){
+ if(!radarCtx)return;
+ const c=radarCtx,w=radarCanvas.width,h=radarCanvas.height;
+ c.clearRect(0,0,w,h);c.fillStyle='#13222bd9';c.fillRect(0,0,w,h);
+ c.strokeStyle='#6f89934b';c.lineWidth=1;
+ for(let i=1;i<=3;i++){c.beginPath();c.arc(w/2,h/2,i*26,0,Math.PI*2);c.stroke()}
+ c.beginPath();c.moveTo(w/2,0);c.lineTo(w/2,h);c.moveTo(0,h/2);c.lineTo(w,h/2);c.stroke();
+ const scale=2.6;
+ function dot(x,z,r,color){const px=w/2+(x-hero.position.x)*scale,py=h/2+(z-hero.position.z)*scale;if(px<5||px>w-5||py<5||py>h-5)return;c.fillStyle=color;c.beginPath();c.arc(px,py,r,0,Math.PI*2);c.fill()}
+ for(const o of obstacles){const px=w/2+(o.x-hero.position.x)*scale,py=h/2+(o.z-hero.position.z)*scale;c.fillStyle='#73828a66';c.fillRect(px-o.w*scale/2,py-o.d*scale/2,o.w*scale,o.d*scale)}
+ for(const e of enemies)dot(e.position.x,e.position.z,4,'#ec7469');
+ for(const p of pickups)dot(p.mesh.position.x,p.mesh.position.z,3,'#5ce4ae');
+ dot(hero.position.x,hero.position.z,5,'#9ad3f2');
+ c.strokeStyle='#9ad3f2';c.beginPath();c.moveTo(w/2,h/2-11);c.lineTo(w/2,h/2-6);c.stroke()
+}
 // Segment versus expanded AABB: cover blocks projectiles and targeting.
 function blocked(ax,az,bx,bz,pad=0){
  for(const o of obstacles){const minX=o.x-o.w/2-pad,maxX=o.x+o.w/2+pad,minZ=o.z-o.d/2-pad,maxZ=o.z+o.d/2+pad;let t0=0,t1=1,dx=bx-ax,dz=bz-az;
@@ -139,6 +156,7 @@ function frame(){
  if(pausedBySystem){clock.getDelta();fpsWindowStart=performance.now();frames=0;pausedBySystem=false}
  try{
   update();
+  if(performance.now()-radarLastDraw>90){drawRadar();radarLastDraw=performance.now()}
   renderer.render(scene,camera);
   frames++;
   if(frames>=90){
