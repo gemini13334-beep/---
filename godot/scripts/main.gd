@@ -197,7 +197,7 @@ func _process(delta: float) -> void:
    _show_hit_feedback(nearest)
    if remaining<=0:
     enemies.erase(nearest)
-    nearest.queue_free()
+    _animate_enemy_defeat(nearest)
     kills+=1
     xp+=10
     kills_label.text="%d / %d"%[kills,_target()]
@@ -208,6 +208,19 @@ func _process(delta: float) -> void:
   _show_result(false)
  hp_label.text="✚ %d"%ceili(maxf(hp,0))
  _update_camera(delta)
+
+func _animate_enemy_defeat(target:Node3D)->void:
+ if not is_instance_valid(target): return
+ # Defeated enemies stop moving immediately because they leave the active list.
+ # The short collapse gives combat a readable finish without skeletal animations.
+ var collapse:=create_tween()
+ collapse.set_parallel(true)
+ collapse.tween_property(target,"rotation_degrees:x",72.0,0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+ collapse.tween_property(target,"position:y",-0.55,0.38).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
+ collapse.tween_property(target,"scale",Vector3(1.0,0.25,1.0),0.38)
+ collapse.chain().tween_callback(func():
+  if is_instance_valid(target): target.queue_free()
+ )
 
 func _show_shot_feedback(target:Node3D)->void:
  var start:=hero.global_position+Vector3(0.32,1.25,0)
