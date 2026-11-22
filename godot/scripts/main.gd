@@ -3,6 +3,7 @@ extends Node3D
 const Story = preload("res://scripts/story.gd")
 const SAVE_PATH := "user://vacation_save.json"
 var stage := 0
+var campaign_complete := false
 var endless := false
 var kills := 0
 var hp := 100.0
@@ -252,7 +253,7 @@ func _show_menu()->void:
  story.custom_minimum_size=Vector2(820,60)
  story.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  menu_layer.add_child(story)
- var labels:=["▶ КАМПАНИЯ: "+str(Story.mission(stage)["name"]),"∞ БЕСКОНЕЧНЫЙ РЕЖИМ","◈ СНАРЯЖЕНИЕ","▤ ЛИЧНОЕ ДЕЛО","⚙ НАСТРОЙКИ"]
+ var labels:=["▶ "+("КАМПАНИЯ ПРОЙДЕНА — ПОВТОР" if campaign_complete else "КАМПАНИЯ: "+str(Story.mission(stage)["name"])),"∞ БЕСКОНЕЧНЫЙ РЕЖИМ","◈ СНАРЯЖЕНИЕ","▤ ЛИЧНОЕ ДЕЛО","⚙ НАСТРОЙКИ"]
  for i in range(labels.size()):
   var b:=_button(labels[i])
   b.position=Vector2(55,215+i*62)
@@ -305,13 +306,19 @@ func _start(is_endless:bool)->void:
 
 func _win()->void:
  playing=false
- stage=min(stage+1,Story.MISSIONS.size()-1)
+ if stage >= Story.MISSIONS.size()-1:
+  campaign_complete=true
+ else:
+  stage+=1
  _save()
  _show_result(true)
 
 func _show_result(won:bool)->void:
  _show_menu()
- var l:=_label("МИССИЯ ВЫПОЛНЕНА" if won else "ОПЕРАЦИЯ ПРОВАЛЕНА",30)
+ var result_text := "ОПЕРАЦИЯ ПРОВАЛЕНА"
+ if won:
+  result_text = "РАПОРТ ПОДПИСАН! ОТПУСК ДО НОВОГО ГОДА!" if campaign_complete else "МИССИЯ ВЫПОЛНЕНА — СЛЕДУЮЩИЙ ЭТАП ОТКРЫТ"
+ var l:=_label(result_text,26)
  l.position=Vector2(475,480)
  menu_layer.add_child(l)
 
@@ -337,7 +344,8 @@ func _load()->void:
  if data is Dictionary:
   stage=clampi(int(data.get("stage",0)),0,Story.MISSIONS.size()-1)
   xp=int(data.get("xp",0))
+  campaign_complete=bool(data.get("campaign_complete",false))
 
 func _save()->void:
  var file:=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
- file.store_string(JSON.stringify({"stage":stage,"xp":xp}))
+ file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete}))
