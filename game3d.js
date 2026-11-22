@@ -11,7 +11,7 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
   model.traverse(o=>{if(o.isMesh){o.castShadow=true;o.receiveShadow=true;o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone()}});
   parent.add(model);
   if(replace){for(const item of Array.isArray(replace)?replace:[replace])item.visible=false;}
-  if(parent.userData.tacticalAgent)attachTacticalGear(parent,parent.userData.tacticalAgent);
+  if(typeof parent.userData.tacticalAgent==='boolean')attachTacticalGear(parent,parent.userData.tacticalAgent);
   assetStatus.loaded++;
   if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animationMixers.push({mixer,owner:parent})}
  }).catch(error=>{assetStatus.failed++;console.warn('GLTF fallback:',url,error)});
