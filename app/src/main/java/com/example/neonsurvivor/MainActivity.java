@@ -3,6 +3,9 @@ import android.app.Activity;
 import android.os.Bundle;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebChromeClient;
+import android.webkit.ConsoleMessage;
+import android.util.Log;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.view.WindowManager;
@@ -25,6 +28,8 @@ public class MainActivity extends Activity {
     catch(Exception e){return new WebResourceResponse("text/plain","UTF-8",404,"Not Found",Collections.emptyMap(),new java.io.ByteArrayInputStream(new byte[0]));}
    }
   });
+  web.setWebChromeClient(new WebChromeClient(){@Override public boolean onConsoleMessage(ConsoleMessage message){Log.e("AFTERFALL_WEBGL",message.message()+" @ "+message.sourceId()+":"+message.lineNumber());return true;}});
+  web.setLayerType(android.view.View.LAYER_TYPE_HARDWARE,null);
   web.getSettings().setJavaScriptEnabled(true);
   web.getSettings().setDomStorageEnabled(true);
   web.getSettings().setAllowFileAccess(false);
