@@ -1,6 +1,9 @@
 name: Build Godot 4 Android APK
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'godot/build-request.txt'
 permissions:
   contents: write
 
