@@ -42,7 +42,8 @@ jobs:
           cp -r /root/.local/share/godot/export_templates/4.3.stable /github/home/.local/share/godot/export_templates/
           mkdir -p /github/home/.android
           keytool -genkeypair -v -keystore /github/home/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          mkdir -p /root/.config/godot /github/home/.config/godot
+          mkdir -p /root/.config/godot /github/home/.config/godot /root/.android
+          cp /github/home/.android/debug.keystore /root/.android/debug.keystore
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/opt/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/github/home/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /root/.config/godot/editor_settings-4.3.tres
           cp /root/.config/godot/editor_settings-4.3.tres /github/home/.config/godot/editor_settings-4.3.tres
           ls -la /opt/android-sdk/build-tools /opt/android-sdk/platforms
@@ -57,7 +58,8 @@ jobs:
       - name: Export debug Android APK
         run: |
           mkdir -p godot/build
-          godot --headless --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk
+          godot --headless --verbose --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk 2>&1 | tee /tmp/godot-export.log
+          if grep -E "Cannot export|Project export.*failed|ERROR:" /tmp/godot-export.log; then exit 1; fi
           test -s godot/build/Otpusk-Tactical-Godot.apk
       - name: Upload Godot APK
         uses: actions/upload-artifact@v4
