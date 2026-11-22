@@ -18,12 +18,12 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
 const animationMixers=[];
 
 const loading=document.getElementById('loading'),hpEl=document.getElementById('hp'),killsEl=document.getElementById('kills'),msg=document.getElementById('msg');
-let renderer;try{renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-performance'});}catch(e){loading.textContent="WebGL недоступен на этом устройстве. Требуется поддержка 3D.";throw e}
-const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);let quality=mobile?'balanced':'high';function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='balanced'?1.15:.85));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
+let renderer;try{renderer=new THREE.WebGLRenderer({antialias:!/Android|iPhone|iPad/i.test(navigator.userAgent),powerPreference:'high-performance',alpha:false});}catch(e){loading.textContent="WebGL недоступен на этом устройстве. Требуется поддержка 3D.";throw e}
+const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);let quality=mobile?'balanced':'high';function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='balanced'?1.0:.75));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1826);scene.fog=new THREE.FogExp2(0x0c1826,.022);
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,150);
 scene.add(new THREE.HemisphereLight(0x9ed8ff,0x16202b,1.8));
-const sun=new THREE.DirectionalLight(0xd6e9ff,2.6);sun.position.set(-7,15,8);sun.castShadow=true;sun.shadow.mapSize.set(1024,1024);sun.shadow.camera.left=-25;sun.shadow.camera.right=25;sun.shadow.camera.top=25;sun.shadow.camera.bottom=-25;scene.add(sun);
+const sun=new THREE.DirectionalLight(0xd6e9ff,2.6);sun.position.set(-7,15,8);sun.castShadow=true;sun.shadow.mapSize.set(mobile?512:1024,mobile?512:1024);sun.shadow.camera.left=-25;sun.shadow.camera.right=25;sun.shadow.camera.top=25;sun.shadow.camera.bottom=-25;scene.add(sun);
 function mat(color,roughness=.7,metalness=.15){return new THREE.MeshStandardMaterial({color,roughness,metalness})}
 const floor=mat(0x344452,.85),wall=mat(0x607482),metal=mat(0x223544,.42,.65),amber=new THREE.MeshStandardMaterial({color:0xffc477,emissive:0xd97d21,emissiveIntensity:1.8}),cyan=new THREE.MeshStandardMaterial({color:0x77e5ff,emissive:0x147eaa,emissiveIntensity:1.6}),red=mat(0x8b4149);
 function box(w,h,d,x,y,z,m,solid=false){const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);if(solid)obstacles.push({x,z,w,d});return mesh}
