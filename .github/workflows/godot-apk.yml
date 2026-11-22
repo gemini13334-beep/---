@@ -26,6 +26,7 @@ jobs:
           echo "HOME=/root" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
           echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
+          apt-get update -qq && apt-get install -y -qq curl unzip openjdk-17-jdk-headless ca-certificates >/dev/null
           mkdir -p /opt/android-sdk/cmdline-tools
           curl -fsSL --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/android-tools.zip
           unzip -q /tmp/android-tools.zip -d /tmp/android-cli
