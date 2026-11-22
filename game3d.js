@@ -108,11 +108,18 @@ function showRestart(){
  Object.assign(btn.style,{position:'fixed',top:'50%',left:'50%',transform:'translate(-50%,-50%)',zIndex:'4',padding:'18px 24px',background:'#d5a25d',color:'#15202a',border:'2px solid #fbe3b1',fontWeight:'bold',fontSize:'17px'});
  btn.onclick=()=>location.reload();document.body.append(btn)
 }
-let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();let pausedBySystem=false;
+let running3d=true,frames=0,slowFrames=0,fpsWindowStart=performance.now();let pausedBySystem=false,pausedByPlayer=false;
+const pauseButton=document.getElementById('pause3d'),pauseOverlay=document.createElement('div');
+pauseOverlay.style.cssText='position:fixed;inset:0;z-index:10;display:none;align-items:center;justify-content:center;background:#0a1420df;color:#f5d69b;font:bold 24px Arial;flex-direction:column;gap:20px';
+const pauseTitle=document.createElement('div');pauseTitle.textContent='ПАУЗА';
+const resumeButton=document.createElement('button');resumeButton.textContent='ПРОДОЛЖИТЬ';resumeButton.style.cssText='padding:16px 24px;background:#d9a75e;color:#14202a;border:0;font-weight:bold';
+pauseOverlay.append(pauseTitle,resumeButton);document.body.append(pauseOverlay);
+function togglePause(){if(ended)return;pausedByPlayer=!pausedByPlayer;pauseOverlay.style.display=pausedByPlayer?'flex':'none';pauseButton.textContent=pausedByPlayer?'▶':'Ⅱ';move.x=move.y=0;knob.style.transform='';keys.clear();clock.getDelta();fpsWindowStart=performance.now();frames=0}
+pauseButton.addEventListener('click',togglePause);resumeButton.addEventListener('click',togglePause);
 function frame(){
  if(!running3d)return;
  requestAnimationFrame(frame);
- if(document.hidden){pausedBySystem=true;return}
+ if(document.hidden){pausedBySystem=true;return}if(pausedByPlayer){clock.getDelta();fpsWindowStart=performance.now();frames=0;return}
  if(pausedBySystem){clock.getDelta();fpsWindowStart=performance.now();frames=0;pausedBySystem=false}
  try{
   update();
