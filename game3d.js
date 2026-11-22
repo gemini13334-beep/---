@@ -1,10 +1,10 @@
 import * as THREE from './vendor/three.module.js';
 import { GLTFLoader } from './vendor/GLTFLoader.js';
 const gltfLoader=new GLTFLoader();
-const assetStatus={loaded:0,failed:0};
+const assetStatus={loaded:0,failed:0};const modelPromises=new Map();function fetchModel(url){if(!modelPromises.has(url))modelPromises.set(url,new Promise((resolve,reject)=>gltfLoader.load(url,resolve,undefined,reject)));return modelPromises.get(url)}
 function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
- gltfLoader.load(url,gltf=>{
-  const model=gltf.scene;const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
+ fetchModel(url).then(gltf=>{
+  const model=gltf.scene.clone(true);const bounds=new THREE.Box3().setFromObject(model),size=bounds.getSize(new THREE.Vector3());
   if(!Number.isFinite(size.y)||size.y<=0)throw new Error('Invalid GLTF model size: '+url);
   const factor=height/size.y;model.scale.setScalar(factor);
   const scaled=new THREE.Box3().setFromObject(model);model.position.y=offsetY-scaled.min.y;
@@ -12,8 +12,8 @@ function loadModel(url,parent,{height=2,offsetY=0,replace=null}={}){
   parent.add(model);
   if(replace){for(const item of Array.isArray(replace)?replace:[replace])item.visible=false;}
   assetStatus.loaded++;
-  if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animationMixers.push(mixer)}
- },undefined,error=>{assetStatus.failed++;console.warn('GLTF fallback:',url,error)});
+  if(gltf.animations.length){const mixer=new THREE.AnimationMixer(model);mixer.clipAction(gltf.animations[0]).play();animationMixers.push({mixer,owner:parent})}
+ }).catch(error=>{assetStatus.failed++;console.warn('GLTF fallback:',url,error)});
 }
 const animationMixers=[];
 
@@ -40,10 +40,10 @@ const keys=new Set();addEventListener('keydown',e=>keys.add(e.key.toLowerCase())
 let dash=0;document.getElementById('dash').addEventListener('pointerdown',()=>dash=0.23);
 function canMove(x,z){return Math.abs(x)<15.1&&Math.abs(z)<16.1&&!obstacles.some(o=>Math.abs(x-o.x)<o.w/2+.55&&Math.abs(z-o.z)<o.d/2+.55)}
 const clock=new THREE.Clock(),spark=new THREE.SphereGeometry(.12,6,6);let elapsed=0;const tempColor=new THREE.Color();function projectile(from,to,enemy){let v=to.clone().sub(from).normalize(),mesh=new THREE.Mesh(spark,enemy?amber:cyan);mesh.position.copy(from);scene.add(mesh);bullets.push({mesh,v,enemy,ttl:1.3})}
-function update(){let dt=Math.min(clock.getDelta(),.04);elapsed+=dt;for(const mixer of animationMixers)mixer.update(dt);if(ended)return;invuln=Math.max(0,invuln-dt);let mx=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),mz=move.y+(keys.has('s')?1:0)-(keys.has('w')?1:0),l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}let speed=dash>0?15:6;dash=Math.max(0,dash-dt);hero.userData.motion=(hero.userData.motion||0)+dt*Math.max(0,l)*11;const running=l>.08;hero.position.y=running?Math.abs(Math.sin(hero.userData.motion))*.07:Math.sin(elapsed*2)*.014;let nx=hero.position.x+mx*speed*dt,nz=hero.position.z+mz*speed*dt;if(canMove(nx,hero.position.z))hero.position.x=nx;if(canMove(hero.position.x,nz))hero.position.z=nz;
+function update(){let dt=Math.min(clock.getDelta(),.04);elapsed+=dt;for(const item of animationMixers){if(item.owner.parent)item.mixer.update(dt)}if(ended)return;invuln=Math.max(0,invuln-dt);let mx=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),mz=move.y+(keys.has('s')?1:0)-(keys.has('w')?1:0),l=Math.hypot(mx,mz);if(l>1){mx/=l;mz/=l}let speed=dash>0?15:6;dash=Math.max(0,dash-dt);hero.userData.motion=(hero.userData.motion||0)+dt*Math.max(0,l)*11;const running=l>.08;hero.position.y=running?Math.abs(Math.sin(hero.userData.motion))*.07:Math.sin(elapsed*2)*.014;let nx=hero.position.x+mx*speed*dt,nz=hero.position.z+mz*speed*dt;if(canMove(nx,hero.position.z))hero.position.x=nx;if(canMove(hero.position.x,nz))hero.position.z=nz;
 let closest=null,dist=100;for(const e of enemies){let dx=hero.position.x-e.position.x,dz=hero.position.z-e.position.z,d=Math.hypot(dx,dz);if(d<dist){dist=d;closest=e}if(d>3){let step=dt*1.45,xx=e.position.x+dx/d*step,zz=e.position.z+dz/d*step;if(canMove(xx,e.position.z))e.position.x=xx;if(canMove(e.position.x,zz))e.position.z=zz}e.lookAt(hero.position.x,0,hero.position.z);e.userData.motion=(e.userData.motion||0)+dt*7;e.position.y=Math.abs(Math.sin(e.userData.motion))*.035;e.userData.cool-=dt;if(d<2&&e.userData.cool<=0){e.userData.cool=1.25;if(invuln<=0){health=Math.max(0,health-12);invuln=.6;hpEl.textContent='HP '+health}}}
 fire-=dt;if(closest&&dist<22&&fire<=0){fire=.28;hero.lookAt(closest.position.x,0,closest.position.z);projectile(hero.position.clone().add(new THREE.Vector3(0,1.35,0)),closest.position.clone().add(new THREE.Vector3(0,1.2,0)),false)}
-for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;let hit=enemies.find(e=>e.position.distanceTo(b.mesh.position)<1.2);if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);enemies.splice(enemies.indexOf(hit),1);kills++;killsEl.textContent=kills+' / 12';if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
+for(let i=bullets.length-1;i>=0;i--){let b=bullets[i];b.mesh.position.addScaledVector(b.v,dt*28);b.ttl-=dt;let hit=enemies.find(e=>e.position.distanceTo(b.mesh.position)<1.2);if(hit){hit.userData.hp--;hit.userData.flash=.15;b.ttl=0;if(hit.userData.hp<=0){scene.remove(hit);for(let j=animationMixers.length-1;j>=0;j--)if(animationMixers[j].owner===hit)animationMixers.splice(j,1);enemies.splice(enemies.indexOf(hit),1);kills++;killsEl.textContent=kills+' / 12';if(kills<12&&enemies.length<5)spawn()}}if(b.ttl<=0){scene.remove(b.mesh);bullets.splice(i,1)}}
 for(const e of enemies){e.userData.flash=Math.max(0,(e.userData.flash||0)-dt);e.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive){if(!o.userData.baseEmissive)o.userData.baseEmissive=o.material.emissive.clone();o.material.emissive.copy(e.userData.flash>0?tempColor.set(0xff4937):o.userData.baseEmissive);o.material.emissiveIntensity=e.userData.flash>0?1.6:1}})}camera.position.lerp(new THREE.Vector3(hero.position.x+0,hero.position.y+15,hero.position.z+19),Math.min(1,dt*5));camera.lookAt(hero.position.x,1,hero.position.z-3);
 if(health<=0||kills>=12){ended=true;msg.textContent=health<=0?'МИССИЯ ПРОВАЛЕНА — обнови страницу':'МИССИЯ ВЫПОЛНЕНА! 3D-ПРОТОТИП ПРОЙДЕН'}}
 function frame(){requestAnimationFrame(frame);update();renderer.render(scene,camera)}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();Object.assign(qualityButton.style,{position:'fixed',top:'54px',right:'12px',zIndex:'3',background:'#172838d9',color:'#f4d49d',border:'1px solid #b6c7d2',padding:'8px',fontSize:'11px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);loading.remove();frame();
