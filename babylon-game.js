@@ -180,14 +180,53 @@ function spawn(){for(let t=0;t<60;t++){const x=(Math.random()-.5)*34,z=(Math.ran
 for(let i=0;i<5;i++)spawn();
 const overlay=document.getElementById('overlay'),panel=document.getElementById('panel');
 function button(text,fn,primary=false){const b=document.createElement('button');b.textContent=text;b.className=primary?'primary':'';b.onclick=fn;panel.append(b)}
-function menu(){playing=false;overlay.hidden=false;panel.replaceChildren();const h=document.createElement('h1');h.textContent='ОТПУСК / TACTICAL';panel.append(h);const p=document.createElement('p');p.textContent='BABYLON.JS · ОПЕРАЦИЯ '+stage+' · ТАКТИЧЕСКИЙ ШУТЕР';panel.append(p);
-button('▶ ПРОДОЛЖИТЬ КАМПАНИЮ',()=>{localStorage.setItem('babylon_mode','campaign');if(mode!=='campaign')location.reload();start()},true);
-button('∞ БЕСКОНЕЧНЫЙ РЕЖИМ',()=>{localStorage.setItem('babylon_mode','endless');if(mode!=='endless')location.reload();start()});
-button('↻ НОВАЯ КАМПАНИЯ',()=>{localStorage.setItem('babylon_stage','1');localStorage.setItem('babylon_mode','campaign');location.reload()});
-const note=document.createElement('p');note.textContent='Брифинг: сектор захвачен. Зачистите территорию и переходите к следующей операции. Управление: левый виртуальный джойстик, автоматический огонь.';panel.append(note)}
+function menu(tab='play'){
+ playing=false;overlay.hidden=false;panel.replaceChildren();
+ const shell=document.createElement('div');shell.className='shell';panel.append(shell);
+ const head=document.createElement('div');head.className='menu-head';head.innerHTML='<span class="brand">ОТПУСК <span style="color:#e6edf1">/ TACTICAL</span></span><span class="menu-meta">MOBILE OPERATIONS · BUILD ALPHA</span>';shell.append(head);
+ const body=document.createElement('div');body.className='menu-body';shell.append(body);
+ const nav=document.createElement('nav');nav.className='nav';body.append(nav);
+ const content=document.createElement('main');content.className='content';body.append(content);
+ const foot=document.createElement('div');foot.className='menu-foot';foot.textContent='ОПЕРАЦИЯ '+stage+'  ·  ОФЛАЙН  ·  BABYLON.JS';shell.append(foot);
+ function navButton(label,id){const b=document.createElement('button');b.textContent=label;b.className=tab===id?'active':'';b.onclick=()=>menu(id);nav.append(b)}
+ navButton('▶ ИГРАТЬ','play');navButton('◈ СНАРЯЖЕНИЕ','loadout');navButton('▦ КОЛЛЕКЦИЯ','collection');navButton('⚙ НАСТРОЙКИ','settings');
+ const eyebrow=document.createElement('div');eyebrow.className='eyebrow';eyebrow.textContent='TACTICAL OPERATIONS / '+tab.toUpperCase();content.append(eyebrow);
+ function title(t){const h=document.createElement('h1');h.textContent=t;content.append(h)}
+ function paragraph(t){const p=document.createElement('p');p.textContent=t;content.append(p)}
+ function action(label,fn,primary=false){const b=document.createElement('button');b.textContent=label;if(primary)b.className='primary';content.append(b);return b}
+ function tiles(items){const grid=document.createElement('div');grid.className='tiles';for(const [name,detail] of items){const tile=document.createElement('div');tile.className='tile';const bold=document.createElement('b');bold.textContent=name;const small=document.createElement('small');small.textContent=detail;tile.append(bold,small);grid.append(tile)}content.append(grid)}
+ if(tab==='play'){
+  title('ВЫБЕРИ ОПЕРАЦИЮ');
+  paragraph('Сектор под контролем противника. Выбери режим, подготовь снаряжение и начни зачистку.');
+  tiles([['КАМПАНИЯ','Этап '+stage+' · '+(12+(stage-1)*6)+' целей'],['БЕСКОНЕЧНЫЙ','Волны противников без ограничения'],['АРЕНА · SECTOR 01','Бетон, укрытия и обходные маршруты']]);
+  const actions=document.createElement('div');actions.className='menu-actions';content.append(actions);
+  const play=document.createElement('button');play.className='primary';play.textContent='▶ НАЧАТЬ КАМПАНИЮ';play.onclick=()=>{localStorage.setItem('babylon_mode','campaign');if(mode!=='campaign')location.reload();else start()};actions.append(play);
+  const endless=document.createElement('button');endless.textContent='∞ БЕСКОНЕЧНЫЙ РЕЖИМ';endless.onclick=()=>{localStorage.setItem('babylon_mode','endless');if(mode!=='endless')location.reload();else start()};actions.append(endless);
+  paragraph('Управление: левый джойстик — движение, свайп справа — обзор, автоматический огонь по видимым целям.');
+ }else if(tab==='loadout'){
+  title('СНАРЯЖЕНИЕ');
+  paragraph('Выбери основное оружие. Изменение применяется сразу и сохраняется.');
+  const list=document.createElement('div');list.className='tiles';
+  weaponTypes.forEach((w,i)=>{const b=document.createElement('button');b.className=i===weaponIndex?'active':'';b.textContent=w.name+' · УРОН '+w.damage+' · ДАЛЬНОСТЬ '+w.range;b.onclick=()=>{weaponIndex=i;updateWeapon();menu('loadout')};list.append(b)});content.append(list);
+  action('▶ В БОЙ',()=>start(),true);
+ }else if(tab==='collection'){
+  title('КОЛЛЕКЦИЯ');
+  paragraph('Система скинов и наград находится в разработке. Здесь отображается доступное оружие.');
+  tiles(weaponTypes.map(w=>[w.name,'Доступно · базовая модель']));
+  action('НАЗАД К ИГРЕ',()=>menu('play'));
+ }else if(tab==='settings'){
+  title('НАСТРОЙКИ');
+  paragraph('Настройки сохраняются на устройстве. Изменение графики перезапустит игру.');
+  tiles([['КАЧЕСТВО',quality.toUpperCase()],['КАМЕРА',cameraZoom===12?'БЛИЖНЯЯ':'ДАЛЬНЯЯ'],['ПРИЦЕЛИВАНИЕ','АВТОМАТИЧЕСКОЕ']]);
+  const actions=document.createElement('div');actions.className='menu-actions';content.append(actions);
+  const graphics=document.createElement('button');graphics.textContent='ГРАФИКА: '+quality.toUpperCase()+' ↻';graphics.onclick=()=>{quality=quality==='low'?'medium':quality==='medium'?'high':'low';localStorage.setItem('babylon_quality',quality);location.reload()};actions.append(graphics);
+  const cameraButton=document.createElement('button');cameraButton.textContent='ПЕРЕКЛЮЧИТЬ КАМЕРУ';cameraButton.onclick=()=>{changeView();menu('settings')};actions.append(cameraButton);
+  const reset=document.createElement('button');reset.textContent='СБРОСИТЬ КАМПАНИЮ';reset.onclick=()=>{if(confirm('Сбросить прогресс кампании?')){localStorage.setItem('babylon_stage','1');localStorage.setItem('babylon_mode','campaign');location.reload()}};actions.append(reset);
+ }
+}
 function start(){overlay.hidden=true;playing=true;status.textContent='ОПЕРАЦИЯ НАЧАТА'}
 function result(win){over=true;playing=false;overlay.hidden=false;panel.replaceChildren();const h=document.createElement('h1');h.textContent=win?'МИССИЯ ВЫПОЛНЕНА':'ОПЕРАЦИЯ ПРОВАЛЕНА';panel.append(h);const p=document.createElement('p');p.textContent='УСТРАНЕНО: '+kills+' · ЭТАП '+stage;panel.append(p);if(win&&mode!=='endless')button('СЛЕДУЮЩАЯ ОПЕРАЦИЯ →',()=>{localStorage.setItem('babylon_stage',String(stage+1));location.reload()},true);button('ПОВТОРИТЬ',()=>location.reload());button('ГЛАВНОЕ МЕНЮ',()=>{localStorage.setItem('babylon_showmenu','1');location.reload()})}
-document.getElementById('pause').onclick=()=>{if(over)return;if(playing)menu();else start()};
+document.getElementById('pause').onclick=()=>{if(over)return;if(playing)menu('play');else start()};
 const stick=document.getElementById('stick'),knob=document.getElementById('knob'),move={x:0,z:0};let pointer=null;
 function drag(e){const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,l=Math.max(1,Math.hypot(x,y)),m=Math.min(1,l/(r.width*.37));move.x=x/l*m;move.z=y/l*m;knob.style.transform='translate('+move.x*38+'px,'+move.z*38+'px)'}
 stick.onpointerdown=e=>{if(!playing)return;pointer=e.pointerId;stick.setPointerCapture(pointer);drag(e)};stick.onpointermove=e=>{if(e.pointerId===pointer)drag(e)};function release(e){if(e.pointerId!==pointer)return;pointer=null;move.x=move.z=0;knob.style.transform=''}stick.onpointerup=release;stick.onpointercancel=release;
