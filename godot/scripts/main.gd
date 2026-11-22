@@ -780,6 +780,67 @@ func _equip_skin(item_id:int)->void:
  _save()
  _show_collection()
 
+func _show_skin_preview(item_id:int)->void:
+ if not inventory.has(item_id): return
+ _show_menu()
+ var item:Dictionary=Loot.ITEMS[item_id]
+ var rarity:int=int(item["rarity"])
+ var weapon:int=int(item["weapon"])
+ var tint:=Color(SKIN_PALETTE[item_id])
+ var rarity_color:=Color(str(Loot.RARITY_COLORS[rarity]))
+ var title:=_label("АРСЕНАЛ / ПРЕДПРОСМОТР СКИНА",23)
+ title.position=Vector2(475,207)
+ menu_layer.add_child(title)
+ var panel:=_panel(Vector2(475,255),Vector2(510,278),Color("#10232d"))
+ panel.add_theme_stylebox_override("panel",_rarity_panel_style(rarity_color))
+ menu_layer.add_child(panel)
+ var stripe:=ColorRect.new()
+ stripe.color=tint
+ stripe.position=Vector2(510,327)
+ stripe.size=Vector2(400,36)
+ stripe.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(stripe)
+ var barrel:=ColorRect.new()
+ barrel.color=tint.darkened(0.4)
+ barrel.position=Vector2(810,338)
+ barrel.size=Vector2(150,13)
+ barrel.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(barrel)
+ var grip:=ColorRect.new()
+ grip.color=tint.darkened(0.28)
+ grip.position=Vector2(600,357)
+ grip.size=Vector2(42,75)
+ grip.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(grip)
+ var accent:=ColorRect.new()
+ accent.color=rarity_color
+ accent.position=Vector2(510,316)
+ accent.size=Vector2(400,5)
+ accent.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(accent)
+ var name_label:=_label(str(item["name"]),26)
+ name_label.position=Vector2(506,270)
+ name_label.add_theme_color_override("font_color",rarity_color)
+ menu_layer.add_child(name_label)
+ var info:=_label(str(WEAPONS[weapon]["name"])+"  /  "+str(Loot.RARITY_NAMES[rarity]),16)
+ info.position=Vector2(506,464)
+ menu_layer.add_child(info)
+ var equipped:bool=equipped_skins[weapon]==item_id
+ var equip:=_button("✓ ЭКИПИРОВАН" if equipped else "ЭКИПИРОВАТЬ")
+ equip.position=Vector2(475,548)
+ equip.custom_minimum_size=Vector2(244,50)
+ equip.disabled=equipped
+ equip.pressed.connect(_equip_skin.bind(item_id))
+ menu_layer.add_child(equip)
+ var back:=_button("← К КОЛЛЕКЦИИ")
+ back.position=Vector2(737,548)
+ back.custom_minimum_size=Vector2(248,50)
+ back.pressed.connect(_show_collection)
+ menu_layer.add_child(back)
+ var note:=_label("СХЕМАТИЧНЫЙ ПРЕДПРОСМОТР ЦВЕТА • В ИГРЕ СКИН НА 3D-ОРУЖИИ",12)
+ note.position=Vector2(475,610)
+ menu_layer.add_child(note)
+
 func _set_collection_filter(value:int)->void:
  collection_filter=value
  collection_page=0
@@ -835,7 +896,7 @@ func _show_collection()->void:
   entry.position=Vector2(x+7,y+6)
   entry.custom_minimum_size=Vector2(233,32)
   entry.add_theme_color_override("font_color",rarity_color)
-  entry.pressed.connect(_equip_skin.bind(item_id))
+  entry.pressed.connect(_show_skin_preview.bind(item_id))
   menu_layer.add_child(entry)
   var sub:=_label(str(Loot.RARITY_NAMES[rarity])+("   /   ЭКИПИРОВАН" if equipped else "   /   НАЖМИТЕ ДЛЯ ВЫБОРА"),11)
   sub.position=Vector2(x+12,y+43)
