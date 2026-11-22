@@ -116,6 +116,29 @@ const objective=()=>mode==='endless'?Infinity:12+(stage-1)*6;
 const killsEl=document.getElementById('kills'),healthEl=document.getElementById('health'),objectiveEl=document.getElementById('objective');
 function updateHUD(){killsEl.textContent=kills+' / '+(Number.isFinite(objective())?objective():'∞');healthEl.textContent=Math.ceil(player.hp);objectiveEl.textContent='ОПЕРАЦИЯ '+stage+' · '+(mode==='endless'?'БЕСКОНЕЧНЫЙ РЕЖИМ':'ЗАЧИСТКА СЕКТОРА')}
 function canMove(x,z){return Math.abs(x)<19.8&&Math.abs(z)<20.8&&!solid.some(o=>Math.abs(x-o.x)<o.w/2+.6&&Math.abs(z-o.z)<o.d/2+.6)}
+function coverBlocks(ax,az,bx,bz){
+ const dx=bx-ax,dz=bz-az;
+ for(const o of solid){
+  let enter=0,exit=1;
+  for(const [p,v,min,max] of [[ax,dx,o.x-o.w/2,o.x+o.w/2],[az,dz,o.z-o.d/2,o.z+o.d/2]]){
+   if(Math.abs(v)<.00001){if(p<min||p>max){exit=-1;break}}else{const t1=(min-p)/v,t2=(max-p)/v;enter=Math.max(enter,Math.min(t1,t2));exit=Math.min(exit,Math.max(t1,t2))}
+  }
+  if(enter<=exit&&exit>0&&enter<1)return true;
+ }
+ return false
+}
+const medkits=[];
+const medkitMaterial=material('medical kit','#d9e8db');
+const medicalCross=material('medical red','#d94843');
+function dropMedkit(x,z){
+ if(medkits.length>=5)return;
+ const root=new B.TransformNode('medical pickup',scene);root.position.set(x,.24,z);
+ const body=box('medkit body',.65,.32,.53,0,0,0,medkitMaterial);body.parent=root;
+ const horizontal=box('red cross horizontal',.32,.065,.12,0,0,0,medicalCross);horizontal.parent=root;horizontal.position.set(0,.17,0);
+ const vertical=box('red cross vertical',.12,.065,.32,0,0,0,medicalCross);vertical.parent=root;vertical.position.set(0,.17,0);
+ medkits.push({root,time:0})
+}
+
 function spawn(){for(let t=0;t<60;t++){const x=(Math.random()-.5)*34,z=(Math.random()-.5)*28-4;if(canMove(x,z)&&Math.hypot(x-player.root.position.x,z-player.root.position.z)>9){enemies.push(agent('hostile',x,z,true));return}}}
 for(let i=0;i<5;i++)spawn();
 const overlay=document.getElementById('overlay'),panel=document.getElementById('panel');
@@ -164,7 +187,8 @@ const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p
 let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8)steerEnemy(ep,p,dt)e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;registerDamage();updateHUD();if(player.hp<=0)result(false)}}
 shot-=dt;const target=enemies.filter(e=>Math.hypot(e.root.position.x-p.x,e.root.position.z-p.z)<weaponTypes[weaponIndex].range&&hasLineOfSight(p,e.root.position)).sort((a,b)=>B.Vector3.DistanceSquared(a.root.position,p)-B.Vector3.DistanceSquared(b.root.position,p))[0];
 if(target&&shot<=0){shot=weaponTypes[weaponIndex].delay;player.root.rotation.y=Math.atan2(target.root.position.x-p.x,-(target.root.position.z-p.z));fire(p.add(new B.Vector3(0,1.4,0)),target.root.position.add(new B.Vector3(0,1.3,0)))}
-for(let i=projectiles.length-1;i>=0;i--){const b=projectiles[i],prev=b.mesh.position.clone();b.mesh.position.addInPlace(b.v.scale(dt*b.speed));b.ttl-=dt;const hit=enemies.find(e=>{const center=e.root.position.add(new B.Vector3(0,1.3,0));const segment=b.mesh.position.subtract(prev),len2=segment.lengthSquared();const t=len2>0?Math.max(0,Math.min(1,B.Vector3.Dot(center.subtract(prev),segment)/len2)):0;return B.Vector3.DistanceSquared(center,prev.add(segment.scale(t)))<.58});if(hit){registerHit();hit.hp-=b.damage;b.ttl=0;if(hit.hp<=0){hit.root.getChildMeshes().forEach(m=>m.dispose());hit.root.dispose();enemies.splice(enemies.indexOf(hit),1);kills++;updateHUD();if(kills>=objective())result(true);else if(enemies.length<5)spawn()}}if(b.ttl<=0){b.mesh.dispose();projectiles.splice(i,1)}}
+for(let i=projectiles.length-1;i>=0;i--){const b=projectiles[i],prev=b.mesh.position.clone();b.mesh.position.addInPlace(b.v.scale(dt*b.speed));b.ttl-=dt;const hit=enemies.find(e=>{const center=e.root.position.add(new B.Vector3(0,1.3,0));const segment=b.mesh.position.subtract(prev),len2=segment.lengthSquared();const t=len2>0?Math.max(0,Math.min(1,B.Vector3.Dot(center.subtract(prev),segment)/len2)):0;return B.Vector3.DistanceSquared(center,prev.add(segment.scale(t)))<.58});if(hit){registerHit();hit.hp-=b.damage;b.ttl=0;if(hit.hp<=0){hit.root.getChildMeshes().forEach(m=>m.dispose());hit.root.dispose();enemies.splice(enemies.indexOf(hit),1);kills++;updateHUD();if(kills%4===0)dropMedkit(hit.root.position.x,hit.root.position.z);if(kills>=objective())result(true);else if(enemies.length<5)spawn()}}if(b.ttl<=0){b.mesh.dispose();projectiles.splice(i,1)}}
+for(let i=medkits.length-1;i>=0;i--){const kit=medkits[i];kit.time+=dt;kit.root.rotation.y+=dt*.8;kit.root.position.y=.24+Math.sin(kit.time*3)*.08;if(Math.hypot(p.x-kit.root.position.x,p.z-kit.root.position.z)<1.2&&player.hp<100){player.hp=Math.min(100,player.hp+30);kit.root.getChildMeshes().forEach(m=>m.dispose());kit.root.dispose();medkits.splice(i,1);status.textContent='АПТЕЧКА +30 HP';updateHUD()}}
 camera.target=B.Vector3.Lerp(camera.target,p.add(new B.Vector3(0,1,0)),Math.min(1,dt*5));camera.alpha+=(cameraAngle-camera.alpha)*Math.min(1,dt*6);camera.beta+=(cameraPitch-camera.beta)*Math.min(1,dt*6);camera.radius+=(cameraZoom-camera.radius)*Math.min(1,dt*6)}
 scene.render()});
 window.addEventListener('resize',()=>engine.resize());updateHUD();menu();status.textContent='BABYLON.JS · ГОТОВО';
