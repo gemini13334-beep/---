@@ -19,7 +19,11 @@ const animationMixers=[];
 
 const loading=document.getElementById('loading'),hpEl=document.getElementById('hp'),killsEl=document.getElementById('kills'),msg=document.getElementById('msg');
 let renderer;try{renderer=new THREE.WebGLRenderer({antialias:!/Android|iPhone|iPad/i.test(navigator.userAgent),powerPreference:'high-performance',alpha:false});}catch(e){loading.textContent="WebGL недоступен на этом устройстве. Требуется поддержка 3D.";throw e}
-const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);let quality=mobile?'balanced':'high';function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='balanced'?1.0:.75));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
+const mobile=/Android|iPhone|iPad/i.test(navigator.userAgent);
+function readSetting(name,fallback){try{const v=localStorage.getItem('tactical3d_'+name);return v===null?fallback:v}catch{return fallback}}
+function saveSetting(name,value){try{localStorage.setItem('tactical3d_'+name,String(value))}catch{}}
+const savedQuality=readSetting('quality',mobile?'balanced':'high');
+let quality=['low','balanced','high'].includes(savedQuality)?savedQuality:(mobile?'balanced':'high');function applyQuality(){renderer.setPixelRatio(Math.min(devicePixelRatio,quality==='high'?1.5:quality==='balanced'?1.0:.75));renderer.shadowMap.enabled=quality!=='low';renderer.shadowMap.type=THREE.PCFSoftShadowMap;renderer.setSize(innerWidth,innerHeight)}applyQuality();renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.4;document.body.prepend(renderer.domElement);
 const scene=new THREE.Scene();scene.background=new THREE.Color(0x0c1826);scene.fog=new THREE.FogExp2(0x0c1826,.022);
 const camera=new THREE.PerspectiveCamera(58,innerWidth/innerHeight,.1,150);
 scene.add(new THREE.HemisphereLight(0x9ed8ff,0x16202b,1.8));
@@ -143,15 +147,15 @@ const resumeButton=document.createElement('button');resumeButton.textContent='П
 const pausePanel=document.createElement('div');pausePanel.style.cssText='display:flex;flex-direction:column;gap:12px;width:min(350px,92vw);padding:22px;border:1px solid #8da0a866;background:#12202bea;box-shadow:0 12px 50px #0008';
 const pauseStats=document.createElement('div');pauseStats.style.cssText='font:13px Arial;color:#c5d1d7;letter-spacing:1px';
 const pauseQuality=document.createElement('button');pauseQuality.style.cssText='padding:13px;background:#273b49;color:#e5d7b9;border:1px solid #708795;font-weight:bold';
-pauseQuality.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};
+pauseQuality.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';saveSetting('quality',quality);applyQuality();pauseQuality.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};
 const hudSettings=document.createElement('div');hudSettings.style.cssText='display:flex;gap:8px;flex-wrap:wrap;justify-content:center';
 const radarToggle=document.createElement('button'),crosshairToggle=document.createElement('button');
 for(const button of [radarToggle,crosshairToggle])button.style.cssText='flex:1;min-width:115px;padding:12px 8px;background:#273b49;color:#e5d7b9;border:1px solid #708795;font-size:12px;font-weight:bold';
 const radarElement=document.getElementById('radar'),crosshairElement=document.getElementById('crosshair');
-let showRadar=true,showCrosshair=true;
+let showRadar=readSetting('radar','true')!=='false',showCrosshair=readSetting('crosshair','true')!=='false';
 function syncHudToggles(){radarToggle.textContent='РАДАР: '+(showRadar?'ВКЛ':'ВЫКЛ');crosshairToggle.textContent='ПРИЦЕЛ: '+(showCrosshair?'ВКЛ':'ВЫКЛ');radarElement.style.display=showRadar?'':'none';crosshairElement.style.display=showCrosshair?'':'none'}
-radarToggle.onclick=()=>{showRadar=!showRadar;syncHudToggles()};
-crosshairToggle.onclick=()=>{showCrosshair=!showCrosshair;syncHudToggles()};
+radarToggle.onclick=()=>{showRadar=!showRadar;saveSetting('radar',showRadar);syncHudToggles()};
+crosshairToggle.onclick=()=>{showCrosshair=!showCrosshair;saveSetting('crosshair',showCrosshair);syncHudToggles()};
 hudSettings.append(radarToggle,crosshairToggle);syncHudToggles();
 const pauseRestart=document.createElement('button');pauseRestart.textContent='НАЧАТЬ ЗАНОВО';pauseRestart.style.cssText='padding:13px;background:#24313a;color:#d4c9ba;border:1px solid #566977;font-weight:bold';pauseRestart.onclick=()=>location.reload();
 resumeButton.style.cssText='padding:15px;background:#dcae62;color:#15202a;border:0;font-weight:900;letter-spacing:1px';
@@ -189,7 +193,7 @@ function frame(){
   const button=document.createElement('button');button.textContent='ПОВТОРИТЬ ЗАПУСК';button.style.cssText='padding:14px;background:#e4b369;color:#101923';button.onclick=()=>location.reload();
   panel.append(title,details,button);failure.append(panel);document.body.append(failure);
  }
-}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.setAttribute('aria-label','Изменить качество 3D-графики');Object.assign(qualityButton.style,{position:'fixed',top:'calc(env(safe-area-inset-top,0px) + 100px)',right:'8px',zIndex:'4',background:'#17242de8',color:'#e6b65b',border:'1px solid #8da0a866',padding:'7px',fontSize:'10px',letterSpacing:'1px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
+}addEventListener('resize',()=>{camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();applyQuality()});const qualityButton=document.createElement('button');qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase();qualityButton.setAttribute('aria-label','Изменить качество 3D-графики');Object.assign(qualityButton.style,{position:'fixed',top:'calc(env(safe-area-inset-top,0px) + 100px)',right:'8px',zIndex:'4',background:'#17242de8',color:'#e6b65b',border:'1px solid #8da0a866',padding:'7px',fontSize:'10px',letterSpacing:'1px'});qualityButton.onclick=()=>{quality=quality==='low'?'balanced':quality==='balanced'?'high':'low';saveSetting('quality',quality);applyQuality();qualityButton.textContent='ГРАФИКА: '+quality.toUpperCase()};document.body.append(qualityButton);
 renderer.domElement.addEventListener('webglcontextlost',event=>{
  event.preventDefault();running3d=false;
  loading.textContent='Потеряно соединение с 3D-видеоускорителем. Перезапусти игру.';
