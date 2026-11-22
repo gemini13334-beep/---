@@ -1,6 +1,7 @@
 extends Node3D
 
 const Story = preload("res://scripts/story.gd")
+const Loot = preload("res://scripts/loot.gd")
 const SAVE_PATH := "user://vacation_save.json"
 const SETTINGS_PATH := "user://tactical_settings.json"
 var graphics_level := 1
@@ -13,6 +14,12 @@ var endless := false
 var kills := 0
 var hp := 100.0
 var xp := 0
+var credits := 350
+var inventory: Array[int] = []
+var loot_misses := 0
+var cases_opened := 0
+var last_drop := -1
+var loot_rng := RandomNumberGenerator.new()
 var playing := false
 var enemies: Array[Node3D] = []
 var enemy_timer := 0.0
@@ -46,6 +53,7 @@ const WEAPONS := [
 ]
 
 func _ready() -> void:
+ loot_rng.randomize()
  _load()
  _load_settings()
  _apply_settings()
@@ -497,10 +505,10 @@ func _show_menu()->void:
  story.custom_minimum_size=Vector2(820,60)
  story.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
  menu_layer.add_child(story)
- var labels:=["▶ "+("КАМПАНИЯ ПРОЙДЕНА — ПОВТОР" if campaign_complete else "КАМПАНИЯ: "+str(Story.mission(stage)["name"])),"∞ БЕСКОНЕЧНЫЙ РЕЖИМ","◈ СНАРЯЖЕНИЕ","▤ ЛИЧНОЕ ДЕЛО","⚙ НАСТРОЙКИ"]
+ var labels:=["▶ "+("КАМПАНИЯ ПРОЙДЕНА — ПОВТОР" if campaign_complete else "КАМПАНИЯ: "+str(Story.mission(stage)["name"])),"∞ БЕСКОНЕЧНЫЙ РЕЖИМ","◈ СНАРЯЖЕНИЕ","▣ КЕЙСЫ / ДРОП","▤ ЛИЧНОЕ ДЕЛО","⚙ НАСТРОЙКИ"]
  for i in range(labels.size()):
   var b:=_button(labels[i])
-  b.position=Vector2(55,215+i*62)
+  b.position=Vector2(55,205+i*58)
   b.custom_minimum_size=Vector2(360,49)
   menu_layer.add_child(b)
   if i==0:
@@ -514,8 +522,13 @@ func _show_menu()->void:
    0: b.pressed.connect(func(): _start(false))
    1: b.pressed.connect(func(): _start(true))
    2: b.pressed.connect(_show_loadout)
-   3: b.pressed.connect(_show_file)
-   4: b.pressed.connect(_show_settings)
+   3: b.pressed.connect(_show_cases)
+   4: b.pressed.connect(_show_file)
+   5: b.pressed.connect(_show_settings)
+ var credits_label:=_label("КРЕДИТЫ  %d  ◈"%credits,17)
+ credits_label.position=Vector2(800,55)
+ credits_label.add_theme_color_override("font_color",Color("#ffce76"))
+ menu_layer.add_child(credits_label)
  var mission_panel:=_panel(Vector2(455,198),Vector2(545,205),Color(0.065,0.13,0.16,0.88))
  menu_layer.add_child(mission_panel)
  var mission_title:=_label("ОПЕРАЦИЯ / %02d  ·  %s"%[stage+1,str(Story.mission(stage)["name"])],22)
@@ -538,6 +551,71 @@ func _show_menu()->void:
  footer.position=Vector2(55,655)
  footer.add_theme_color_override("font_color",Color("#83b7b8"))
  menu_layer.add_child(footer)
+
+func _show_cases()->void:
+ _show_menu()
+ var title:=_label("АРСЕНАЛ / КЕЙСЫ И ДОБЫЧА",22)
+ title.position=Vector2(475,210)
+ menu_layer.add_child(title)
+ var details:=_label("КРЕДИТЫ: %d   •   ОТКРЫТО: %d   •   КОЛЛЕКЦИЯ: %d/%d"%[credits,cases_opened,inventory.size(),Loot.ITEMS.size()],15)
+ details.position=Vector2(475,248)
+ menu_layer.add_child(details)
+ for i in range(Loot.CASES.size()):
+  var data:Dictionary=Loot.CASES[i]
+  var button:=_button("%s  /  %d ◈"%[str(data["name"]),int(data["price"])])
+  button.position=Vector2(475,285+i*59)
+  button.custom_minimum_size=Vector2(470,50)
+  button.disabled=credits<int(data["price"])
+  button.pressed.connect(_open_case.bind(i))
+  menu_layer.add_child(button)
+ var guarantee:=_label("ГАРАНТИЯ ЭПИЧЕСКОГО: %d/20"%min(loot_misses,19),15)
+ guarantee.position=Vector2(475,475)
+ menu_layer.add_child(guarantee)
+ if last_drop>=0:
+  var item:Dictionary=Loot.ITEMS[last_drop]
+  var result:=_label("ПОСЛЕДНИЙ ДРОП: "+str(item["name"])+"  /  "+str(Loot.RARITY_NAMES[int(item["rarity"])]),16)
+  result.position=Vector2(475,508)
+  result.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
+  menu_layer.add_child(result)
+ var collection:=_button("КОЛЛЕКЦИЯ ПРЕДМЕТОВ")
+ collection.position=Vector2(475,558)
+ collection.custom_minimum_size=Vector2(470,47)
+ collection.pressed.connect(_show_collection)
+ menu_layer.add_child(collection)
+
+func _open_case(index:int)->void:
+ var cost:int=int(Loot.CASES[index]["price"])
+ if credits<cost:
+  return
+ credits-=cost
+ var drop:Dictionary=Loot.roll(index,loot_misses,loot_rng)
+ loot_misses=int(drop["misses"])
+ var item_id:int=int(drop["id"])
+ last_drop=item_id
+ cases_opened+=1
+ if inventory.has(item_id):
+  credits+=int(Loot.DUPLICATE_CREDITS[int(drop["rarity"])])
+ else:
+  inventory.append(item_id)
+ _save()
+ _show_cases()
+
+func _show_collection()->void:
+ _show_menu()
+ var title:=_label("КОЛЛЕКЦИЯ  /  %d ИЗ %d"%[inventory.size(),Loot.ITEMS.size()],22)
+ title.position=Vector2(475,208)
+ menu_layer.add_child(title)
+ var back:=_button("← К КЕЙСАМ")
+ back.position=Vector2(475,250)
+ back.custom_minimum_size=Vector2(470,45)
+ back.pressed.connect(_show_cases)
+ menu_layer.add_child(back)
+ for i in range(min(inventory.size(),9)):
+  var item:Dictionary=Loot.ITEMS[inventory[i]]
+  var row_label:=_label("◈ "+str(item["name"])+"   /   "+str(Loot.RARITY_NAMES[int(item["rarity"])]),15)
+  row_label.position=Vector2(475,310+i*32)
+  row_label.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
+  menu_layer.add_child(row_label)
 
 func _show_loadout()->void:
  _show_menu()
@@ -625,6 +703,7 @@ func _win()->void:
   campaign_complete=true
  else:
   stage+=1
+ credits+=220+stage*45
  _save()
  _show_result(true)
 
@@ -667,7 +746,16 @@ func _load()->void:
   stage=clampi(int(data.get("stage",0)),0,Story.MISSIONS.size()-1)
   xp=int(data.get("xp",0))
   campaign_complete=bool(data.get("campaign_complete",false))
+  credits=max(0,int(data.get("credits",350)))
+  loot_misses=clampi(int(data.get("loot_misses",0)),0,19)
+  cases_opened=max(0,int(data.get("cases_opened",0)))
+  last_drop=clampi(int(data.get("last_drop",-1)),-1,Loot.ITEMS.size()-1)
+  inventory.clear()
+  for value in data.get("inventory",[]):
+   var item_id:int=int(value)
+   if item_id>=0 and item_id<Loot.ITEMS.size() and not inventory.has(item_id):
+    inventory.append(item_id)
 
 func _save()->void:
  var file:=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
- file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete}))
+ file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete,"credits":credits,"loot_misses":loot_misses,"cases_opened":cases_opened,"last_drop":last_drop,"inventory":inventory}))
