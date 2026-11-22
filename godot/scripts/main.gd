@@ -8,6 +8,9 @@ const SETTINGS_PATH := "user://tactical_settings.json"
 var graphics_level := 1
 var fps_limit := 60
 var auto_fire := true
+var fire_button: Button
+var fire_touch_id := -1
+var fire_requested := false
 var camera_shake := false
 var stage := 0
 var campaign_complete := false
@@ -33,7 +36,8 @@ var playing := false
 var enemies: Array[Node3D] = []
 var enemy_timer := 0.0
 var fire_timer := 0.0
-var magazine_rounds := [30,12,6]
+const MAGAZINE_CAPACITIES := [30,12,6]
+var magazine_rounds := MAGAZINE_CAPACITIES.duplicate()
 var reload_timer := 0.0
 var reload_duration := 1.5
 var reload_progress: ProgressBar
@@ -359,7 +363,9 @@ func _process(delta: float) -> void:
   if reload_timer==0.0:
    magazine_rounds[weapon_index]=_magazine_capacity()
   _refresh_ammo_ui()
- if auto_fire and fire_timer<=0 and reload_timer<=0.0 and magazine_rounds[weapon_index]>0:
+ var firing := auto_fire or fire_requested or fire_touch_id != -1 or fire_button.button_pressed or Input.is_key_pressed(KEY_SPACE)
+ fire_requested=false
+ if firing and fire_timer<=0 and reload_timer<=0.0 and magazine_rounds[weapon_index]>0:
   var nearest: Node3D = null
   var distance: float = float(WEAPONS[weapon_index]["range"])
   for e in enemies:
@@ -476,7 +482,7 @@ func _show_hit_feedback(target:Node3D)->void:
  if is_instance_valid(hit_marker):
   hit_marker.visible=true
  var flash:=_box(target,"Hit flash",Vector3(0,1.4,-0.42),Vector3(0.92,0.65,0.08),Color("#ff7759"))
- var tween:=create_tween()
+ var tween:=flash.create_tween()
  tween.tween_property(flash,"scale",Vector3(0.1,0.1,0.1),0.18)
  tween.tween_callback(flash.queue_free)
  # Floating damage is attached to the arena, so a defeated enemy can disappear.
@@ -498,12 +504,10 @@ func _show_hit_feedback(target:Node3D)->void:
  if not target.has_meta("staggering"):
   target.set_meta("staggering",true)
   var base_scale:Vector3=target.scale
-  var impact:=create_tween()
+  var impact:=target.create_tween()
   impact.tween_property(target,"scale",base_scale*Vector3(1.08,0.92,1.08),0.065)
   impact.tween_property(target,"scale",base_scale,0.14)
-  impact.tween_callback(func():
-   if is_instance_valid(target): target.remove_meta("staggering")
-  )
+  impact.tween_callback(target.remove_meta.bind("staggering"))
 
 func _target()->int:
  return int(Story.mission(stage)["kills"])
@@ -545,6 +549,13 @@ func _build_ui()->void:
  status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  status_label.add_theme_color_override("font_color",Color("#b4e9e4"))
  hud.add_child(status_label)
+ fire_button=_button("ОГОНЬ")
+ fire_button.set_anchors_preset(Control.PRESET_BOTTOM_RIGHT)
+ fire_button.position=Vector2(-290,-295)
+ fire_button.custom_minimum_size=Vector2(275,70)
+ fire_button.focus_mode=Control.FOCUS_NONE
+ fire_button.button_down.connect(func(): fire_requested=true)
+ hud.add_child(fire_button)
  var pause:=_button("Ⅱ  МЕНЮ")
  pause.set_anchors_preset(Control.PRESET_TOP_RIGHT)
  pause.position=Vector2(-190,14)
@@ -611,7 +622,7 @@ func _cycle_weapon()->void:
  _apply_weapon_skin()
 
 func _magazine_capacity()->int:
- return [30,12,6][weapon_index]
+ return MAGAZINE_CAPACITIES[weapon_index]
 
 func _start_reload()->void:
  if not playing or reload_timer>0.0: return
@@ -750,6 +761,8 @@ func _clear_menu()->void:
 
 func _show_menu()->void:
  playing=false
+ hud.hide()
+ menu_layer.show()
  _clear_menu()
  var shade:=ColorRect.new()
  shade.color=Color("#0a111b")
@@ -1293,10 +1306,19 @@ func _start(is_endless:bool)->void:
  enemies.clear()
  _clear_menu()
  playing=true
+ menu_layer.hide()
+ hud.show()
+ fire_button.visible=not auto_fire
+ fire_touch_id=-1
+ fire_requested=false
+ fire_timer=0.0
+ reload_timer=0.0
+ magazine_rounds=MAGAZINE_CAPACITIES.duplicate()
  touch_id=-1
  joystick=Vector2.ZERO
  _update_joystick_visual()
  weapon_index=0
+ _refresh_ammo_ui()
  _refresh_weapon_button()
  _apply_weapon_skin()
  status_label.text="∞ БЕСКОНЕЧНЫЙ" if endless else str(Story.mission(stage)["name"])
@@ -1323,7 +1345,22 @@ func _show_result(won:bool)->void:
 
 func _input(event:InputEvent)->void:
  if not playing: return
+ if not auto_fire and event is InputEventKey and event.keycode==KEY_SPACE:
+  if event.pressed and not event.echo:
+   fire_requested=true
+  get_viewport().set_input_as_handled()
+  return
  if event is InputEventScreenTouch:
+  if not auto_fire:
+   if event.pressed and fire_touch_id==-1 and fire_button.get_global_rect().has_point(event.position):
+    fire_touch_id=event.index
+    fire_requested=true
+    get_viewport().set_input_as_handled()
+    return
+   if not event.pressed and event.index==fire_touch_id:
+    fire_touch_id=-1
+    get_viewport().set_input_as_handled()
+    return
   if event.pressed and touch_id==-1 and event.position.x<get_viewport().get_visible_rect().size.x*0.45 and event.position.y>get_viewport().get_visible_rect().size.y*0.35:
    touch_id=event.index
    touch_origin=event.position
@@ -1338,6 +1375,14 @@ func _input(event:InputEvent)->void:
   _update_joystick_visual()
  if event is InputEventKey and event.pressed and event.keycode==KEY_ESCAPE:
   _show_menu()
+
+func _notification(what:int)->void:
+ if what==NOTIFICATION_APPLICATION_FOCUS_OUT:
+  fire_touch_id=-1
+  fire_requested=false
+  touch_id=-1
+  joystick=Vector2.ZERO
+  _update_joystick_visual()
 
 func _update_joystick_visual()->void:
  if is_instance_valid(joystick_knob):
