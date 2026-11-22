@@ -180,7 +180,14 @@ function spawn(){for(let t=0;t<60;t++){const x=(Math.random()-.5)*34,z=(Math.ran
 for(let i=0;i<5;i++)spawn();
 const overlay=document.getElementById('overlay'),panel=document.getElementById('panel');
 function button(text,fn,primary=false){const b=document.createElement('button');b.textContent=text;b.className=primary?'primary':'';b.onclick=fn;panel.append(b)}
-function menu(tab='play'){
+let lobbyMode=true,lobbyPhase=0;
+function setLobby(enabled){
+ lobbyMode=enabled;
+ for(const e of enemies)e.root.setEnabled(!enabled);
+ if(enabled){cameraZoom=8;cameraAngle=-Math.PI/2;cameraPitch=1.17}
+ else{cameraZoom=18;cameraPitch=1.02}
+}
+function menu(tab='play'){setLobby(true);
  playing=false;overlay.hidden=false;panel.replaceChildren();
  const shell=document.createElement('div');shell.className='shell';panel.append(shell);
  const head=document.createElement('div');head.className='menu-head';head.innerHTML='<span class="brand">ОТПУСК <span style="color:#e6edf1">/ TACTICAL</span></span><span class="menu-meta">MOBILE OPERATIONS · BUILD ALPHA</span>';shell.append(head);
@@ -224,8 +231,8 @@ function menu(tab='play'){
   const reset=document.createElement('button');reset.textContent='СБРОСИТЬ КАМПАНИЮ';reset.onclick=()=>{if(confirm('Сбросить прогресс кампании?')){localStorage.setItem('babylon_stage','1');localStorage.setItem('babylon_mode','campaign');location.reload()}};actions.append(reset);
  }
 }
-function start(){overlay.hidden=true;playing=true;status.textContent='ОПЕРАЦИЯ НАЧАТА'}
-function result(win){over=true;playing=false;overlay.hidden=false;panel.replaceChildren();const h=document.createElement('h1');h.textContent=win?'МИССИЯ ВЫПОЛНЕНА':'ОПЕРАЦИЯ ПРОВАЛЕНА';panel.append(h);const p=document.createElement('p');p.textContent='УСТРАНЕНО: '+kills+' · ЭТАП '+stage;panel.append(p);if(win&&mode!=='endless')button('СЛЕДУЮЩАЯ ОПЕРАЦИЯ →',()=>{localStorage.setItem('babylon_stage',String(stage+1));location.reload()},true);button('ПОВТОРИТЬ',()=>location.reload());button('ГЛАВНОЕ МЕНЮ',()=>{localStorage.setItem('babylon_showmenu','1');location.reload()})}
+function start(){setLobby(false);overlay.hidden=true;playing=true;status.textContent='ОПЕРАЦИЯ НАЧАТА'}
+function result(win){over=true;playing=false;setLobby(true);overlay.hidden=false;panel.replaceChildren();const h=document.createElement('h1');h.textContent=win?'МИССИЯ ВЫПОЛНЕНА':'ОПЕРАЦИЯ ПРОВАЛЕНА';panel.append(h);const p=document.createElement('p');p.textContent='УСТРАНЕНО: '+kills+' · ЭТАП '+stage;panel.append(p);if(win&&mode!=='endless')button('СЛЕДУЮЩАЯ ОПЕРАЦИЯ →',()=>{localStorage.setItem('babylon_stage',String(stage+1));location.reload()},true);button('ПОВТОРИТЬ',()=>location.reload());button('ГЛАВНОЕ МЕНЮ',()=>{localStorage.setItem('babylon_showmenu','1');location.reload()})}
 document.getElementById('pause').onclick=()=>{if(over)return;if(playing)menu('play');else start()};
 const stick=document.getElementById('stick'),knob=document.getElementById('knob'),move={x:0,z:0};let pointer=null;
 function drag(e){const r=stick.getBoundingClientRect(),x=e.clientX-r.left-r.width/2,y=e.clientY-r.top-r.height/2,l=Math.max(1,Math.hypot(x,y)),m=Math.min(1,l/(r.width*.37));move.x=x/l*m;move.z=y/l*m;knob.style.transform='translate('+move.x*38+'px,'+move.z*38+'px)'}
@@ -258,6 +265,7 @@ let flashTime=0;
 function updateFlash(dt){flashTime=Math.max(0,flashTime-dt);muzzle.isVisible=flashTime>0}
 function fire(from,to){player.recoil=.22;flashTime=.065;muzzle.position.copyFrom(from);muzzle.position.addInPlace(to.subtract(from).normalize().scale(.9));muzzle.isVisible=true;const mesh=B.MeshBuilder.CreateSphere('shot',{diameter:.12,segments:6},scene);mesh.material=tracerMaterial;mesh.position.copyFrom(from);const v=to.subtract(from).normalize();projectiles.push({mesh,v,ttl:1,damage:weaponTypes[weaponIndex].damage,speed:weaponTypes[weaponIndex].speed})}
 engine.runRenderLoop(()=>{const now=performance.now(),dt=Math.min(.05,(now-last)/1000);last=now;updateFlash(dt);hitTimer=Math.max(0,hitTimer-dt);damageTimer=Math.max(0,damageTimer-dt);if(hitMarker)hitMarker.style.opacity=hitTimer>0?'1':'0';if(damageFlash)damageFlash.style.opacity=String(damageTimer*1.8);
+if(lobbyMode){lobbyPhase+=dt;const p=player.root.position;player.root.rotation.y=Math.sin(lobbyPhase*.4)*.2;camera.target=B.Vector3.Lerp(camera.target,p.add(new B.Vector3(-2.8,1.25,0)),Math.min(1,dt*3));camera.alpha+=(cameraAngle-camera.alpha)*Math.min(1,dt*3);camera.beta+=(cameraPitch-camera.beta)*Math.min(1,dt*3);camera.radius+=(cameraZoom-camera.radius)*Math.min(1,dt*3)}
 if(playing){let x=move.x+(keys.has('d')?1:0)-(keys.has('a')?1:0),z=move.z+(keys.has('s')?1:0)-(keys.has('w')?1:0),len=Math.hypot(x,z);if(len>1){x/=len;z/=len}
 const p=player.root.position;if(canMove(p.x+x*dt*5,p.z))p.x+=x*dt*5;if(canMove(p.x,p.z+z*dt*5))p.z+=z*dt*5;animateAgent(player,dt);
 let closest=null,dist=100;for(const e of enemies){const ep=e.root.position,d=Math.hypot(ep.x-p.x,ep.z-p.z);if(d<dist){dist=d;closest=e}if(d>1.8)steerEnemy(ep,p,dt);e.root.rotation.y=Math.atan2(p.x-ep.x,-(p.z-ep.z));animateAgent(e,dt);e.cool-=dt;if(d<2&&e.cool<=0){player.hp-=8;e.cool=1.4;registerDamage();updateHUD();if(player.hp<=0)result(false)}}
