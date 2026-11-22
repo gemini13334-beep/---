@@ -8,6 +8,8 @@ on:
       - "godot/assets/textures/**"
       - "godot/assets/briefing/**"
       - "godot/assets/courtyard/**"
+      - "godot/assets/registry/**"
+      - "godot/scripts/registry.gd"
       - "godot/scripts/briefing.gd"
       - "godot/scripts/radar.gd"
 permissions:

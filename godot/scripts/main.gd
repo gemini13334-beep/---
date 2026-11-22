@@ -10,7 +10,7 @@ var look_touch_id := -1
 var pitch := 0.0
 var elapsed := 0.0
 var timer_label:Label
-var radar:Control
+var radar:Radar
 var foreground:TextureRect
 const HAND_ART := ["first-person","stapler","folder"]
 const SAVE_PATH := "user://vacation_save.json"
@@ -69,6 +69,10 @@ var weapon_status: Label
 var kills_label: Label
 var hero: Node3D
 var cam: Camera3D
+const Registry = preload("res://scripts/registry.gd")
+var arena: Node3D
+var registry: Registry
+var document_label: Label
 var world_root: Node3D
 var weapon_index := 0
 var hit_flash_timer := 0.0
@@ -117,7 +121,6 @@ func _build_world() -> void:
  world_root = Node3D.new()
  world_root.name = "Sector"
  add_child(world_root)
- _build_courtyard()
  hero = CharacterBody3D.new()
  hero.name = "Player"
  add_child(hero)
@@ -156,6 +159,27 @@ func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:in
  part.material_override=courtyard_materials[id]
  return part
 
+func _set_location(indoors:bool)->void:
+ if arena!=null and indoors==(registry!=null): return
+ if arena!=null:
+  world_root.remove_child(arena)
+  arena.queue_free()
+ registry=null
+ if indoors:
+  registry=Registry.new()
+  arena=registry
+  world_root.add_child(arena)
+  registry.build()
+ else:
+  arena=Node3D.new()
+  world_root.add_child(arena)
+  _build_courtyard()
+ radar.buildings.clear()
+ for prop in arena.get_children():
+  if prop is MeshInstance3D and prop.mesh is BoxMesh and prop.get_child_count()>0 and prop.position.y>0:
+   var footprint:=Vector2(prop.mesh.size.x,prop.mesh.size.z)
+   radar.buildings.append(Rect2(Vector2(prop.position.x,prop.position.z)-footprint/2,footprint))
+
 func _build_courtyard()->void:
  var environment:=Environment.new()
  environment.background_mode=Environment.BG_SKY
@@ -172,72 +196,72 @@ func _build_courtyard()->void:
  environment.tonemap_mode=Environment.TONE_MAPPER_FILMIC
  var world:=WorldEnvironment.new()
  world.environment=environment
- add_child(world)
+ arena.add_child(world)
  var sun:=DirectionalLight3D.new()
  sun.rotation_degrees=Vector3(-47,-38,0)
  sun.light_color=Color("#fff0d7")
  sun.light_energy=0.90
  sun.shadow_enabled=true
  sun.directional_shadow_max_distance=45
- add_child(sun)
- _surface(world_root,"Paving",Vector3(0,-0.23,0),Vector3(41,0.46,42),1,Color("#e1d6c6"),true)
+ arena.add_child(sun)
+ _surface(arena,"Paving",Vector3(0,-0.23,0),Vector3(41,0.46,42),1,Color("#e1d6c6"),true)
  for side in [-1,1]:
-  _surface(world_root,"Boundary",Vector3(side*20,2.7,0),Vector3(0.8,5.4,42),0,Color.WHITE,true)
+  _surface(arena,"Boundary",Vector3(side*20,2.7,0),Vector3(0.8,5.4,42),0,Color.WHITE,true)
   for row in 3:
    var z:float=-14+row*13
    var height:float=6.4+float((row+side+2)%3)*0.85
    var x:float=side*15.6
-   _surface(world_root,"Registry",Vector3(x,height/2,z),Vector3(8.4,height,10.8),0,Color.WHITE,true)
-   _surface(world_root,"Cornice",Vector3(x,height,z),Vector3(8.8,0.28,11.1),0,Color("#e6cead"))
+   _surface(arena,"Registry",Vector3(x,height/2,z),Vector3(8.4,height,10.8),0,Color.WHITE,true)
+   _surface(arena,"Cornice",Vector3(x,height,z),Vector3(8.8,0.28,11.1),0,Color("#e6cead"))
    for offset in [-3.1,0,3.1]:
-    _surface(world_root,"Window recess",Vector3(side*11.35,height-1.55,z+offset),Vector3(0.12,1.64,1.15),2,Color("#454944"))
-    _surface(world_root,"Window sill",Vector3(side*11.19,height-2.37,z+offset),Vector3(0.45,0.16,1.42),0,Color.WHITE)
-   _surface(world_root,"Entry",Vector3(side*11.31,1.4,z+2.6),Vector3(0.15,2.8,1.75),2,Color("#77938a"))
+    _surface(arena,"Window recess",Vector3(side*11.35,height-1.55,z+offset),Vector3(0.12,1.64,1.15),2,Color("#454944"))
+    _surface(arena,"Window sill",Vector3(side*11.19,height-2.37,z+offset),Vector3(0.45,0.16,1.42),0,Color.WHITE)
+   _surface(arena,"Entry",Vector3(side*11.31,1.4,z+2.6),Vector3(0.15,2.8,1.75),2,Color("#77938a"))
  for side in [-1,1]:
-  _surface(world_root,"Gatehouse",Vector3(side*11.9,3.85,-20),Vector3(16,7.7,1.2),0,Color.WHITE,true)
-  _surface(world_root,"Parapet",Vector3(side*11.9,7.8,-20),Vector3(16.3,0.34,1.65),0,Color.WHITE)
-  _surface(world_root,"Gate pier",Vector3(side*3.68,1.8,-19.15),Vector3(0.55,3.6,1.15),0,Color("#dec3a2"),true)
-  _surface(world_root,"Gate leaf",Vector3(side*1.84,2.55,-19.84),Vector3(3.65,5.1,0.45),2,Color("#b4ab8c"),true)
+  _surface(arena,"Gatehouse",Vector3(side*11.9,3.85,-20),Vector3(16,7.7,1.2),0,Color.WHITE,true)
+  _surface(arena,"Parapet",Vector3(side*11.9,7.8,-20),Vector3(16.3,0.34,1.65),0,Color.WHITE)
+  _surface(arena,"Gate pier",Vector3(side*3.68,1.8,-19.15),Vector3(0.55,3.6,1.15),0,Color("#dec3a2"),true)
+  _surface(arena,"Gate leaf",Vector3(side*1.84,2.55,-19.84),Vector3(3.65,5.1,0.45),2,Color("#b4ab8c"),true)
   for y in [0.8,2.6,4.35]:
-   _surface(world_root,"Iron strap",Vector3(side*1.85,y,-19.53),Vector3(3.52,0.12,0.14),3,Color("#646460"))
+   _surface(arena,"Iron strap",Vector3(side*1.85,y,-19.53),Vector3(3.52,0.12,0.14),3,Color("#646460"))
   for i in 4:
-   _surface(world_root,"Merlon",Vector3(side*(4.6+i*3.6),8.15,-20),Vector3(1,0.65,1.25),0,Color.WHITE)
- _surface(world_root,"Arch backing",Vector3(0,5.3,-20.27),Vector3(8,4.8,0.55),0,Color("#b7a186"),true)
+   _surface(arena,"Merlon",Vector3(side*(4.6+i*3.6),8.15,-20),Vector3(1,0.65,1.25),0,Color.WHITE)
+ _surface(arena,"Arch backing",Vector3(0,5.3,-20.27),Vector3(8,4.8,0.55),0,Color("#b7a186"),true)
  for i in 17:
   var angle:=PI*(i+0.5)/17
-  var stone:=_surface(world_root,"Arch stone",Vector3(cos(angle)*3.7,3.45+sin(angle)*2.75,-19.09),Vector3(0.76,0.62,1.12),0,Color("#e9d2b1"))
+  var stone:=_surface(arena,"Arch stone",Vector3(cos(angle)*3.7,3.45+sin(angle)*2.75,-19.09),Vector3(0.76,0.62,1.12),0,Color("#e9d2b1"))
   stone.rotation.z=atan2(2.75*cos(angle),-3.7*sin(angle))
- _surface(world_root,"South wall",Vector3(0,2.7,20),Vector3(40,5.4,0.9),0,Color.WHITE,true)
+ _surface(arena,"South wall",Vector3(0,2.7,20),Vector3(40,5.4,0.9),0,Color.WHITE,true)
  for location in [Vector3(-8,0,-9),Vector3(7,0,-11),Vector3(9,0,4),Vector3(-9,0,7)]:
   for i in 3:
    var p:Vector3=location+Vector3((i%2)*1.55,(i/2)*1.42,0)
-   _surface(world_root,"Freight",p+Vector3.UP*0.71,Vector3(1.5,1.42,1.5),2,Color("#d8c7af"),true)
+   _surface(arena,"Freight",p+Vector3.UP*0.71,Vector3(1.5,1.42,1.5),2,Color("#d8c7af"),true)
    for dx in [-0.61,0.61]:
-    _surface(world_root,"Crate slat",p+Vector3(dx,0.71,0.78),Vector3(0.13,1.42,0.09),2,Color("#dbbf93"))
+    _surface(arena,"Crate slat",p+Vector3(dx,0.71,0.78),Vector3(0.13,1.42,0.09),2,Color("#dbbf93"))
  for i in 5:
   var x:float=-18+i*8.3
   var h:float=[9,10.6,9.4,11.8,9.5][i]
   var back_z:float=-24-i%2*1.8
-  _surface(world_root,"Annex",Vector3(x,h/2,back_z),Vector3(7.4,h,5.3),0,Color("#e6d7c3"))
-  _surface(world_root,"Eave",Vector3(x,h,back_z),Vector3(7.8,0.2,5.7),0,Color.WHITE)
+  _surface(arena,"Annex",Vector3(x,h/2,back_z),Vector3(7.4,h,5.3),0,Color("#e6d7c3"))
+  _surface(arena,"Eave",Vector3(x,h,back_z),Vector3(7.8,0.2,5.7),0,Color.WHITE)
   for j in 3:
-   _surface(world_root,"Gallery",Vector3(x-2.4+j*2.3,h-1.25,back_z+2.7),Vector3(0.72,1.15,0.08),2,Color("#616059"))
+   _surface(arena,"Gallery",Vector3(x-2.4+j*2.3,h-1.25,back_z+2.7),Vector3(0.72,1.15,0.08),2,Color("#616059"))
  for side in [-1,1]:
   for row in 3:
    var z:float=-14+row*13
    for off in [-3.1,0,3.1]:
     for leaf in [-1,1]:
-     _surface(world_root,"Shutter",Vector3(side*11.26,5.3+float((row+side+2)%3)*0.85,z+off+leaf*0.82),Vector3(0.15,1.75,0.42),2,Color("#858e83"))
-   _surface(world_root,"Canopy",Vector3(side*10.67,3.12,z+2.6),Vector3(1.65,0.14,3.05),2,Color("#a79c81"))
+     _surface(arena,"Shutter",Vector3(side*11.26,5.3+float((row+side+2)%3)*0.85,z+off+leaf*0.82),Vector3(0.15,1.75,0.42),2,Color("#858e83"))
+   _surface(arena,"Canopy",Vector3(side*10.67,3.12,z+2.6),Vector3(1.65,0.14,3.05),2,Color("#a79c81"))
    for k in [-1,1]:
-    _surface(world_root,"Awning bracket",Vector3(side*10.91,2.85,z+2.6+k*1.24),Vector3(1.15,0.12,0.12),3,Color("#65645b"))
+    _surface(arena,"Awning bracket",Vector3(side*10.91,2.85,z+2.6+k*1.24),Vector3(1.15,0.12,0.12),3,Color("#65645b"))
  for i in 3:
   var z:float=-10.5+i*8.6
   var line_start:=Vector3(-11.3,5.8,z)
   for n in 12:
    var u:float=float(n+1)/12
    var end:=Vector3(lerpf(-11.3,11.3,u),5.8-sin(u*PI)*1.15,z+u*2.0)
-   var wire:=_box(world_root,"Cable",(line_start+end)/2,Vector3(0.025,0.025,line_start.distance_to(end)),Color("#383532"))
+   var wire:=_box(arena,"Cable",(line_start+end)/2,Vector3(0.025,0.025,line_start.distance_to(end)),Color("#383532"))
    wire.look_at(end,Vector3.UP)
    line_start=end
  for location in [Vector3(-6.8,0,-8),Vector3(-5.8,0,-8.5),Vector3(7,0,2.5)]:
@@ -254,7 +278,7 @@ func _build_courtyard()->void:
    finish.albedo_color=Color("#929d9c") if band==0 else Color("#d5cbc0")
    drum.material_override=finish
    drum.position=location+Vector3.UP*[0.61,0.29,0.92][band]
-   world_root.add_child(drum)
+   arena.add_child(drum)
    if band==0:
     var body:=StaticBody3D.new()
     var collision:=CollisionShape3D.new()
@@ -264,7 +288,7 @@ func _build_courtyard()->void:
     collision.shape=volume
     drum.add_child(body)
     body.add_child(collision)
- _surface(world_root,"Sector plaque",Vector3(-7.4,3.85,-19.33),Vector3(4.4,0.85,0.1),3,Color("#485b58"))
+ _surface(arena,"Sector plaque",Vector3(-7.4,3.85,-19.33),Vector3(4.4,0.85,0.1),3,Color("#485b58"))
  for i in 6:
   _palm(Vector3([-16,-7,8,17,-18,17][i],0,[-23,-25,-24,-23,5,8][i]),9+i%3,i)
  var sign:=Label3D.new()
@@ -275,7 +299,7 @@ func _build_courtyard()->void:
  sign.modulate=Color("#f4e8ca")
  sign.outline_size=0
  sign.position=Vector3(-7.4,3.85,-19.24)
- world_root.add_child(sign)
+ arena.add_child(sign)
 
 func _palm(base:Vector3, height:float, seed_index:int)->void:
  var trunk:=MeshInstance3D.new()
@@ -291,7 +315,7 @@ func _palm(base:Vector3, height:float, seed_index:int)->void:
  bark.uv1_scale=Vector3(1,4,1)
  trunk.material_override=bark
  trunk.position=base+Vector3.UP*height*0.5
- world_root.add_child(trunk)
+ arena.add_child(trunk)
  var leaves:=SurfaceTool.new()
  leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
  var green:=StandardMaterial3D.new()
@@ -314,10 +338,10 @@ func _palm(base:Vector3, height:float, seed_index:int)->void:
  var crown:=MeshInstance3D.new()
  crown.mesh=leaves.commit()
  crown.position=base+Vector3.UP*height
- world_root.add_child(crown)
+ arena.add_child(crown)
 
 func _spawn_enemy() -> void:
- if enemies.size() >= 20:
+ if enemies.size() >= 20 or (not endless and kills+enemies.size()>=_target()):
   return
  var e := Node3D.new()
  var roll:=randf()
@@ -326,8 +350,9 @@ func _spawn_enemy() -> void:
   enemy_kind=2
  elif roll<0.42:
   enemy_kind=1
- var lane:float=[-7.0,-3.5,0.0,3.5,7.0].pick_random()
- e.position=Vector3(lane,0,-16.5 if hero.position.z>=0 else 16.5)
+ var lanes:=Registry.SPAWN_X if registry!=null else [-7.0,-3.5,0.0,3.5,7.0]
+ var spawn_z:=12.8 if registry!=null else 16.5
+ e.position=Vector3(lanes.pick_random(),0,-spawn_z if hero.position.z>=0 else spawn_z)
  world_root.add_child(e)
  var portrait:=Sprite3D.new()
  portrait.texture=load("res://assets/courtyard/clerk-%d.webp"%enemy_kind)
@@ -456,8 +481,12 @@ func _process(delta: float) -> void:
     kills+=1
     xp+=10
     kills_label.text="%d / ∞"%kills if endless else "%d / %d"%[kills,_target()]
-    if not endless and kills>=_target():
-     _win()
+ if registry!=null:
+  var before:=registry.files.size()
+  registry.collect_near(hero.position)
+  if registry.files.size()!=before: _refresh_documents()
+ if hp>0 and not endless and kills>=_target() and (registry==null or registry.files.is_empty()):
+  _win()
  if playing and magazine_rounds[weapon_index]<=0 and reload_timer<=0.0:
   _start_reload()
  if playing and hp<=0:
@@ -563,6 +592,11 @@ func _show_hit_feedback(target:Node3D)->void:
   impact.tween_property(target,"scale",base_scale,0.14)
   impact.tween_callback(target.remove_meta.bind("staggering"))
 
+func _refresh_documents()->void:
+ document_label.visible=registry!=null
+ if registry==null: return
+ document_label.text="ДЕЛА   %d / %d"%[Registry.FILE_COUNT-registry.files.size(),Registry.FILE_COUNT]
+
 func _target()->int:
  return int(Story.mission(active_stage)["kills"])
 
@@ -629,10 +663,6 @@ func _build_ui()->void:
  radar=Radar.new()
  radar.player=hero
  radar.contacts=enemies
- for prop in world_root.get_children():
-  if prop is MeshInstance3D and prop.mesh is BoxMesh and prop.get_child_count()>0 and prop.position.y>0:
-   var footprint:=Vector2(prop.mesh.size.x,prop.mesh.size.z)
-   radar.buildings.append(Rect2(Vector2(prop.position.x,prop.position.z)-footprint/2,footprint))
  radar.mouse_filter=Control.MOUSE_FILTER_IGNORE
  _hud_place(radar,Control.PRESET_TOP_LEFT,Vector2(18,18),Vector2(154,154))
  status_label=_hud_text("",17,Control.PRESET_TOP_LEFT,Vector2(16,174),Vector2(159,27))
@@ -640,6 +670,8 @@ func _build_ui()->void:
  var score:=_panel(Vector2.ZERO,Vector2(184,57),Color("#151e26ce"))
  _hud_place(score,Control.PRESET_CENTER_TOP,Vector2(-92,10),Vector2(184,57))
  timer_label=_hud_text("00:00",27,Control.PRESET_CENTER_TOP,Vector2(-78,14),Vector2(76,44))
+ document_label=_hud_text("",20,Control.PRESET_CENTER_TOP,Vector2(-85,68),Vector2(170,38))
+ document_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  kills_label=_hud_text("",23,Control.PRESET_CENTER_TOP,Vector2(7,17),Vector2(78,39))
  _combat_button("МЕНЮ",Control.PRESET_TOP_RIGHT,Vector2(-101,16),Vector2(85,46),_show_menu)
  fire_button=_combat_button("ОГОНЬ",Control.PRESET_BOTTOM_RIGHT,Vector2(-116,-245),Vector2(91,91),func():pass)
@@ -1250,7 +1282,13 @@ func _save_settings()->void:
 
 func _start(is_endless:bool, mission:=-1)->void:
  active_stage=stage if is_endless or mission<0 else clampi(mission,0,stage)
- hero.position=Vector3(0,0,4)
+ _set_location(not is_endless and active_stage==1)
+ radar.objectives=[]
+ if registry!=null:
+  registry.reset_files()
+  radar.objectives=registry.files
+ _refresh_documents()
+ hero.position=Vector3(0,0,9 if registry!=null else 4)
  hero.rotation=Vector3.ZERO
  pitch=0
  elapsed=0
