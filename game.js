@@ -42,7 +42,17 @@ for(let b of shots){b.x+=b.vx*dt;b.y+=b.vy*dt;b.t-=dt;if(b.enemy){if(dist(b,p)<p
 shots=shots.filter(b=>b.t>0&&b.x>-50&&b.x<W+50&&b.y>-50&&b.y<H+50);enemies=enemies.filter(e=>e.hp>0);for(let x of fx){x.t-=dt;if(!x.ring){x.x+=x.vx*dt;x.y+=x.vy*dt}}fx=fx.filter(x=>x.t>0);for(let x of pickups){x.t-=dt;if(dist(x,p)<22){p.hp=Math.min(p.max,p.hp+16);x.t=0;sound(700,.12,'triangle')}}pickups=pickups.filter(x=>x.t>0);$('health').textContent='♥ '+Math.ceil(p.hp)+'/'+p.max;$('ammo').textContent='✦ '+save.points+'  ⚡'+Math.ceil(Math.max(0,stamp));$('objective').textContent=save.level===8?'БОСС':kills+'/'+target}
 function die(){mode='menu';show('ОТКАЗ В ОТПУСКЕ','Зомби-клерки отправили тебя на дополнительное дежурство. Возвращайся в коморку и прокачай навыки.');btn('ПОВТОРИТЬ',()=>start(save.level),true,true);btn('В КОМОРКУ',menu,true)}
 function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),Math.round(w),Math.round(h))}
-function pixelChar(x,y,r,color,kind=0){ctx.fillStyle='#070b11aa';ctx.beginPath();ctx.ellipse(x,y+9,r*1.1,r*.4,0,0,7);ctx.fill();rect(x-r*.65,y-r*.6,r*1.3,r*1.2,'#18202c');rect(x-r*.55,y-r*.75,r*1.1,r*.9,color);rect(x-r*.35,y-r*1.1,r*.7,r*.45,kind===5?'#e6ac8c':'#a2c6ad');rect(x-r*.33,y-r*.98,3,3,'#172329');rect(x+r*.1,y-r*.98,3,3,'#172329');rect(x-r*.6,y+r*.35,r*.4,r*.6,'#1b202b');rect(x+r*.2,y+r*.35,r*.4,r*.6,'#1b202b');rect(x-r*.9,y-r*.3,r*.32,r*.6,kind===5?'#e9ba75':'#d5d1b7');rect(x+r*.58,y-r*.3,r*.32,r*.6,kind===5?'#e9ba75':'#d5d1b7')}
+function pixelChar(x,y,r,color,kind=0){const z=kind===5?1.65:1;ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.scale(z,z);const rr=r/z;ctx.fillStyle='#03071088';ctx.beginPath();ctx.ellipse(2,12,rr*1.25,rr*.43,0,0,7);ctx.fill();
+const skin=kind===5?'#d49b79':'#e0bc97',coat=kind===5?'#5d303c':color;
+rect(-7,3,6,12,'#1a2331');rect(2,3,6,12,'#1a2331');rect(-8,10,7,4,'#0b1019');rect(2,10,7,4,'#0b1019');
+rect(-10,-12,20,19,'#151d2b');rect(-8,-11,16,17,coat);rect(-2,-11,4,14,'#d6d5c2');rect(-1,-7,2,8,kind===5?'#a72e40':'#8d3e4e');
+rect(-13,-9,5,13,coat);rect(8,-9,5,13,coat);rect(-13,2,5,4,skin);rect(8,2,5,4,skin);
+rect(-7,-22,14,13,skin);rect(-8,-23,16,5,kind===5?'#34303c':'#293340');rect(-9,-19,5,4,kind===5?'#34303c':'#293340');
+rect(-5,-16,3,2,'#1b2634');rect(3,-16,3,2,'#1b2634');rect(-3,-11,7,2,kind===5?'#75394c':'#765b54');
+rect(9,-6,5,4,'#c8ac75');rect(12,-5,7,3,'#5d6771');
+if(kind===5){rect(-13,-9,26,15,'#70414b');rect(-10,-25,20,6,'#33313c');rect(-5,-11,11,3,'#8b3742')}
+else{rect(-7,-8,5,4,'#c0c9c0');rect(-6,-7,3,2,'#4c6c76')}
+ctx.restore()}
 function draw(){ctx.save();ctx.translate(rand(-shake,shake),rand(-shake,shake));rect(0,0,W,H,LEVELS[save.level][4]);let tile=46;for(let y=0;y<H+tile;y+=tile)for(let x=0;x<W+tile;x+=tile){rect(x,y,tile-2,tile-2,(Math.floor(x/tile)+Math.floor(y/tile))%2?'#00000012':'#ffffff07');rect(x+6,y+8,2,2,'#ffffff12')}
 // Dense, deterministic environmental props with perspective shadows.
 for(let i=0;i<22;i++){let x=(i*179+29)%(W+60)-30,y=(i*283+57)%(H+80)-20;
