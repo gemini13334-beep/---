@@ -25,13 +25,24 @@ jobs:
           export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
           echo "HOME=/root" >> "$GITHUB_ENV"
           echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=/usr/lib/android-sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
+          mkdir -p /opt/android-sdk/cmdline-tools
+          curl -fsSL --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/android-tools.zip
+          unzip -q /tmp/android-tools.zip -d /tmp/android-cli
+          mv /tmp/android-cli/cmdline-tools /opt/android-sdk/cmdline-tools/latest
+          export ANDROID_HOME=/opt/android-sdk
+          export ANDROID_SDK_ROOT=/opt/android-sdk
+          export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
+          yes | sdkmanager --sdk_root=/opt/android-sdk --licenses >/dev/null || true
+          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-35" "build-tools;35.0.0"
+          echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
+          echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> "$GITHUB_ENV"
           mkdir -p /github/home/.local/share/godot/export_templates
           cp -r /root/.local/share/godot/export_templates/4.3.stable /github/home/.local/share/godot/export_templates/
           mkdir -p /github/home/.android
           keytool -genkeypair -v -keystore /github/home/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           mkdir -p /github/home/.config/godot
-          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/usr/lib/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/github/home/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /github/home/.config/godot/editor_settings-4.tres
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/opt/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/github/home/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /github/home/.config/godot/editor_settings-4.tres
       - name: Import project and check scripts
         run: |
           godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
