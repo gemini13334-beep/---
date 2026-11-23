@@ -4,5 +4,5 @@ Media license: https://github.com/Unvanquished/Unvanquished/blob/master/COPYING.
 Creative Commons Attribution-ShareAlike 2.5: https://creativecommons.org/licenses/by-sa/2.5/
 
 The adapted model and textures in this directory are distributed under the same license.
-Adaptations for Otpusk Tactical include coordinate and weight conversion, material grouping,
+Adaptations for Osobyi Otdel include coordinate and weight conversion, material grouping,
 mobile texture sizes, reduced animation tracks, a hand-mounted dispatch terminal, and three equipment configurations.

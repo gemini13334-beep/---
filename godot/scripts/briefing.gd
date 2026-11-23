@@ -87,8 +87,14 @@ func button(value:String, at:Vector2, extent:Vector2, action:Callable, primary:=
 
 func chrome(active:String)->void:
  panel(Vector2.ZERO,Vector2(1280,64),Color("#191816fa"))
- caption("ОТПУСК",Vector2(29,5),34)
- caption("/ TACTICAL",Vector2(144,19),19,GOLD)
+ var insignia:=TextureRect.new()
+ insignia.texture=preload("res://icon.svg")
+ insignia.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+ insignia.position=Vector2(17,12)
+ insignia.size=Vector2(40,40)
+ insignia.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ add_child(insignia)
+ caption(Story.TITLE,Vector2(67,11),28,PAPER)
  var tabs:=["ЛОББИ","ИГРАТЬ","ИНВЕНТАРЬ","СНАРЯЖЕНИЕ","МАГАЗИН","ПРОФИЛЬ","НАСТРОЙКИ"]
  for i in tabs.size():
   var key:String=tabs[i]

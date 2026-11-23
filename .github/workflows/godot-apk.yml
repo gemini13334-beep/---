@@ -16,7 +16,7 @@ permissions:
 env:
   PACKAGE: org.otpusk.tactical.game
   SIGNER_SHA256: d77e07cd1f65f7bf58a48c169716867f45c641ef88b0333bf002c6f9170b02a6
-  APK: Otpusk-Tactical-Godot.apk
+  APK: Osobyi-Otdel.apk
 
 jobs:
   build:
@@ -65,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-export
-          path: dist/Otpusk-Tactical-Godot.apk
+          path: dist/Osobyi-Otdel.apk
           if-no-files-found: error
 
   install:
@@ -139,5 +139,5 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --latest
           else
-            gh release create "$RELEASE_TAG" "dist/$APK" --target "$GITHUB_SHA" --title "ОТПУСК / TACTICAL — Android $GITHUB_RUN_NUMBER" --notes "Подписанный универсальный APK. Проверен на Android 14." --latest
+            gh release create "$RELEASE_TAG" "dist/$APK" --target "$GITHUB_SHA" --title "ОСОБЫЙ ОТДЕЛ — Android $GITHUB_RUN_NUMBER" --notes "Подписанный универсальный APK. Проверен на Android 14." --latest
           fi
