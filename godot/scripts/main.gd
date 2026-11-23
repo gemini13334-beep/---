@@ -12,6 +12,7 @@ var elapsed := 0.0
 var timer_label:Label
 var radar:Radar
 var foreground:TextureRect
+const CASE_ART := ["case-field","case-elite","case-vault"]
 const HAND_ART := ["first-person","stapler","folder"]
 const SAVE_PATH := "user://vacation_save.json"
 const SETTINGS_PATH := "user://tactical_settings.json"
@@ -61,6 +62,7 @@ var joystick_base: Panel
 var joystick_knob: Panel
 var hud: Control
 var menu_layer: Control
+var page_body: Control
 var status_label: Label
 var hp_label: Label
 var health_bar: ProgressBar
@@ -71,6 +73,8 @@ var hero: Node3D
 var cam: Camera3D
 const Inspector = preload("res://scripts/inspector.gd")
 const Registry = preload("res://scripts/registry.gd")
+const StoryWing = preload("res://scripts/story_wing.gd")
+var location_id := -1
 var arena: Node3D
 var registry: Registry
 var document_label: Label
@@ -160,14 +164,15 @@ func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:in
  part.material_override=courtyard_materials[id]
  return part
 
-func _set_location(indoors:bool)->void:
- if arena!=null and indoors==(registry!=null): return
+func _set_location(location: int)->void:
+ if arena!=null and location==location_id: return
+ location_id=location
  if arena!=null:
   world_root.remove_child(arena)
   arena.queue_free()
  registry=null
- if indoors:
-  registry=Registry.new()
+ if location>0:
+  registry=Registry.new() if location==1 else StoryWing.new(location)
   arena=registry
   world_root.add_child(arena)
   registry.build()
@@ -474,9 +479,7 @@ func _process(delta: float) -> void:
      xp+=10
      kills_label.text="%d / ∞"%kills if endless else "%d / %d"%[kills,_target()]
  if registry!=null:
-  var before:=registry.files.size()
-  registry.collect_near(hero.position)
-  if registry.files.size()!=before: _refresh_documents()
+  if registry.collect_near(hero.position): _refresh_documents()
  if hp>0 and not endless and kills>=_target() and (registry==null or registry.files.is_empty()):
   _win()
  if playing and magazine_rounds[weapon_index]<=0 and reload_timer<=0.0:
@@ -581,7 +584,7 @@ func _show_hit_feedback(target:Node3D)->void:
 func _refresh_documents()->void:
  document_label.visible=registry!=null
  if registry==null: return
- document_label.text="ДЕЛА   %d / %d"%[Registry.FILE_COUNT-registry.files.size(),Registry.FILE_COUNT]
+ document_label.text=registry.objective_status()
 
 func _target()->int:
  return int(Story.mission(active_stage)["kills"])
@@ -656,7 +659,7 @@ func _build_ui()->void:
  var score:=_panel(Vector2.ZERO,Vector2(184,57),Color("#151e26ce"))
  _hud_place(score,Control.PRESET_CENTER_TOP,Vector2(-92,10),Vector2(184,57))
  timer_label=_hud_text("00:00",27,Control.PRESET_CENTER_TOP,Vector2(-78,14),Vector2(76,44))
- document_label=_hud_text("",20,Control.PRESET_CENTER_TOP,Vector2(-85,68),Vector2(170,38))
+ document_label=_hud_text("",20,Control.PRESET_CENTER_TOP,Vector2(-140,68),Vector2(280,38))
  document_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  kills_label=_hud_text("",23,Control.PRESET_CENTER_TOP,Vector2(7,17),Vector2(78,39))
  _combat_button("МЕНЮ",Control.PRESET_TOP_RIGHT,Vector2(-101,16),Vector2(85,46),_show_menu)
@@ -779,19 +782,20 @@ func _button(value:String)->Button:
  b.add_theme_color_override("font_color",Color("#e8f3f5"))
  b.add_theme_color_override("font_hover_color",Color("#ffffff"))
  var normal:=StyleBoxFlat.new()
- normal.bg_color=Color("#232b31")
- normal.set_corner_radius_all(8)
+ normal.bg_color=Color("#37332d")
+ normal.set_corner_radius_all(2)
  normal.border_width_left=3
- normal.border_color=Color("#d9a859")
+ normal.border_color=Briefing.RUST
  b.add_theme_stylebox_override("normal",normal)
  var hover:=normal.duplicate()
- hover.bg_color=Color("#41474a")
+ hover.bg_color=Color("#584638")
  b.add_theme_stylebox_override("hover",hover)
  b.add_theme_stylebox_override("pressed",hover)
  b.add_theme_stylebox_override("focus",StyleBoxEmpty.new())
  return b
 
 func _clear_menu()->void:
+ if case_spin_tween!=null and case_spin_tween.is_running(): case_spin_tween.kill()
  for child in menu_layer.get_children():
   if child is CanvasItem: child.hide()
   child.queue_free()
@@ -834,57 +838,26 @@ func _navigate(section:String)->void:
    screen.operations()
 
 func _show_cases()->void:
- _show_subpage("МАГАЗИН / КЕЙСЫ")
- var title:=_label("МАГАЗИН / КЕЙСЫ",24)
- title.position=Vector2(475,197)
- menu_layer.add_child(title)
- var details:=_label("◈ %d КРЕДИТОВ     •     ОТКРЫТО %d     •     СКИНОВ %d/%d"%[credits,cases_opened,inventory.size(),Loot.ITEMS.size()],15)
- details.position=Vector2(475,234)
- details.add_theme_color_override("font_color",Color("#ffce76"))
- menu_layer.add_child(details)
- var accents:=["#5ba8ff","#bb76ff","#ffc36b"]
- var descriptions:=["БАЗОВЫЙ НАБОР","ПОВЫШЕННЫЕ ШАНСЫ","МАКСИМАЛЬНЫЙ БОНУС"]
- for i in range(Loot.CASES.size()):
-  var data:Dictionary=Loot.CASES[i]
-  var x:float=475+i*176
-  var card:=_panel(Vector2(x,273),Vector2(166,206),Color("#10232d"))
-  card.add_theme_stylebox_override("panel",_rarity_panel_style(Color(accents[i])))
-  menu_layer.add_child(card)
-  var emblem:=_label(["◈","◆","✦"][i],38)
-  emblem.position=Vector2(x+62,290)
-  emblem.add_theme_color_override("font_color",Color(accents[i]))
-  menu_layer.add_child(emblem)
-  var case_name:=_label(str(data["name"]),14)
-  case_name.position=Vector2(x+12,343)
-  menu_layer.add_child(case_name)
-  var description:=_label(descriptions[i],11)
-  description.position=Vector2(x+12,367)
-  description.add_theme_color_override("font_color",Color("#9bbcc5"))
-  menu_layer.add_child(description)
-  var button:=_button("ОТКРЫТЬ  %d ◈"%int(data["price"]))
-  button.position=Vector2(x+9,412)
-  button.custom_minimum_size=Vector2(148,48)
-  button.disabled=credits<int(data["price"])
-  button.pressed.connect(_open_case.bind(i))
-  menu_layer.add_child(button)
- var guarantee:=_label("ГАРАНТИЯ: %d/20  •  ПОСЛЕ 19 НЕУДАЧ СЛЕДУЮЩИЙ ДРОП ЭПИЧЕСКИЙ+"%mini(loot_misses,19),14)
- guarantee.position=Vector2(475,491)
- menu_layer.add_child(guarantee)
- var odds:=_label("ШАНСЫ БАЗОВОГО КЕЙСА: РЕДКИЙ 27%  /  ЭПИК 12%  /  ЛЕГЕНДА 5%  /  УЛЬТРА 1%",12)
- odds.position=Vector2(475,521)
- odds.add_theme_color_override("font_color",Color("#9bbcc5"))
- menu_layer.add_child(odds)
- var collection:=_button("МОЯ КОЛЛЕКЦИЯ")
- collection.position=Vector2(475,558)
- collection.custom_minimum_size=Vector2(252,46)
- collection.pressed.connect(_show_collection)
- menu_layer.add_child(collection)
+ var screen := _show_subpage("МАГАЗИН / СНАБЖЕНИЕ")
+ screen.caption("КЕЙСЫ СНАБЖЕНИЯ",Vector2(426,116),35,Briefing.PAPER)
+ screen.caption("◈  %d  КРЕДИТОВ     /     ОТКРЫТО  %d"%[credits,cases_opened],Vector2(428,168),17,Briefing.GOLD)
+ var descriptions := ["Базовый набор","Повышенный шанс редкостей","Высший класс снабжения"]
+ for i in Loot.CASES.size():
+  var data: Dictionary = Loot.CASES[i]
+  var x := 426 + i*274
+  screen.panel(Vector2(x,223),Vector2(258,322),Briefing.INK)
+  var photo := screen.picture(CASE_ART[i],Vector2(x,223),Vector2(258,164))
+  screen.enter_art(photo,5+i*2)
+  screen.panel(Vector2(x,387),Vector2(258,3),Briefing.RUST)
+  screen.caption(data.name,Vector2(x+14,404),25,Briefing.PAPER)
+  screen.caption(descriptions[i],Vector2(x+14,447),16,Color("#d1bda5"))
+  var purchase := screen.button("ОТКРЫТЬ   %d ◈"%int(data.price),Vector2(x+12,483),Vector2(234,48),_open_case.bind(i),credits>=int(data.price))
+  purchase.disabled=credits<int(data.price)
+ screen.caption("ГАРАНТИЯ ЭПИЧЕСКОГО ПРЕДМЕТА    %d / 20"%mini(loot_misses,19),Vector2(428,566),17,Briefing.GOLD)
+ screen.caption("Базовый кейс    •    редкий 27%    /    эпический 12%    /    легендарный 5%    /    ультраредкий 1%",Vector2(428,597),15,Briefing.PAPER)
+ screen.button("МОЯ КОЛЛЕКЦИЯ   ›",Vector2(428,635),Vector2(264,46),_show_collection)
  if last_drop>=0:
-  var item:Dictionary=Loot.ITEMS[last_drop]
-  var last:=_label("ПОСЛЕДНИЙ: "+str(item["name"]),14)
-  last.position=Vector2(743,572)
-  last.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
-  menu_layer.add_child(last)
+  screen.caption("ПОСЛЕДНИЙ ПРЕДМЕТ   /   "+str(Loot.ITEMS[last_drop].name),Vector2(712,647),16,Briefing.PAPER)
 
 func _open_case(index:int)->void:
  var cost:int=int(Loot.CASES[index]["price"])
@@ -897,7 +870,8 @@ func _open_case(index:int)->void:
  var item_id:int=int(drop["id"])
  last_drop=item_id
  cases_opened+=1
- if inventory.has(item_id):
+ last_drop_duplicate = inventory.has(item_id)
+ if last_drop_duplicate:
   credits+=int(Loot.DUPLICATE_CREDITS[int(drop["rarity"])])
  else:
   inventory.append(item_id)
@@ -905,53 +879,46 @@ func _open_case(index:int)->void:
  _show_case_roulette(item_id)
 
 func _show_case_roulette(item_id:int)->void:
- _show_subpage("МАГАЗИН / ВСКРЫТИЕ КЕЙСА")
- var title:=_label("ВСКРЫТИЕ КЕЙСА  /  СКАНИРОВАНИЕ",23)
- title.position=Vector2(475,218)
- menu_layer.add_child(title)
- var frame:=_panel(Vector2(472,280),Vector2(515,170),Color("#0b1e29"))
- menu_layer.add_child(frame)
+ var screen:=_show_subpage("МАГАЗИН / ВСКРЫТИЕ")
+ screen.caption("ВСКРЫТИЕ КЕЙСА",Vector2(430,150),34,Briefing.PAPER)
+ screen.caption(str(Loot.CASES[last_case_index].name),Vector2(432,207),18,Briefing.GOLD)
+ var window:=Control.new()
+ window.position=Vector2(436,281)
+ window.size=Vector2(779,184)
+ window.clip_contents=true
+ window.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ screen.add_child(window)
+ var belt:=Control.new()
+ belt.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ window.add_child(belt)
+ const SPACING := 155
+ const WINNING_SLOT := 14
+ for i in WINNING_SLOT+4:
+  var id:=item_id if i==WINNING_SLOT else loot_rng.randi_range(0,Loot.ITEMS.size()-1)
+  var item:Dictionary=Loot.ITEMS[id]
+  var color:=Color(str(Loot.RARITY_COLORS[int(item.rarity)]))
+  var card:=_panel(Vector2(i*SPACING,8),Vector2(148,167),Briefing.INK)
+  card.add_theme_stylebox_override("panel",_rarity_panel_style(color))
+  belt.add_child(card)
+  var image:=_equipment_image(int(item.weapon),Vector2.ZERO,Vector2(140,104),id)
+  image.reparent(card,false)
+  image.position=Vector2(4,5)
+  var title:=_label(str(item.name),16)
+  title.position=Vector2(6,108)
+  title.size=Vector2(136,49)
+  title.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
+  title.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+  title.add_theme_color_override("font_color",color)
+  card.add_child(title)
+ var center:=window.size.x*.5
+ var stop_x:=center-74.0-WINNING_SLOT*SPACING
+ screen.panel(Vector2(window.position.x+center-2,268),Vector2(4,23),Briefing.GOLD)
+ screen.panel(Vector2(window.position.x+center-2,450),Vector2(4,23),Briefing.GOLD)
+ screen.button("ПРОПУСТИТЬ АНИМАЦИЮ",Vector2(436,539),Vector2(345,57),_finish_case_spin.bind(item_id))
  case_spin_finished=false
- var slots:Array[Label]=[]
- var cards:Array[Panel]=[]
- for i in range(5):
-  var card:=_panel(Vector2(488+i*100,304),Vector2(92,110),Color("#20313e"))
-  menu_layer.add_child(card)
-  cards.append(card)
-  var name_label:=_label("...",12)
-  name_label.position=Vector2(494+i*100,340)
-  name_label.custom_minimum_size=Vector2(80,65)
-  name_label.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
-  name_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
-  menu_layer.add_child(name_label)
-  slots.append(name_label)
- var marker:=ColorRect.new()
- marker.color=Color("#65f2dd")
- marker.position=Vector2(731,290)
- marker.size=Vector2(3,140)
- marker.mouse_filter=Control.MOUSE_FILTER_IGNORE
- menu_layer.add_child(marker)
- var hint:=_label("ИДЁТ ВЫБОР НАГРАДЫ...",16)
- hint.position=Vector2(475,490)
- menu_layer.add_child(hint)
- var steps:=24
- var reel:Array[int]=[]
- for i in range(steps+5):
-  reel.append(loot_rng.randi_range(0,Loot.ITEMS.size()-1))
- reel[steps+2]=item_id
- for j in range(5):
-  _update_reel_slot(slots[j],reel[j])
- var skip:=_button("ПРОПУСТИТЬ АНИМАЦИЮ")
- skip.position=Vector2(475,537)
- skip.custom_minimum_size=Vector2(470,47)
- skip.pressed.connect(_finish_case_spin.bind(item_id))
- menu_layer.add_child(skip)
- case_spin_tween=frame.create_tween()
- for step in range(1,steps+1):
-  var delay:float=0.045+0.008*float(step*step)/float(steps)
-  case_spin_tween.tween_interval(delay)
-  case_spin_tween.tween_callback(_advance_case_reel.bind(frame,slots,cards,reel,step))
- case_spin_tween.tween_interval(0.45)
+ case_spin_tween=belt.create_tween()
+ case_spin_tween.tween_property(belt,"position:x",stop_x,2.7).set_trans(Tween.TRANS_QUART).set_ease(Tween.EASE_OUT)
+ case_spin_tween.tween_interval(.46)
  case_spin_tween.tween_callback(_finish_case_spin.bind(item_id))
 
 func _finish_case_spin(item_id:int)->void:
@@ -961,74 +928,34 @@ func _finish_case_spin(item_id:int)->void:
   case_spin_tween.kill()
  _show_drop_reveal(item_id)
 
-func _advance_case_reel(frame:Panel,slots:Array[Label],cards:Array[Panel],reel:Array[int],step:int)->void:
- if not is_instance_valid(frame): return
- for j in range(5):
-  if is_instance_valid(slots[j]):
-   _update_reel_slot(slots[j],reel[step+j])
-   var rarity:int=int(Loot.ITEMS[reel[step+j]]["rarity"])
-   cards[j].add_theme_stylebox_override("panel",_rarity_panel_style(Color(str(Loot.RARITY_COLORS[rarity]))))
-
-func _update_reel_slot(slot:Label,item_id:int)->void:
- var item:Dictionary=Loot.ITEMS[item_id]
- slot.text=str(item["name"])
- slot.add_theme_color_override("font_color",Color(str(Loot.RARITY_COLORS[int(item["rarity"])])))
-
 func _show_drop_reveal(item_id:int)->void:
- _show_subpage("МАГАЗИН / НАГРАДА")
+ var screen:=_show_subpage("МАГАЗИН / НАГРАДА")
  var item:Dictionary=Loot.ITEMS[item_id]
- var rarity:int=int(item["rarity"])
- var color:=Color(str(Loot.RARITY_COLORS[rarity]))
- var panel:=_panel(Vector2(470,202),Vector2(530,385),Color(0.035,0.075,0.095,0.98))
- panel.add_theme_stylebox_override("panel",_rarity_panel_style(color))
- menu_layer.add_child(panel)
- var header:=_label("ПОЛУЧЕН ПРЕДМЕТ",23)
- header.position=Vector2(502,225)
- menu_layer.add_child(header)
- var rarity_text:=_label(str(Loot.RARITY_NAMES[rarity]),17)
- rarity_text.position=Vector2(502,273)
- rarity_text.add_theme_color_override("font_color",color)
- menu_layer.add_child(rarity_text)
- var item_name:=_label(str(item["name"]),29)
- item_name.position=Vector2(502,320)
- item_name.add_theme_color_override("font_color",color)
- menu_layer.add_child(item_name)
- item_name.modulate.a=0.0
- item_name.position.y+=16.0
- var reveal:=create_tween().set_parallel(true)
- reveal.tween_property(item_name,"modulate:a",1.0,0.35).set_delay(0.18)
- reveal.tween_property(item_name,"position:y",320.0,0.42).set_delay(0.18).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
- var weapon_name:=_label("ОРУЖИЕ: "+str(WEAPONS[int(item["weapon"])]["name"]),17)
- weapon_name.position=Vector2(502,375)
- menu_layer.add_child(weapon_name)
- var equip:=_button("ЭКИПИРОВАТЬ")
- equip.position=Vector2(502,444)
- equip.custom_minimum_size=Vector2(215,50)
- equip.pressed.connect(_equip_skin.bind(item_id))
- menu_layer.add_child(equip)
- var again:=_button("К КЕЙСАМ")
- again.position=Vector2(734,444)
- again.custom_minimum_size=Vector2(215,50)
- again.pressed.connect(_show_cases)
- menu_layer.add_child(again)
- var repeat_cost:int=int(Loot.CASES[last_case_index]["price"])
- var repeat:=_button("ЕЩЁ РАЗ  /  %d ◈"%repeat_cost)
- repeat.position=Vector2(502,501)
- repeat.custom_minimum_size=Vector2(447,46)
- repeat.disabled=credits<repeat_cost
- repeat.pressed.connect(_open_case.bind(last_case_index))
- menu_layer.add_child(repeat)
- var hint:=_label("Предмет сохранён. За дубликат начислены кредиты." if last_drop_duplicate else "Предмет сохранён в коллекции.",14)
- hint.position=Vector2(502,557)
- hint.autowrap_mode=TextServer.AUTOWRAP_WORD_SMART
- hint.set_deferred("size",Vector2(452,0))
- menu_layer.add_child(hint)
+ var rarity:int=item.rarity
+ var accent:=Color(str(Loot.RARITY_COLORS[rarity]))
+ screen.caption("ПОЛУЧЕН ПРЕДМЕТ",Vector2(432,117),34,Briefing.PAPER)
+ screen.panel(Vector2(432,185),Vector2(788,263),Briefing.INK)
+ screen.panel(Vector2(432,442),Vector2(788,6),accent)
+ var image:=_equipment_image(int(item.weapon),Vector2(738,193),Vector2(445,241),item_id,screen)
+ image.pivot_offset=image.size*.5
+ image.scale=Vector2(.85,.85)
+ image.create_tween().tween_property(image,"scale",Vector2.ONE,.42).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+ screen.caption(Loot.RARITY_NAMES[rarity],Vector2(456,227),16,accent)
+ screen.caption(item.name,Vector2(454,261),29,Briefing.PAPER,290)
+ screen.caption(WEAPONS[int(item.weapon)].name,Vector2(456,373),16,Briefing.GOLD,275)
+ screen.caption("Дубликат. Начислено %d кредитов."%Loot.DUPLICATE_CREDITS[rarity] if last_drop_duplicate else "Предмет добавлен в коллекцию.",Vector2(434,471),19,Briefing.PAPER)
+ screen.button("ЭКИПИРОВАТЬ",Vector2(432,535),Vector2(252,57),_equip_skin.bind(item_id),true)
+ screen.button("К КЕЙСАМ",Vector2(698,535),Vector2(252,57),_show_cases)
+ var price:int=Loot.CASES[last_case_index].price
+ var again:=screen.button("ЕЩЁ РАЗ   %d ◈"%price,Vector2(964,535),Vector2(252,57),_open_case.bind(last_case_index))
+ again.disabled=credits<price
 
 func _rarity_panel_style(color:Color)->StyleBoxFlat:
  var style:=StyleBoxFlat.new()
- style.bg_color=Color("#10232d")
- style.set_corner_radius_all(12)
- style.set_border_width_all(3)
+ style.bg_color=Color("#2e2a25")
+ style.set_corner_radius_all(2)
+ style.border_width_bottom=3
+ style.border_width_left=1
  style.border_color=color
  return style
 
@@ -1050,10 +977,10 @@ func _show_skin_preview(item_id:int)->void:
  var rarity_color:=Color(str(Loot.RARITY_COLORS[rarity]))
  var title:=_label("АРСЕНАЛ / ПРЕДПРОСМОТР СКИНА",23)
  title.position=Vector2(475,207)
- menu_layer.add_child(title)
- var panel:=_panel(Vector2(475,255),Vector2(510,278),Color("#10232d"))
+ page_body.add_child(title)
+ var panel:=_panel(Vector2(475,255),Vector2(510,278),Color("#2e2a25"))
  panel.add_theme_stylebox_override("panel",_rarity_panel_style(rarity_color))
- menu_layer.add_child(panel)
+ page_body.add_child(panel)
  var preview:=TextureRect.new()
  preview.texture=load("res://assets/briefing/"+str(HAND_ART[weapon])+".webp")
  preview.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
@@ -1066,26 +993,26 @@ func _show_skin_preview(item_id:int)->void:
  paint.set_shader_parameter("finish",tint)
  paint.set_shader_parameter("pattern",item_id%4)
  preview.material=paint
- menu_layer.add_child(preview)
+ page_body.add_child(preview)
  var name_label:=_label(str(item["name"]),26)
  name_label.position=Vector2(506,270)
  name_label.add_theme_color_override("font_color",rarity_color)
- menu_layer.add_child(name_label)
+ page_body.add_child(name_label)
  var info:=_label(str(WEAPONS[weapon]["name"])+"  /  "+str(Loot.RARITY_NAMES[rarity]),16)
  info.position=Vector2(506,464)
- menu_layer.add_child(info)
+ page_body.add_child(info)
  var equipped:bool=equipped_skins[weapon]==item_id
  var equip:=_button("✓ ЭКИПИРОВАН" if equipped else "ЭКИПИРОВАТЬ")
  equip.position=Vector2(475,548)
  equip.custom_minimum_size=Vector2(244,50)
  equip.disabled=equipped
  equip.pressed.connect(_equip_skin.bind(item_id))
- menu_layer.add_child(equip)
+ page_body.add_child(equip)
  var back:=_button("← К КОЛЛЕКЦИИ")
  back.position=Vector2(737,548)
  back.custom_minimum_size=Vector2(248,50)
  back.pressed.connect(_show_collection)
- menu_layer.add_child(back)
+ page_body.add_child(back)
 
 func _set_collection_filter(value:int)->void:
  collection_filter=value
@@ -1097,142 +1024,140 @@ func _set_collection_page(value:int)->void:
  _show_collection()
 
 func _show_collection()->void:
- _show_subpage("ИНВЕНТАРЬ / КОЛЛЕКЦИЯ")
- var title:=_label("АРСЕНАЛ / КОЛЛЕКЦИЯ  %d/%d"%[inventory.size(),Loot.ITEMS.size()],22)
- title.position=Vector2(475,203)
- menu_layer.add_child(title)
- var back:=_button("← К КЕЙСАМ")
- back.position=Vector2(475,242)
- back.custom_minimum_size=Vector2(230,43)
- back.pressed.connect(_show_cases)
- menu_layer.add_child(back)
+ var screen:=_show_subpage("ИНВЕНТАРЬ / КОЛЛЕКЦИЯ")
+ screen.caption("АРСЕНАЛ",Vector2(429,116),35,Briefing.PAPER)
+ screen.caption("%d / %d   ПРЕДМЕТОВ"%[inventory.size(),Loot.ITEMS.size()],Vector2(432,170),17,Briefing.GOLD)
+ screen.button("К КЕЙСАМ   ›",Vector2(1033,122),Vector2(192,48),_show_cases)
  var filters:=["ВСЕ","АВТОМАТ","СТЕПЛЕР","ПАПКА"]
- for i in range(filters.size()):
-  var filter_value:int=i-1
-  var filter_button:=_button(("● " if collection_filter==filter_value else "")+filters[i])
-  filter_button.position=Vector2(475+i*127,297)
-  filter_button.custom_minimum_size=Vector2(121,40)
-  filter_button.pressed.connect(_set_collection_filter.bind(filter_value))
-  menu_layer.add_child(filter_button)
+ for i in filters.size():
+  screen.button(filters[i],Vector2(432+i*198,224),Vector2(188,46),_set_collection_filter.bind(i-1),collection_filter==i-1)
  var filtered:Array[int]=[]
- for item_id in inventory:
-  if collection_filter<0 or int(Loot.ITEMS[item_id]["weapon"])==collection_filter:
-   filtered.append(item_id)
- filtered.sort_custom(func(a:int,b:int)->bool:
-  return int(Loot.ITEMS[a]["rarity"])>int(Loot.ITEMS[b]["rarity"])
- )
- var per_page:=6
- var page_count:int=maxi(1,int(ceil(float(filtered.size())/float(per_page))))
- collection_page=clampi(collection_page,0,page_count-1)
- for i in range(collection_page*per_page,mini(filtered.size(),(collection_page+1)*per_page)):
-  var item_id:int=filtered[i]
-  var item:Dictionary=Loot.ITEMS[item_id]
-  var index_on_page:int=i-collection_page*per_page
-  var col:int=index_on_page%2
-  var row_index:int=int(index_on_page/2)
-  var x:float=475+col*260
-  var y:float=351+row_index*75
-  var rarity:int=int(item["rarity"])
-  var rarity_color:=Color(str(Loot.RARITY_COLORS[rarity]))
-  var card:=_panel(Vector2(x,y),Vector2(247,66),Color("#10232d"))
-  card.add_theme_stylebox_override("panel",_rarity_panel_style(rarity_color))
-  menu_layer.add_child(card)
-  var equipped:bool=equipped_skins[int(item["weapon"])]==item_id
-  var entry:=_button(("✓ " if equipped else "◈ ")+str(item["name"]))
-  entry.position=Vector2(x+7,y+6)
-  entry.custom_minimum_size=Vector2(233,32)
-  entry.add_theme_color_override("font_color",rarity_color)
-  entry.pressed.connect(_show_skin_preview.bind(item_id))
-  menu_layer.add_child(entry)
-  var sub:=_label(str(Loot.RARITY_NAMES[rarity])+("   /   ЭКИПИРОВАН" if equipped else "   /   НАЖМИТЕ ДЛЯ ВЫБОРА"),11)
-  sub.position=Vector2(x+12,y+43)
-  menu_layer.add_child(sub)
+ for id in inventory:
+  if collection_filter<0 or int(Loot.ITEMS[id].weapon)==collection_filter: filtered.append(id)
+ filtered.sort_custom(func(a:int,b:int)->bool: return Loot.ITEMS[a].rarity>Loot.ITEMS[b].rarity)
+ const PER_PAGE := 6
+ var pages:=maxi(1,ceili(float(filtered.size())/PER_PAGE))
+ collection_page=clampi(collection_page,0,pages-1)
+ for i in range(collection_page*PER_PAGE,mini(filtered.size(),(collection_page+1)*PER_PAGE)):
+  var id:=filtered[i]
+  var item:Dictionary=Loot.ITEMS[id]
+  var slot:=i%PER_PAGE
+  var at:=Vector2(432+slot%3*266,294+int(slot/3)*151)
+  var accent:=Color(str(Loot.RARITY_COLORS[int(item.rarity)]))
+  screen.panel(at,Vector2(254,139),Briefing.INK)
+  _equipment_image(int(item.weapon),at+Vector2(8,2),Vector2(238,74),id,screen)
+  screen.panel(at+Vector2(0,76),Vector2(254,2),accent)
+  screen.caption(item.name,at+Vector2(10,81),20,Briefing.PAPER)
+  var equipped:bool=equipped_skins[int(item.weapon)]==id
+  screen.caption(str(Loot.RARITY_NAMES[int(item.rarity)])+("   ✓" if equipped else ""),at+Vector2(10,112),13,accent)
+  var select:=Button.new()
+  select.flat=true
+  select.position=at
+  select.size=Vector2(254,139)
+  select.tooltip_text=str(item.name)
+  select.pressed.connect(_show_skin_preview.bind(id))
+  screen.add_child(select)
  if filtered.is_empty():
-  var empty:=_label("В ЭТОЙ КАТЕГОРИИ ПОКА НЕТ СКИНОВ",17)
-  empty.position=Vector2(475,408)
-  menu_layer.add_child(empty)
- var page_label:=_label("СТРАНИЦА %d / %d   •   ПРЕДМЕТОВ: %d"%[collection_page+1,page_count,filtered.size()],15)
- page_label.position=Vector2(475,604)
- menu_layer.add_child(page_label)
- var prev:=_button("←")
- prev.position=Vector2(800,595)
- prev.custom_minimum_size=Vector2(72,42)
+  screen.panel(Vector2(432,294),Vector2(786,203),Briefing.INK)
+  screen.caption("ПОКА ПУСТО",Vector2(455,339),27,Briefing.PAPER)
+  screen.caption("Открой кейс в магазине, чтобы пополнить коллекцию." if inventory.is_empty() else "Выбери другую категорию снаряжения.",Vector2(455,391),20,Briefing.GOLD)
+ screen.caption("СТРАНИЦА  %d / %d"%[collection_page+1,pages],Vector2(432,618),18,Briefing.PAPER)
+ var prev:=screen.button("‹",Vector2(1040,597),Vector2(81,54),_set_collection_page.bind(collection_page-1))
+ var next:=screen.button("›",Vector2(1135,597),Vector2(81,54),_set_collection_page.bind(collection_page+1))
  prev.disabled=collection_page==0
- prev.pressed.connect(_set_collection_page.bind(collection_page-1))
- menu_layer.add_child(prev)
- var next:=_button("→")
- next.position=Vector2(884,595)
- next.custom_minimum_size=Vector2(72,42)
- next.disabled=collection_page>=page_count-1
- next.pressed.connect(_set_collection_page.bind(collection_page+1))
- menu_layer.add_child(next)
+ next.disabled=collection_page>=pages-1
 
-func _show_subpage(title_text:String)->void:
+func _show_subpage(title_text:String)->Briefing:
  var screen:=_briefing()
- screen.picture("lobby",Vector2.ZERO,Vector2(1280,720))
- screen.panel(Vector2.ZERO,Vector2(1280,720),Color("#121a23c9"))
- screen.chrome(title_text.get_slice(" /",0))
- # Existing inventory and shop controls occupy the right-hand panel.
- var content:=_panel(Vector2(356,100),Vector2(897,548),Color("#0c1a24"))
- content.add_theme_stylebox_override("panel",_rarity_panel_style(Color("#a4814c")))
- menu_layer.add_child(content)
- var heading:=_label(title_text,27)
- heading.position=Vector2(385,124)
- menu_layer.add_child(heading)
- var back:=_button("←  НАЗАД")
- back.position=Vector2(1050,116)
- back.custom_minimum_size=Vector2(170,44)
- back.pressed.connect(_show_menu)
- menu_layer.add_child(back)
+ var section:=title_text.get_slice(" /",0)
+ var art:String={"МАГАЗИН":"depot","ИНВЕНТАРЬ":"depot","СНАРЯЖЕНИЕ":"bench","ПРОФИЛЬ":"dossier","НАСТРОЙКИ":"bench"}.get(section,"dossier")
+ if title_text in ["МАГАЗИН / ВСКРЫТИЕ","МАГАЗИН / НАГРАДА"]: art=CASE_ART[last_case_index]
+ screen.panel(Vector2.ZERO,Vector2(1280,720),Briefing.CHARCOAL)
+ var photo:=screen.picture(art,Vector2(28,95),Vector2(362,587))
+ screen.enter_art(photo,-12)
+ screen.panel(Vector2(28,550),Vector2(362,132),Briefing.INK)
+ screen.panel(Vector2(28,550),Vector2(6,132),Briefing.RUST)
+ screen.caption(section,Vector2(50,573),16,Briefing.GOLD)
+ screen.caption(title_text.get_slice(" / ",1),Vector2(50,603),30,Briefing.PAPER)
+ screen.chrome(section)
+ page_body=Control.new()
+ page_body.position=Vector2(90,-15)
+ page_body.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ menu_layer.add_child(page_body)
+ page_body.position.y=-5
+ page_body.modulate.a=.20
+ var appear:=page_body.create_tween().set_parallel(true)
+ appear.tween_property(page_body,"position:y",-15.0,.22).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+ appear.tween_property(page_body,"modulate:a",1.0,.20)
+ return screen
+
+func _equipment_image(weapon:int, at: Vector2, extent:Vector2, skin_id: int = -1, parent: Control = null) -> TextureRect:
+ var image := TextureRect.new()
+ image.texture=load("res://assets/briefing/"+str(HAND_ART[weapon])+".webp")
+ image.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+ image.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+ image.position=at
+ image.size=extent
+ image.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ if skin_id>=0:
+  var paint:=foreground.material.duplicate() as ShaderMaterial
+  paint.set_shader_parameter("equipped",true)
+  paint.set_shader_parameter("finish",Color(SKIN_PALETTE[skin_id]))
+  paint.set_shader_parameter("pattern",skin_id%4)
+  image.material=paint
+ if parent == null: parent=page_body
+ parent.add_child(image)
+ return image
 
 func _show_loadout()->void:
- _show_subpage("СНАРЯЖЕНИЕ / ОРУЖИЕ")
- var b:=_button("ОРУЖИЕ: "+str(WEAPONS[weapon_index]["name"]))
- b.position=Vector2(475,370)
- b.custom_minimum_size=Vector2(450,50)
- b.pressed.connect(func(): weapon_index=(weapon_index+1)%WEAPONS.size();_refresh_weapon_button();_apply_weapon_skin();_show_loadout())
- menu_layer.add_child(b)
+ var screen:=_show_subpage("СНАРЯЖЕНИЕ / ОРУЖИЕ")
+ screen.caption("ПОЛЕВОЕ СНАРЯЖЕНИЕ",Vector2(432,117),34,Briefing.PAPER)
+ screen.panel(Vector2(432,192),Vector2(790,287),Briefing.INK)
+ _equipment_image(weapon_index,Vector2(420,209),Vector2(510,270),equipped_skins[weapon_index])
+ screen.caption(str(WEAPONS[weapon_index].name),Vector2(448,493),28,Briefing.PAPER)
  var skin_id:int=equipped_skins[weapon_index]
- var skin_text:="СТАНДАРТ" if skin_id<0 else str(Loot.ITEMS[skin_id]["name"])
- var equipped_label:=_label("СКИН: "+skin_text,17)
- equipped_label.position=Vector2(475,432)
- menu_layer.add_child(equipped_label)
- var collection_button:=_button("ВЫБРАТЬ СКИН ИЗ КОЛЛЕКЦИИ")
- collection_button.position=Vector2(475,485)
- collection_button.custom_minimum_size=Vector2(450,47)
- collection_button.pressed.connect(_show_collection)
- menu_layer.add_child(collection_button)
+ var skin_text:="СТАНДАРТ" if skin_id<0 else str(Loot.ITEMS[skin_id].name)
+ screen.caption("ПОКРЫТИЕ    /    "+skin_text,Vector2(449,540),17,Briefing.GOLD)
+ screen.button("СМЕНИТЬ СНАРЯЖЕНИЕ",Vector2(445,601),Vector2(344,59),func(): _cycle_weapon(); _show_loadout(),true)
+ screen.button("ВЫБРАТЬ СКИН",Vector2(801,601),Vector2(302,59),_show_collection)
 
 func _show_file()->void:
- _show_subpage("ПРОФИЛЬ / ЛИЧНОЕ ДЕЛО")
- var l:=_label("ЛИЧНОЕ ДЕЛО  ·  ОПЫТ: %d  ·  ЭТАП: %d\n%s"%[xp,stage+1,Story.BASE],18)
- l.position=Vector2(475,360)
- menu_layer.add_child(l)
+ var screen:=_show_subpage("ПРОФИЛЬ / ЛИЧНОЕ ДЕЛО")
+ screen.caption("ПОСЛУЖНОЙ СПИСОК",Vector2(432,117),34,Briefing.PAPER)
+ var values:=[str(xp),str(credits),"%d / %d"%[inventory.size(),Loot.ITEMS.size()]]
+ var labels:=["ОПЫТ","КРЕДИТЫ","КОЛЛЕКЦИЯ"]
+ for i in 3:
+  var x:=432+i*269
+  screen.panel(Vector2(x,196),Vector2(251,128),Briefing.INK)
+  screen.caption(labels[i],Vector2(x+18,214),17,Briefing.GOLD)
+  screen.caption(values[i],Vector2(x+18,246),36,Briefing.PAPER)
+ screen.caption("КАМПАНИЯ",Vector2(433,378),17,Briefing.GOLD)
+ screen.caption("ОТПУСК ОДОБРЕН" if campaign_complete else str(Story.mission(stage).name),Vector2(431,412),36,Briefing.PAPER)
+ for i in 5:
+  screen.panel(Vector2(432+i*153,487),Vector2(141,6),Briefing.RUST if i<=stage else Color("#554d43"))
+ screen.caption("ЭТАП  %d / 5"%[stage+1],Vector2(433,512),18,Briefing.PAPER)
+ screen.button("К ОПЕРАЦИЯМ   ›",Vector2(433,594),Vector2(287,62),func(): _navigate("ИГРАТЬ"),true)
 
 func _show_settings()->void:
- _show_subpage("НАСТРОЙКИ / ANDROID")
- var title:=_label("⚙ НАСТРОЙКИ / ANDROID",24)
- title.position=Vector2(475,290)
- menu_layer.add_child(title)
- var quality_names:=["ЭКОНОМИЯ","БАЛАНС","КАЧЕСТВО"]
- var quality:=_button("ГРАФИКА: "+quality_names[graphics_level])
- quality.position=Vector2(475,345)
- quality.custom_minimum_size=Vector2(470,48)
- quality.pressed.connect(func(): graphics_level=(graphics_level+1)%3;_apply_settings();_save_settings();_show_settings())
- menu_layer.add_child(quality)
- var frames:=_button("ЧАСТОТА КАДРОВ: %d FPS"%fps_limit)
- frames.position=Vector2(475,400)
- frames.custom_minimum_size=Vector2(470,48)
- frames.pressed.connect(func(): fps_limit=60 if fps_limit==30 else (90 if fps_limit==60 else 30);_apply_settings();_save_settings();_show_settings())
- menu_layer.add_child(frames)
- var shooting:=_button("АВТОСТРЕЛЬБА: "+("ВКЛ" if auto_fire else "ВЫКЛ"))
- shooting.position=Vector2(475,455)
- shooting.custom_minimum_size=Vector2(470,48)
- shooting.pressed.connect(func(): auto_fire=not auto_fire;_save_settings();_show_settings())
- menu_layer.add_child(shooting)
- var note:=_label("Настройки сохраняются автоматически.\n90 FPS зависит от экрана и мощности телефона.",15)
- note.position=Vector2(475,515)
- menu_layer.add_child(note)
+ var screen:=_show_subpage("НАСТРОЙКИ / ANDROID")
+ screen.caption("ПАРАМЕТРЫ ИГРЫ",Vector2(432,117),34,Briefing.PAPER)
+ var names:=["ГРАФИКА","ЧАСТОТА КАДРОВ","АВТОСТРЕЛЬБА"]
+ var values:=[["ЭКОНОМИЯ","БАЛАНС","КАЧЕСТВО"][graphics_level],"%d FPS"%fps_limit,"ВКЛ" if auto_fire else "ВЫКЛ"]
+ for i in 3:
+  var y:=217+i*104
+  screen.panel(Vector2(432,y),Vector2(788,87),Briefing.INK)
+  screen.caption(names[i],Vector2(451,y+22),23,Briefing.PAPER)
+  screen.button(str(values[i])+"    ›",Vector2(941,y+15),Vector2(259,56),_change_setting.bind(i))
+ screen.caption("Настройки сохраняются автоматически. Доступная частота кадров зависит от устройства.",Vector2(434,553),17,Briefing.GOLD,767)
+
+func _change_setting(index:int)->void:
+ match index:
+  0: graphics_level=(graphics_level+1)%3
+  1: fps_limit=60 if fps_limit==30 else (90 if fps_limit==60 else 30)
+  2: auto_fire=not auto_fire
+ _apply_settings()
+ _save_settings()
+ _show_settings()
 
 func _apply_settings()->void:
  Engine.max_fps=fps_limit
@@ -1257,7 +1182,7 @@ func _save_settings()->void:
 
 func _start(is_endless:bool, mission:=-1)->void:
  active_stage=stage if is_endless or mission<0 else clampi(mission,0,stage)
- _set_location(not is_endless and active_stage==1)
+ _set_location(0 if is_endless else active_stage)
  radar.objectives=[]
  if registry!=null:
   registry.reset_files()

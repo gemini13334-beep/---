@@ -180,9 +180,14 @@ func reset_files()->void:
   tag.outline_size=7
   files.append(folder)
 
-func collect_near(player:Vector3)->void:
+func objective_status()->String:
+ return "ДЕЛА   %d / %d"%[FILE_COUNT-files.size(),FILE_COUNT]
+
+func collect_near(player:Vector3)->bool:
+ var before:=files.size()
  for i in range(files.size()-1,-1,-1):
   var pos:=files[i].position
   if Vector2(pos.x-player.x,pos.z-player.z).length()<1.4:
    files[i].queue_free()
    files.remove_at(i)
+ return files.size()!=before

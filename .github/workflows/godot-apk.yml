@@ -9,6 +9,7 @@ on:
       - '.github/scripts/android-smoke.sh'
       - 'godot/**'
       - 'tests/patrol.gd'
+      - 'tests/story_wings.gd'
 permissions:
   contents: read
 
@@ -38,6 +39,7 @@ jobs:
           sed -i "s/^version\/code=.*/version\/code=$GITHUB_RUN_NUMBER/" godot/export_presets.cfg
           godot --headless --editor --path godot --import
           timeout 90s godot --headless --path godot --script "$PWD/tests/patrol.gd"
+          timeout 90s godot --headless --path godot --script "$PWD/tests/story_wings.gd"
           godot --headless --path godot --export-release Android "$PWD/dist/unpacked.apk" 2>&1 | tee "$RUNNER_TEMP/export.log"
           ! grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' "$RUNNER_TEMP/export.log" || exit 1
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 dist/unpacked.apk "dist/$APK"

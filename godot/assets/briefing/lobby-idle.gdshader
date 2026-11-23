@@ -13,10 +13,17 @@ void fragment() {
  vec2 motion = vec2(0.0036 * shift * chest + 0.0014 * sin(phase * 0.51) * head,
                     -0.0052 * breath * chest);
  motion.x += (uv.x - 0.533) * breath * 0.016 * chest;
+ // A slow head turn leads the shoulders, with a small lift at the visor.
+ float glance = sin(phase * 0.66) * sin(phase * 0.32);
+ motion.x += head * (0.0032 * glance + (uv.y - 0.15) * 0.014 * glance);
+ motion.y += head * (uv.x - 0.536) * 0.038 * glance;
  vec2 source = uv - motion;
  vec3 background_sample = texture(silhouette, uv).rgb;
  vec2 edge = (background_sample.gb * 255.0 - 128.0) * 0.25 / vec2(800.0, 450.0);
  vec4 background = texture(TEXTURE, uv + edge * background_sample.r);
  float foreground = texture(silhouette, source).r;
- COLOR = mix(background, texture(TEXTURE, source), foreground);
+ vec4 portrait = mix(background, texture(TEXTURE, source), foreground);
+ float luma = dot(portrait.rgb, vec3(0.299,0.587,0.114));
+ portrait.rgb = mix(vec3(luma),portrait.rgb,0.86) * vec3(1.025,0.97,0.89);
+ COLOR = portrait;
 }

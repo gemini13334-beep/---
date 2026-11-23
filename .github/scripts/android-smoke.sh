@@ -26,7 +26,7 @@ fi
 activity=$(adb shell cmd package resolve-activity --brief "$PACKAGE" | tail -1 | tr -d '\r')
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity" | tee device-check/launch.txt
 grep -F 'Status: ok' device-check/launch.txt
-# The landscape viewport is 1280x720. Wait for the amber deployment button
+# The landscape viewport is 1280x720. Wait for the rust-red deployment button
 # before sending input so a slow emulator can finish importing the first frame.
 wait_for_button() {
   local screen=$1 x=$2 y=$3
@@ -39,7 +39,7 @@ image = Image.open("device-check/" + sys.argv[1] + ".png").convert("RGB")
 if image.width < image.height:
     sys.exit(1)
 r,g,b = image.getpixel((int(sys.argv[2]), int(sys.argv[3])))
-sys.exit(0 if r > 170 and 100 < g < 215 and b < 130 and r > g + 30 else 1)
+sys.exit(0 if r > 155 and 42 < g < 135 and b < 105 and r > g + 60 else 1)
 PYCODE
     then return; fi
     if (( attempt == 15 )); then adb shell pidof "$PACKAGE" || return 1; fi
@@ -48,6 +48,12 @@ PYCODE
   return 1
 }
 wait_for_button lobby 1025 654
+adb shell input tap 1090 579
+wait_for_button cases 450 507
+adb shell input tap 537 507
+wait_for_button reward 454 563
+adb shell input tap 340 32
+wait_for_button return-lobby 1025 654
 adb shell input tap 1090 654
 wait_for_button missions 1010 612
 adb shell input tap 1070 612
