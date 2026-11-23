@@ -6,6 +6,7 @@ on:
     tags: ['android-verify-*']
     paths:
       - '.github/workflows/godot-apk.yml'
+      - '.github/scripts/android-smoke.sh'
       - 'godot/**'
 permissions:
   contents: read
@@ -111,13 +112,14 @@ jobs:
         run: |
           sudo chmod a+rw /dev/kvm
           python3 -c "from PIL import Image" || python3 -m pip install Pillow
-      - name: Install, launch and update on Android 15
+      - name: Install, launch and update on Android 14
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          profile: pixel_2
+          api-level: 34
           arch: x86_64
           target: google_apis
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -no-snapshot
           script: bash .github/scripts/android-smoke.sh
       - uses: actions/upload-artifact@v4
         if: always()
@@ -133,5 +135,5 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == tag ]]; then
             gh release edit "$RELEASE_TAG" --draft=false --latest
           else
-            gh release create "$RELEASE_TAG" "dist/$APK" --target "$GITHUB_SHA" --title "ОТПУСК / TACTICAL — Android $GITHUB_RUN_NUMBER" --notes "Подписанный универсальный APK. Проверен на Android 15." --latest
+            gh release create "$RELEASE_TAG" "dist/$APK" --target "$GITHUB_SHA" --title "ОТПУСК / TACTICAL — Android $GITHUB_RUN_NUMBER" --notes "Подписанный универсальный APK. Проверен на Android 14." --latest
           fi

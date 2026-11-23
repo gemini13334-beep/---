@@ -1,11 +1,24 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p device-check
-trap 'adb logcat -d -s AndroidRuntime:E godot:E > device-check/errors.log || true' EXIT
+diagnostics() {
+ adb logcat -d > device-check/logcat.txt
+ adb shell dumpsys activity exit-info "$PACKAGE" > device-check/exits.txt
+ grep -Ei 'godot|FATAL EXCEPTION|Fatal signal' device-check/logcat.txt | tail -90 || true
+}
+trap diagnostics EXIT
+adb shell settings put secure immersive_mode_confirmations confirmed
+adb shell input keyevent KEYCODE_WAKEUP
+adb shell wm dismiss-keyguard
+adb shell settings put system accelerometer_rotation 0
+adb shell settings put system user_rotation 1
+adb shell wm density 320
 adb shell wm size 720x1280
+until adb shell getprop init.svc.bootanim | grep -q stopped; do sleep 2; done
+sleep 12
 adb install "dist/$APK"
 activity=$(adb shell cmd package resolve-activity --brief "$PACKAGE" | tail -1 | tr -d '\r')
-adb shell am start -W -n "$activity" | tee device-check/launch.txt
+adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity" | tee device-check/launch.txt
 grep -F 'Status: ok' device-check/launch.txt
 # The landscape viewport is 1280x720. Wait for the amber deployment button
 # before sending input so a slow emulator can finish importing the first frame.
@@ -23,6 +36,7 @@ r,g,b = image.getpixel((int(sys.argv[2]), int(sys.argv[3])))
 sys.exit(0 if r > 170 and 100 < g < 215 and b < 130 and r > g + 30 else 1)
 PYCODE
     then return; fi
+    if (( attempt == 15 )); then adb shell pidof "$PACKAGE" || return 1; fi
     sleep 1
   done
   return 1
@@ -37,6 +51,6 @@ adb exec-out screencap -p > device-check/combat.png
 adb logcat -d -s godot:E AndroidRuntime:E > device-check/first-run.log
 if grep -E 'SCRIPT ERROR|Parse Error|FATAL EXCEPTION|Failed to load script' device-check/first-run.log; then exit 1; fi
 adb install -r "dist/$APK"
-adb shell am start -W -n "$activity"
+adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity"
 sleep 3
 adb shell pidof "$PACKAGE"
