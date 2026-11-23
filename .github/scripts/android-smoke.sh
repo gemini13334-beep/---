@@ -57,9 +57,31 @@ wait_for_button return-lobby 1025 654
 adb shell input tap 1090 654
 wait_for_button missions 1010 612
 adb shell input tap 1070 612
-sleep 5
-adb shell pidof "$PACKAGE"
-adb exec-out screencap -p > device-check/combat.png
+# Shader compilation on a software-rendered emulator may outlast the first tap.
+for attempt in {1..40}; do
+  adb shell pidof "$PACKAGE" >/dev/null
+  adb exec-out screencap -p > device-check/combat.png
+  if python3 - <<'PY'
+from PIL import Image
+im = Image.open("device-check/combat.png").convert("RGB")
+r,g,b = im.getpixel((1178,39))
+sky = b > 140 and b > r + 40
+r,g,b = im.getpixel((700,24))
+score = r < 65 and 42 < g < 86 and b > g
+raise SystemExit(0 if sky and score else 1)
+PY
+  then break; fi
+  if (( attempt == 10 )); then
+    if python3 - <<'PY'
+from PIL import Image
+r,g,b=Image.open("device-check/combat.png").convert("RGB").getpixel((1010,612))
+raise SystemExit(0 if r>155 and 42<g<135 and b<105 and r>g+60 else 1)
+PY
+    then adb shell input tap 1105 608; fi
+  fi
+  if (( attempt == 40 )); then exit 1; fi
+  sleep 1
+done
 adb logcat -d -s godot:E AndroidRuntime:E > device-check/first-run.log
 if grep -E 'SCRIPT ERROR|Parse Error|FATAL EXCEPTION|Failed to load script' device-check/first-run.log; then exit 1; fi
 adb install -r "dist/$APK"
