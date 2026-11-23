@@ -201,7 +201,7 @@ func _build_courtyard()->void:
  var sun:=DirectionalLight3D.new()
  sun.rotation_degrees=Vector3(-47,-38,0)
  sun.light_color=Color("#fff0d7")
- sun.light_energy=0.90
+ sun.light_energy=0.78
  sun.shadow_enabled=true
  sun.directional_shadow_max_distance=45
  arena.add_child(sun)
@@ -212,7 +212,7 @@ func _build_courtyard()->void:
    var z:float=-14+row*13
    var height:float=6.4+float((row+side+2)%3)*0.85
    var x:float=side*15.6
-   _surface(arena,"Registry",Vector3(x,height/2,z),Vector3(8.4,height,10.8),0,Color.WHITE,true)
+   _surface(arena,"Registry",Vector3(x,height/2,z),Vector3(8.4,height,10.8),0,Color("#e9dac6"),true)
    _surface(arena,"Cornice",Vector3(x,height,z),Vector3(8.8,0.28,11.1),0,Color("#e6cead"))
    for offset in [-3.1,0,3.1]:
     _surface(arena,"Window recess",Vector3(side*11.35,height-1.55,z+offset),Vector3(0.12,1.64,1.15),2,Color("#454944"))
@@ -341,7 +341,7 @@ func _palm(base:Vector3, height:float, seed_index:int)->void:
  crown.position=base+Vector3.UP*height
  arena.add_child(crown)
 
-func _spawn_enemy() -> void:
+func _spawn_enemy(requested_kind := -1) -> void:
  if enemies.size() >= 20 or (not endless and kills+enemies.size()>=_target()):
   return
  var e := Node3D.new()
@@ -351,20 +351,15 @@ func _spawn_enemy() -> void:
   enemy_kind=2
  elif roll<0.42:
   enemy_kind=1
+ if requested_kind >= 0: enemy_kind = clampi(requested_kind,0,2)
  var lanes:=Registry.SPAWN_X if registry!=null else [-7.0,-3.5,0.0,3.5,7.0]
  var spawn_z:=12.8 if registry!=null else 16.5
  e.position=Vector3(lanes.pick_random(),0,-spawn_z if hero.position.z>=0 else spawn_z)
  world_root.add_child(e)
- if enemy_kind==0:
-  e.add_child(Inspector.new())
- else:
-  var portrait:=Sprite3D.new()
-  portrait.texture=load("res://assets/courtyard/clerk-%d.webp"%enemy_kind)
-  portrait.pixel_size=2.05/portrait.texture.get_height()
-  portrait.position.y=1.025
-  portrait.billboard=BaseMaterial3D.BILLBOARD_FIXED_Y
-  portrait.alpha_cut=SpriteBase3D.ALPHA_CUT_DISCARD
-  e.add_child(portrait)
+ e.look_at(Vector3(hero.position.x,0,hero.position.z),Vector3.UP)
+ var actor := Inspector.new()
+ actor.kind = enemy_kind
+ e.add_child(actor)
  match enemy_kind:
   1:
    e.name="Fast Courier"
@@ -406,6 +401,7 @@ func _process(delta: float) -> void:
  var hp_before:=hp
  for e in enemies.duplicate():
   if not is_instance_valid(e): continue
+  var actor := e.get_child(0) as Inspector
   var previous_position:Vector3=e.position
   var diff: Vector3 = hero.position-e.position
   diff.y = 0
@@ -422,7 +418,7 @@ func _process(delta: float) -> void:
      separation+=away.normalized()*(2.2-gap)/2.2
    # Light lateral movement gives couriers a different approach pattern.
    var lateral:=Vector3.ZERO
-   if e.name=="Fast Courier" and distance_to_hero<8.0:
+   if actor.kind==1 and distance_to_hero<8.0:
     lateral=Vector3(-desired.z,0.0,desired.x)*sin(float(Time.get_ticks_msec())*0.0017+float(e.get_instance_id()%17))*0.35
    var steering:Vector3=desired+separation*1.2+lateral
    if steering.length_squared()>0.001:
@@ -430,15 +426,14 @@ func _process(delta: float) -> void:
     next_position.x=clampf(next_position.x,-18.7,18.7)
     next_position.z=clampf(next_position.z,-18.7,18.7)
     e.position=_enemy_navigate(e,next_position,steering.normalized(),delta)
-  else:
+  elif _wall_hit(e.global_position+Vector3.UP, hero.global_position+Vector3.UP).is_empty():
    hp-=delta*float(e.get_meta("damage",12.0))
-  var portrait:=e.get_child(0) as Sprite3D
-  if portrait!=null:
-   portrait.position.y=1.025+absf(sin(elapsed*6+e.get_instance_id()%13))*0.045
-  elif e.get_child(0) is Inspector:
-   e.get_child(0).advance(delta,e.position.distance_to(previous_position))
-  if distance_to_hero>0.01:
-   e.look_at(Vector3(hero.position.x,e.position.y,hero.position.z),Vector3.UP)
+  var travel: Vector3 = e.position - previous_position
+  actor.advance(delta,travel.length())
+  var heading: Vector3 = travel if travel.length_squared()>0.000001 else diff
+  if heading.length_squared()>0.000001:
+   var angle := atan2(-heading.x,-heading.z)
+   e.rotation.y = lerp_angle(e.rotation.y, angle, 1.0-exp(-delta*16.0))
  if hp<hp_before:
   damage_flash=minf(0.55,damage_flash+delta*0.9)
   camera_kick=minf(0.28,camera_kick+delta*0.5)
@@ -456,38 +451,28 @@ func _process(delta: float) -> void:
   if reload_timer==0.0:
    magazine_rounds[weapon_index]=_magazine_capacity()
   _refresh_ammo_ui()
- var firing := auto_fire or fire_requested or fire_touch_id != -1 or fire_button.button_pressed or Input.is_key_pressed(KEY_SPACE) or (Input.mouse_mode==Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
+ var manual := fire_requested or fire_touch_id != -1 or fire_button.button_pressed or Input.is_key_pressed(KEY_SPACE) or (Input.mouse_mode==Input.MOUSE_MODE_CAPTURED and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT))
  fire_requested=false
- if firing and fire_timer<=0 and reload_timer<=0.0 and magazine_rounds[weapon_index]>0:
-  var nearest: Node3D = null
-  var distance: float = float(WEAPONS[weapon_index]["range"])
-  var best_error:=0.075 if auto_fire else 0.032
-  for e in enemies:
-   if not is_instance_valid(e): continue
-   var center:Vector3=e.global_position+Vector3.UP*1.3
-   if cam.is_position_behind(center): continue
-   var viewport_size:=get_viewport().get_visible_rect().size
-   var aim_error:=cam.unproject_position(center).distance_to(viewport_size*0.5)/viewport_size.y
-   var d: float = hero.position.distance_to(e.position)
-   if d<=distance and aim_error<best_error and _has_clear_shot(e):
-    best_error=aim_error
-    nearest=e
-  if nearest != null:
-   fire_timer=float(WEAPONS[weapon_index]["cooldown"])
+ if (auto_fire or manual) and fire_timer<=0 and reload_timer<=0.0 and magazine_rounds[weapon_index]>0:
+  var shot := _aim_hit(float(WEAPONS[weapon_index].range))
+  var target: Node3D = shot.target
+  if target != null or (manual and not auto_fire):
+   fire_timer=float(WEAPONS[weapon_index].cooldown)
    magazine_rounds[weapon_index]-=1
    recoil_timer=0.14
    camera_kick=minf(0.18,camera_kick+0.045)
    _refresh_ammo_ui()
-   _show_shot_feedback(nearest)
-   var remaining: float = float(nearest.get_meta("hp"))-float(WEAPONS[weapon_index]["damage"])
-   nearest.set_meta("hp",remaining)
-   _show_hit_feedback(nearest)
-   if remaining<=0:
-    enemies.erase(nearest)
-    _animate_enemy_defeat(nearest)
-    kills+=1
-    xp+=10
-    kills_label.text="%d / ∞"%kills if endless else "%d / %d"%[kills,_target()]
+   _show_shot_feedback(shot.position)
+   if target != null:
+    var remaining := float(target.get_meta("hp"))-float(WEAPONS[weapon_index].damage)
+    target.set_meta("hp",remaining)
+    _show_hit_feedback(target)
+    if remaining<=0:
+     enemies.erase(target)
+     _animate_enemy_defeat(target)
+     kills+=1
+     xp+=10
+     kills_label.text="%d / ∞"%kills if endless else "%d / %d"%[kills,_target()]
  if registry!=null:
   var before:=registry.files.size()
   registry.collect_near(hero.position)
@@ -525,39 +510,45 @@ func _enemy_navigate(enemy:Node3D, desired_position:Vector3, direction:Vector3, 
    return result
  return enemy.position
 
-func _has_clear_shot(target:Node3D)->bool:
- # OpenFPS-style hitscan visibility check; enemy health remains lightweight.
- # Props/walls are StaticBody3D and block shots; the target has no collider.
- if not is_instance_valid(target) or not is_instance_valid(hero): return false
- var from:Vector3=cam.global_position
- var to:Vector3=target.global_position+Vector3(0.0,1.3,0.0)
- var params:=PhysicsRayQueryParameters3D.create(from,to,1)
- params.collide_with_areas=false
- var hit:Dictionary=get_world_3d().direct_space_state.intersect_ray(params)
- return hit.is_empty()
+func _wall_hit(start: Vector3, end: Vector3) -> Dictionary:
+ var query := PhysicsRayQueryParameters3D.create(start, end, 1)
+ query.hit_from_inside = true
+ return get_world_3d().direct_space_state.intersect_ray(query)
+
+func _aim_hit(reach: float) -> Dictionary:
+ var center := get_viewport().get_visible_rect().get_center()
+ var start := cam.project_ray_origin(center)
+ var end := start + cam.project_ray_normal(center) * reach
+ var wall := _wall_hit(start, end)
+ if not wall.is_empty(): end = wall.position
+ var target: Node3D = null
+ for enemy in enemies:
+  var actor := enemy.get_child(0) as Inspector
+  var point = actor.intersect_shot(start,end)
+  if point != null and start.distance_squared_to(point) < start.distance_squared_to(end):
+   target = enemy
+   end = point
+ return {"target": target, "position": end}
 
 func _animate_enemy_defeat(target:Node3D)->void:
  if not is_instance_valid(target): return
  # Defeated enemies stop moving immediately because they leave the active list.
- # The short collapse gives combat a readable finish without skeletal animations.
  var collapse:=create_tween()
  collapse.set_parallel(true)
  collapse.tween_property(target,"rotation_degrees:x",72.0,0.25).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
  collapse.tween_property(target,"position:y",-0.55,0.38).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_IN)
- collapse.tween_property(target,"scale",Vector3(1.0,0.25,1.0),0.38)
  collapse.chain().tween_callback(func():
   if is_instance_valid(target): target.queue_free()
  )
 
-func _show_shot_feedback(target:Node3D)->void:
+func _show_shot_feedback(finish:Vector3)->void:
  var start:=cam.to_global(Vector3(0.19,-0.17,-0.64))
- var finish:=target.global_position+Vector3(0,1.3,0)
  var distance:=start.distance_to(finish)
  if distance<0.1: return
  var direction:Vector3=(finish-start).normalized()
- var tracer:=_box(world_root,"Shot tracer",(start+finish)*0.5,Vector3(0.045,0.045,distance),Color("#ffe5a0"))
+ var tracer:=_box(world_root,"Shot tracer",(start+finish)*0.5,Vector3(0.014,0.014,distance),Color("#ffe5a0"))
  tracer.look_at(finish,Vector3.UP)
- var muzzle:=_box(world_root,"Muzzle flash",start+direction*0.3,Vector3(0.28,0.28,0.28),Color("#ffc75c"))
+ var muzzle:=_box(world_root,"Muzzle flash",start+direction*0.3,Vector3(0.075,0.065,0.12),Color("#ffc75c"))
  var shot_tween:=create_tween()
  shot_tween.set_parallel(true)
  shot_tween.tween_property(tracer,"scale",Vector3(0.1,0.1,1.0),0.09)
@@ -571,10 +562,6 @@ func _show_hit_feedback(target:Node3D)->void:
  hit_flash_timer=0.13
  if is_instance_valid(hit_marker):
   hit_marker.visible=true
- var flash:=_box(target,"Hit flash",Vector3(0,1.4,-0.42),Vector3(0.92,0.65,0.08),Color("#ff7759"))
- var tween:=flash.create_tween()
- tween.tween_property(flash,"scale",Vector3(0.1,0.1,0.1),0.18)
- tween.tween_callback(flash.queue_free)
  # Floating damage is attached to the arena, so a defeated enemy can disappear.
  var popup:=Label3D.new()
  popup.text="-%d"%int(WEAPONS[weapon_index]["damage"])
@@ -590,14 +577,6 @@ func _show_hit_feedback(target:Node3D)->void:
  float_tween.tween_property(popup,"position:y",popup.position.y+0.85,0.52)
  float_tween.tween_property(popup,"modulate:a",0.0,0.52)
  float_tween.chain().tween_callback(popup.queue_free)
- # Brief body impact without a skeleton or extra textures.
- if not target.has_meta("staggering"):
-  target.set_meta("staggering",true)
-  var base_scale:Vector3=target.scale
-  var impact:=target.create_tween()
-  impact.tween_property(target,"scale",base_scale*Vector3(1.08,0.92,1.08),0.065)
-  impact.tween_property(target,"scale",base_scale,0.14)
-  impact.tween_callback(target.remove_meta.bind("staggering"))
 
 func _refresh_documents()->void:
  document_label.visible=registry!=null
@@ -785,6 +764,7 @@ func _panel(pos:Vector2,dimensions:Vector2,tint:Color)->Panel:
 
 func _label(value:String,size:int)->Label:
  var l:=Label.new()
+ l.add_theme_font_override("font",Briefing.FACE)
  l.text=value
  l.add_theme_font_size_override("font_size",size)
  l.add_theme_color_override("font_color",Color("#f5e6c9"))
@@ -813,7 +793,7 @@ func _button(value:String)->Button:
 
 func _clear_menu()->void:
  for child in menu_layer.get_children():
-  menu_layer.remove_child(child)
+  if child is CanvasItem: child.hide()
   child.queue_free()
 
 func _briefing()->Briefing:
@@ -1321,7 +1301,6 @@ func _start(is_endless:bool, mission:=-1)->void:
  touch_id=-1
  joystick=Vector2.ZERO
  _update_joystick_visual()
- weapon_index=0
  _refresh_ammo_ui()
  _refresh_weapon_button()
  _apply_weapon_skin()

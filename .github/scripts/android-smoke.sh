@@ -16,7 +16,13 @@ adb shell wm density 320
 adb shell wm size 720x1280
 until adb shell getprop init.svc.bootanim | grep -q stopped; do sleep 2; done
 sleep 12
-adb install "dist/$APK"
+if [[ -n "${BASELINE_APK:-}" ]]; then
+  adb install "$BASELINE_APK"
+  adb shell dumpsys package "$PACKAGE" | grep -m1 'versionCode=' > device-check/upgrade-from.txt
+  adb install -r "dist/$APK"
+else
+  adb install "dist/$APK"
+fi
 activity=$(adb shell cmd package resolve-activity --brief "$PACKAGE" | tail -1 | tr -d '\r')
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity" | tee device-check/launch.txt
 grep -F 'Status: ok' device-check/launch.txt

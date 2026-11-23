@@ -4,7 +4,7 @@ signal navigate(section: String)
 signal deploy(endless: bool, mission: int)
 
 const Story = preload("res://scripts/story.gd")
-const FACE = preload("res://assets/type/OpenSans-CondBold.ttf")
+const FACE = preload("res://assets/type/interface.tres")
 const GOLD := Color("#ffbd58")
 const INK := Color("#151d24ed")
 const ART := ["sector-0","sector-1","room-0","sector-2","room-1"]
@@ -13,6 +13,8 @@ var selected: int
 var infinite := false
 var experience: int
 var balance: int
+var idle_portrait: ShaderMaterial
+var idle_time := 0.0
 
 func panel(at:Vector2, extent:Vector2, color:Color)->ColorRect:
  var rect:=ColorRect.new()
@@ -81,8 +83,17 @@ func chrome(active:String)->void:
   button(key,Vector2(x,0),Vector2(139,62),func(): navigate.emit(key))
   if active==key: panel(Vector2(x,61),Vector2(139,3),GOLD)
 
+func _process(delta: float) -> void:
+ if idle_portrait != null:
+  idle_time = fmod(idle_time + delta, 3600.0)
+  idle_portrait.set_shader_parameter("phase", idle_time)
+
 func lobby()->void:
- picture("lobby",Vector2.ZERO,Vector2(1280,720))
+ var portrait := picture("lobby",Vector2(0,64),Vector2(1280,720))
+ idle_portrait = ShaderMaterial.new()
+ idle_portrait.shader = preload("res://assets/briefing/lobby-idle.gdshader")
+ idle_portrait.set_shader_parameter("silhouette",preload("res://assets/briefing/lobby-mask.png"))
+ portrait.material = idle_portrait
  chrome("ЛОББИ")
  panel(Vector2(32,324),Vector2(352,316),INK)
  picture(ART[frontier],Vector2(32,324),Vector2(352,118))

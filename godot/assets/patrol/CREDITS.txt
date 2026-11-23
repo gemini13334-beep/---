@@ -1,0 +1,8 @@
+Patrol character mesh, textures and motion clips by the Unvanquished team.
+Source: https://github.com/UnvanquishedAssets/res-players_src.dpkdir/tree/master/models/players/human_male
+Media license: https://github.com/Unvanquished/Unvanquished/blob/master/COPYING.txt
+Creative Commons Attribution-ShareAlike 2.5: https://creativecommons.org/licenses/by-sa/2.5/
+
+The adapted model and textures in this directory are distributed under the same license.
+Adaptations for Otpusk Tactical include coordinate and weight conversion, material grouping,
+mobile texture sizes, reduced animation tracks, a hand-mounted dispatch terminal, and three equipment configurations.

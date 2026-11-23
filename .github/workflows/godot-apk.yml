@@ -8,6 +8,7 @@ on:
       - '.github/workflows/godot-apk.yml'
       - '.github/scripts/android-smoke.sh'
       - 'godot/**'
+      - 'tests/patrol.gd'
 permissions:
   contents: read
 
@@ -36,6 +37,7 @@ jobs:
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME_17_X64" > "$HOME/.config/godot/editor_settings-4.5.tres"
           sed -i "s/^version\/code=.*/version\/code=$GITHUB_RUN_NUMBER/" godot/export_presets.cfg
           godot --headless --editor --path godot --import
+          timeout 90s godot --headless --path godot --script "$PWD/tests/patrol.gd"
           godot --headless --path godot --export-release Android "$PWD/dist/unpacked.apk" 2>&1 | tee "$RUNNER_TEMP/export.log"
           ! grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' "$RUNNER_TEMP/export.log" || exit 1
           "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 dist/unpacked.apk "dist/$APK"
