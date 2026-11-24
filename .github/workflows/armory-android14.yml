@@ -1,0 +1,53 @@
+name: Особый отдел on Android 14
+on:
+  push:
+    branches: [ci/verify-armory-37]
+permissions:
+  contents: write
+env:
+  APK: Osobyi-Otdel.apk
+  PACKAGE: org.otpusk.tactical.game
+  BASELINE_APK: /tmp/department-build-34.apk
+jobs:
+  android14:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify signed upgrade candidate
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          curl -fsSL --retry 3 https://github.com/gemini13334-beep/---/releases/download/android-build-34/Osobyi-Otdel.apk -o "$BASELINE_APK"
+          zstd -qd --long=28 --patch-from="$BASELINE_APK" .release-transfer/armory-37.zst -o "dist/$APK"
+          echo "f864ec96d6d7fb4d2e443954cad58bdec94830f6747fd9efddc0658432396e2e  dist/$APK" | sha256sum -c -
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "dist/$APK" | grep -F 'd77e07cd1f65f7bf58a48c169716867f45c641ef88b0333bf002c6f9170b02a6'
+          sudo chmod a+rw /dev/kvm
+          python3 -c "from PIL import Image" || python3 -m pip install Pillow
+      - name: Upgrade build 34, open a case, deploy, and select a weapon
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          profile: pixel_2
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash .github/scripts/android-smoke.sh
+      - name: Check combat screenshot and runtime log
+        run: |
+          grep -F 'versionCode=34' device-check/upgrade-from.txt
+          if grep -E 'Condition "!is_inside_tree\(\)"|SCRIPT ERROR|FATAL EXCEPTION' device-check/first-run.log; then exit 1; fi
+          test -s device-check/slot-five.png
+          test -s device-check/crouched.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: department-device-check
+          path: device-check/
+          if-no-files-found: ignore
+      - name: Attach verified APK to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-build-37 --json isDraft,targetCommitish | jq -e '.isDraft and .targetCommitish=="7362a966637bd5fa79954317aa81e753c2d1b147"'
+          gh release upload android-build-37 "dist/$APK"
