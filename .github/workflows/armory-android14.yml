@@ -1,0 +1,58 @@
+name: Особый отдел on Android 14
+on:
+  push:
+    branches: [ci/verify-grip-39]
+permissions:
+  contents: write
+env:
+  APK: Osobyi-Otdel.apk
+  PACKAGE: org.otpusk.tactical.game
+  BASELINE_APK: /tmp/department-build-38.apk
+jobs:
+  android14:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify signed upgrade candidate
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          curl -fsSL --retry 3 https://github.com/gemini13334-beep/---/releases/download/android-build-34/Osobyi-Otdel.apk -o /tmp/stable.apk
+          curl -fsSL --retry 3 https://github.com/gemini13334-beep/---/releases/download/android-build-38/Osobyi-Otdel.apk -o "$BASELINE_APK"
+          zstd -qd --long=28 --patch-from="$BASELINE_APK" .release-transfer/grip-39.zst -o "dist/$APK"
+          echo "51af771116dc070a915d8c428c17feaff4edb93c0f54afe445aaf8846a6c7590  dist/$APK" | sha256sum -c -
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "dist/$APK" | grep -F 'd77e07cd1f65f7bf58a48c169716867f45c641ef88b0333bf002c6f9170b02a6'
+          sudo chmod a+rw /dev/kvm
+          python3 -c "from PIL import Image" || python3 -m pip install Pillow
+      - name: Upgrade from stable and preview, deploy and capture every grip
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          profile: pixel_2
+          target: google_apis
+          arch: x86_64
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -no-snapshot
+          script: |
+            adb install /tmp/stable.apk
+            adb install -r "dist/$APK"
+            adb uninstall "$PACKAGE"
+            bash .github/scripts/android-smoke.sh
+      - name: Check combat screenshot and runtime log
+        run: |
+          grep -F 'versionCode=38' device-check/upgrade-from.txt
+          if grep -E 'Condition "!is_inside_tree\(\)"|SCRIPT ERROR|FATAL EXCEPTION' device-check/first-run.log; then exit 1; fi
+          for slot in two three four five; do test -s "device-check/slot-$slot.png"; done
+          test -s device-check/crouched.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: department-device-check
+          path: device-check/
+          if-no-files-found: ignore
+      - name: Attach verified APK to draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view android-build-39 --json isDraft,targetCommitish | jq -e '.isDraft and .targetCommitish=="e5f08a795421cab21cc1469ffb1c725138be72d3"'
+          gh release upload android-build-39 "dist/$APK"
