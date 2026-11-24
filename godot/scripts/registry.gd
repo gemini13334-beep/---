@@ -145,7 +145,7 @@ func build()->void:
  env.background_color=Color("#829793")
  env.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
  env.ambient_light_color=Color("#d4dedb")
- env.ambient_light_energy=0.65
+ env.ambient_light_energy=0.53
  env.tonemap_mode=Environment.TONE_MAPPER_FILMIC
  var lighting:=WorldEnvironment.new()
  lighting.environment=env
@@ -153,7 +153,7 @@ func build()->void:
  var sun:=DirectionalLight3D.new()
  sun.rotation_degrees=Vector3(-17,-72,0)
  sun.light_color=Color("#ffe7bb")
- sun.light_energy=1.6
+ sun.light_energy=0.78
  sun.shadow_enabled=true
  sun.directional_shadow_max_distance=42
  add_child(sun)
@@ -161,7 +161,7 @@ func build()->void:
   var lamp:=OmniLight3D.new()
   lamp.position=Vector3(-6,3.9,z)
   lamp.light_color=Color("#ffdfac")
-  lamp.light_energy=1.4
+  lamp.light_energy=1.05
   lamp.omni_range=13
   add_child(lamp)
 

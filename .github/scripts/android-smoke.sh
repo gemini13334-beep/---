@@ -64,11 +64,12 @@ for attempt in {1..40}; do
   if python3 - <<'PY'
 from PIL import Image
 im = Image.open("device-check/combat.png").convert("RGB")
-r,g,b = im.getpixel((1178,39))
-sky = b > 140 and b > r + 40
-r,g,b = im.getpixel((700,24))
-score = r < 65 and 42 < g < 86 and b > g
-raise SystemExit(0 if sky and score else 1)
+def gold(x,y):
+    r,g,b=im.getpixel((x,y))
+    return r>175 and r>g+20 and g>b+25
+radar=any(gold(95,y) for y in range(18,23)) and any(gold(x,95) for x in range(18,23))
+slot=any(gold(x,y) for x in range(1178,1183) for y in range(149,159))
+raise SystemExit(0 if radar and slot else 1)
 PY
   then break; fi
   if (( attempt == 10 )); then
@@ -80,6 +81,19 @@ PY
     then adb shell input tap 1105 608; fi
   fi
   if (( attempt == 40 )); then exit 1; fi
+  sleep 1
+done
+adb shell input tap 1221 331
+for attempt in {1..24}; do
+  adb exec-out screencap -p > device-check/slot-five.png
+  if python3 - <<'PY'
+from PIL import Image
+im=Image.open("device-check/slot-five.png").convert("RGB")
+pixels=[im.getpixel((x,y)) for x in range(1178,1184) for y in range(330,345)]
+raise SystemExit(0 if any(r>200 and r>g+20 and g>b+40 for r,g,b in pixels) else 1)
+PY
+  then break; fi
+  if (( attempt == 24 )); then exit 1; fi
   sleep 1
 done
 adb logcat -d -s godot:E AndroidRuntime:E > device-check/first-run.log

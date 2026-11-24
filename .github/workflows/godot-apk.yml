@@ -9,6 +9,7 @@ on:
       - '.github/scripts/android-smoke.sh'
       - 'godot/**'
       - 'tests/patrol.gd'
+      - 'tests/firefight.gd'
       - 'tests/story_wings.gd'
 permissions:
   contents: read
@@ -39,6 +40,7 @@ jobs:
           sed -i "s/^version\/code=.*/version\/code=$GITHUB_RUN_NUMBER/" godot/export_presets.cfg
           godot --headless --editor --path godot --import
           timeout 90s godot --headless --path godot --script "$PWD/tests/patrol.gd"
+          timeout 90s godot --headless --path godot --script "$PWD/tests/firefight.gd"
           timeout 90s godot --headless --path godot --script "$PWD/tests/story_wings.gd"
           godot --headless --path godot --export-release Android "$PWD/dist/unpacked.apk" 2>&1 | tee "$RUNNER_TEMP/export.log"
           ! grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' "$RUNNER_TEMP/export.log" || exit 1
@@ -132,6 +134,7 @@ jobs:
           path: device-check/
           if-no-files-found: ignore
       - name: Publish tested APK
+        if: github.ref_name != 'feature/armory-preview'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

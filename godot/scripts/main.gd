@@ -11,9 +11,14 @@ var pitch := 0.0
 var elapsed := 0.0
 var timer_label:Label
 var radar:Radar
-var foreground:TextureRect
+const Armory = preload("res://scripts/armory.gd")
+const Glint = preload("res://scripts/shot_glint.gd")
+var foreground:Armory
+var glint:Glint
+var bolts:Array[MeshInstance3D]=[]
+var bolt_mesh:=SphereMesh.new()
+var bloom_ticks:Array[ColorRect]=[]
 const CASE_ART := ["case-field","case-elite","case-vault"]
-const HAND_ART := ["first-person","stapler","folder"]
 const SAVE_PATH := "user://vacation_save.json"
 const SETTINGS_PATH := "user://tactical_settings.json"
 var graphics_level := 1
@@ -22,7 +27,6 @@ var auto_fire := true
 var fire_button: Button
 var fire_touch_id := -1
 var fire_requested := false
-var camera_shake := false
 var stage := 0
 var campaign_complete := false
 var endless := false
@@ -34,27 +38,25 @@ var inventory: Array[int] = []
 var loot_misses := 0
 var cases_opened := 0
 var last_drop := -1
-var equipped_skins := [-1,-1,-1]
+var equipped_skins := [-1,-1,-1,-1,-1]
 var last_drop_duplicate := false
 var case_spin_tween: Tween
 var case_spin_finished := false
 var last_case_index := 0
 var collection_filter := -1
 var collection_page := 0
-const SKIN_PALETTE := ["#71818b","#b8a17a","#a3b4bd","#a5e5ee","#36e5ca","#ff9d43","#6178ba","#a07be8","#e1bc6d","#ffca59","#d7515e","#f6d8fa"]
 var loot_rng := RandomNumberGenerator.new()
 var playing := false
 var enemies: Array[Node3D] = []
 var enemy_timer := 0.0
 var fire_timer := 0.0
-const MAGAZINE_CAPACITIES := [30,12,6]
+const MAGAZINE_CAPACITIES := [30,16,6,7,60]
 var magazine_rounds := MAGAZINE_CAPACITIES.duplicate()
 var reload_timer := 0.0
 var reload_duration := 1.5
 var reload_progress: ProgressBar
 var ammo_label: Label
 var reload_button: Button
-var recoil_timer := 0.0
 var joystick := Vector2.ZERO
 var touch_origin := Vector2.ZERO
 var touch_id := -1
@@ -66,7 +68,10 @@ var page_body: Control
 var status_label: Label
 var hp_label: Label
 var health_bar: ProgressBar
-var weapon_button: Button
+var slot_buttons:Array[Button]=[]
+const Ribbon=preload("res://scripts/combat_ribbon.gd")
+const ActionIcon=preload("res://scripts/action_icon.gd")
+var ribbon:Ribbon
 var weapon_status: Label
 var kills_label: Label
 var hero: Node3D
@@ -86,9 +91,11 @@ var damage_overlay: ColorRect
 var damage_flash := 0.0
 var camera_kick := 0.0
 const WEAPONS := [
- {"name":"КАНЦЕЛЯРСКИЙ АВТОМАТ", "damage":26.0, "cooldown":0.22, "range":17.0},
- {"name":"СТЕПЛЕР", "damage":46.0, "cooldown":0.65, "range":11.0},
- {"name":"ПАПКА С ГРИФОМ", "damage":70.0, "cooldown":1.15, "range":21.0}
+ {"name":"АВТОМАТ «КОРДОН»", "damage":26.0, "cooldown":0.16, "range":27.0,"kick":.033},
+ {"name":"ПИСТОЛЕТ «ИСКРА»", "damage":22.0, "cooldown":0.22, "range":21.0,"kick":.024},
+ {"name":"КАРАБИН «ВИЗИР»", "damage":92.0, "cooldown":0.9, "range":40.0,"kick":.068},
+ {"name":"ДРОБОВИК «ШТОРМ»", "damage":16.0, "cooldown":0.72, "range":15.0,"kick":.084},
+ {"name":"ПУЛЕМЁТ «БАСТИОН»", "damage":21.0, "cooldown":0.125, "range":29.0,"kick":.027}
 ]
 
 func _ready() -> void:
@@ -153,8 +160,8 @@ func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:in
  var part:=_box(parent,title,pos,extent,tint,solid)
  if not courtyard_materials.has(id):
   var mat:=StandardMaterial3D.new()
-  mat.albedo_texture=load("res://assets/courtyard/surface-%d.webp"%atlas)
-  mat.albedo_color=tint
+  mat.albedo_texture=preload("res://assets/courtyard/pavers.webp") if atlas==1 else load("res://assets/courtyard/surface-%d.webp"%atlas)
+  mat.albedo_color=tint*Color("#c5c7c6")
   mat.texture_filter=BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
   mat.uv1_triplanar=true
   mat.uv1_world_triplanar=true
@@ -189,16 +196,14 @@ func _set_location(location: int)->void:
 func _build_courtyard()->void:
  var environment:=Environment.new()
  environment.background_mode=Environment.BG_SKY
- var atmosphere:=ProceduralSkyMaterial.new()
- atmosphere.sky_top_color=Color("#467fc0")
- atmosphere.sky_horizon_color=Color("#c6dae6")
- atmosphere.ground_horizon_color=Color("#d9c9a8")
- atmosphere.sun_angle_max=4.0
+ var atmosphere:=PanoramaSkyMaterial.new()
+ atmosphere.panorama=preload("res://assets/courtyard/clouds.webp")
+ environment.sky_rotation.y=1.6
  environment.sky=Sky.new()
  environment.sky.sky_material=atmosphere
  environment.ambient_light_source=Environment.AMBIENT_SOURCE_COLOR
  environment.ambient_light_color=Color("#d5dfec")
- environment.ambient_light_energy=0.50
+ environment.ambient_light_energy=0.46
  environment.tonemap_mode=Environment.TONE_MAPPER_FILMIC
  var world:=WorldEnvironment.new()
  world.environment=environment
@@ -206,7 +211,7 @@ func _build_courtyard()->void:
  var sun:=DirectionalLight3D.new()
  sun.rotation_degrees=Vector3(-47,-38,0)
  sun.light_color=Color("#fff0d7")
- sun.light_energy=0.78
+ sun.light_energy=0.53
  sun.shadow_enabled=true
  sun.directional_shadow_max_distance=45
  arena.add_child(sun)
@@ -219,19 +224,16 @@ func _build_courtyard()->void:
    var x:float=side*15.6
    _surface(arena,"Registry",Vector3(x,height/2,z),Vector3(8.4,height,10.8),0,Color("#e9dac6"),true)
    _surface(arena,"Cornice",Vector3(x,height,z),Vector3(8.8,0.28,11.1),0,Color("#e6cead"))
-   for offset in [-3.1,0,3.1]:
-    _surface(arena,"Window recess",Vector3(side*11.35,height-1.55,z+offset),Vector3(0.12,1.64,1.15),2,Color("#454944"))
-    _surface(arena,"Window sill",Vector3(side*11.19,height-2.37,z+offset),Vector3(0.45,0.16,1.42),0,Color.WHITE)
-   _surface(arena,"Entry",Vector3(side*11.31,1.4,z+2.6),Vector3(0.15,2.8,1.75),2,Color("#77938a"))
+   var facade:Texture2D=preload("res://assets/courtyard/front-shutters.webp") if (row+side+1)%2==0 else preload("res://assets/courtyard/front-arches.webp")
+   _facade(Vector3(side*11.39,height*.5,z),Vector2(10.8,height),-side*PI*.5,facade)
  for side in [-1,1]:
   _surface(arena,"Gatehouse",Vector3(side*11.9,3.85,-20),Vector3(16,7.7,1.2),0,Color.WHITE,true)
   _surface(arena,"Parapet",Vector3(side*11.9,7.8,-20),Vector3(16.3,0.34,1.65),0,Color.WHITE)
   _surface(arena,"Gate pier",Vector3(side*3.68,1.8,-19.15),Vector3(0.55,3.6,1.15),0,Color("#dec3a2"),true)
   _surface(arena,"Gate leaf",Vector3(side*1.84,2.55,-19.84),Vector3(3.65,5.1,0.45),2,Color("#b4ab8c"),true)
-  for y in [0.8,2.6,4.35]:
-   _surface(arena,"Iron strap",Vector3(side*1.85,y,-19.53),Vector3(3.52,0.12,0.14),3,Color("#646460"))
   for i in 4:
    _surface(arena,"Merlon",Vector3(side*(4.6+i*3.6),8.15,-20),Vector3(1,0.65,1.25),0,Color.WHITE)
+ _facade(Vector3(0,3.09,-19.55),Vector2(7.28,6.18),0,preload("res://assets/courtyard/gate.webp"),true)
  _surface(arena,"Arch backing",Vector3(0,5.3,-20.27),Vector3(8,4.8,0.55),0,Color("#b7a186"),true)
  for i in 17:
   var angle:=PI*(i+0.5)/17
@@ -250,17 +252,7 @@ func _build_courtyard()->void:
   var back_z:float=-24-i%2*1.8
   _surface(arena,"Annex",Vector3(x,h/2,back_z),Vector3(7.4,h,5.3),0,Color("#e6d7c3"))
   _surface(arena,"Eave",Vector3(x,h,back_z),Vector3(7.8,0.2,5.7),0,Color.WHITE)
-  for j in 3:
-   _surface(arena,"Gallery",Vector3(x-2.4+j*2.3,h-1.25,back_z+2.7),Vector3(0.72,1.15,0.08),2,Color("#616059"))
- for side in [-1,1]:
-  for row in 3:
-   var z:float=-14+row*13
-   for off in [-3.1,0,3.1]:
-    for leaf in [-1,1]:
-     _surface(arena,"Shutter",Vector3(side*11.26,5.3+float((row+side+2)%3)*0.85,z+off+leaf*0.82),Vector3(0.15,1.75,0.42),2,Color("#858e83"))
-   _surface(arena,"Canopy",Vector3(side*10.67,3.12,z+2.6),Vector3(1.65,0.14,3.05),2,Color("#a79c81"))
-   for k in [-1,1]:
-    _surface(arena,"Awning bracket",Vector3(side*10.91,2.85,z+2.6+k*1.24),Vector3(1.15,0.12,0.12),3,Color("#65645b"))
+  _facade(Vector3(x,h-2.36,back_z+2.67),Vector2(7.38,4.68),0,preload("res://assets/courtyard/front-arches.webp"))
  for i in 3:
   var z:float=-10.5+i*8.6
   var line_start:=Vector3(-11.3,5.8,z)
@@ -308,43 +300,37 @@ func _build_courtyard()->void:
  arena.add_child(sign)
 
 func _palm(base:Vector3, height:float, seed_index:int)->void:
- var trunk:=MeshInstance3D.new()
- var cylinder:=CylinderMesh.new()
- cylinder.top_radius=0.18
- cylinder.bottom_radius=0.37
- cylinder.height=height
- cylinder.radial_segments=9
- trunk.mesh=cylinder
- var bark:=StandardMaterial3D.new()
- bark.albedo_texture=load("res://assets/courtyard/surface-2.webp")
- bark.albedo_color=Color("#97816a")
- bark.uv1_scale=Vector3(1,4,1)
- trunk.material_override=bark
- trunk.position=base+Vector3.UP*height*0.5
- arena.add_child(trunk)
- var leaves:=SurfaceTool.new()
- leaves.begin(Mesh.PRIMITIVE_TRIANGLES)
- var green:=StandardMaterial3D.new()
- green.albedo_color=Color("#718347")
- green.cull_mode=BaseMaterial3D.CULL_DISABLED
- leaves.set_material(green)
- for i in 19:
-  var angle:=i*2.4+seed_index
-  var axis:=Vector3(cos(angle),0,sin(angle))
-  var crosswise:=Vector3(-axis.z,0,axis.x)
-  var length:=3.8+0.75*(i%3)
-  for j in 15:
-   var u:=float(j)/15.0
-   var stem:=axis*length*u+Vector3.UP*(sin(PI*u)*1.1-u*u)
-   for side in [-1,1]:
-    leaves.add_vertex(stem)
-    leaves.add_vertex(stem+axis*0.34)
-    leaves.add_vertex(stem+axis*0.65+crosswise*side*(0.15+sin(PI*u)*0.62)-Vector3.UP*0.36)
- leaves.generate_normals()
- var crown:=MeshInstance3D.new()
- crown.mesh=leaves.commit()
- crown.position=base+Vector3.UP*height
- arena.add_child(crown)
+ var tree:=MeshInstance3D.new()
+ var mesh:=QuadMesh.new()
+ var tree_height:=height+4.0+float(seed_index%2)
+ mesh.size=Vector2(tree_height*.65,tree_height)
+ var mat:=StandardMaterial3D.new()
+ mat.albedo_texture=preload("res://assets/courtyard/date-palm.webp")
+ mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+ mat.alpha_scissor_threshold=.42
+ mat.billboard_mode=BaseMaterial3D.BILLBOARD_FIXED_Y
+ mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+ mesh.material=mat
+ tree.mesh=mesh
+ tree.position=base+Vector3.UP*tree_height*.5
+ arena.add_child(tree)
+
+func _facade(at:Vector3,extent:Vector2,yaw:float,photo:Texture2D,cutout:=false)->void:
+ var surface:=MeshInstance3D.new()
+ var quad:=QuadMesh.new()
+ quad.size=extent
+ var finish:=StandardMaterial3D.new()
+ finish.albedo_texture=photo
+ finish.albedo_color=Color("#d8d4cb")
+ finish.texture_filter=BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
+ finish.roughness=.95
+ if cutout:finish.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+ quad.material=finish
+ surface.mesh=quad
+ surface.position=at
+ surface.rotation.y=yaw
+ surface.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+ arena.add_child(surface)
 
 func _spawn_enemy(requested_kind := -1) -> void:
  if enemies.size() >= 20 or (not endless and kills+enemies.size()>=_target()):
@@ -381,6 +367,8 @@ func _spawn_enemy(requested_kind := -1) -> void:
    e.set_meta("hp",70.0+active_stage*10.0)
    e.set_meta("speed",1.6+active_stage*0.08)
    e.set_meta("damage",12.0)
+ e.set_meta("attack_wait",randf_range(1.3,2.4))
+ e.set_meta("windup",0.0)
  enemies.append(e)
 
 func _process(delta: float) -> void:
@@ -411,7 +399,9 @@ func _process(delta: float) -> void:
   var diff: Vector3 = hero.position-e.position
   diff.y = 0
   var distance_to_hero:float=diff.length()
-  if distance_to_hero>1.4:
+  var can_shoot:=distance_to_hero<([16.0,11.5,20.0][actor.kind] as float) and _wall_hit(e.position+Vector3.UP*1.38,hero.position+Vector3.UP*1.05).is_empty()
+  _enemy_attack(e,actor.kind,delta,can_shoot)
+  if distance_to_hero>([8.5,5.0,11.5][actor.kind] as float) or (not can_shoot and distance_to_hero>1.4):
    var desired:Vector3=diff.normalized()
    var separation:=Vector3.ZERO
    for other in enemies:
@@ -431,19 +421,17 @@ func _process(delta: float) -> void:
     next_position.x=clampf(next_position.x,-18.7,18.7)
     next_position.z=clampf(next_position.z,-18.7,18.7)
     e.position=_enemy_navigate(e,next_position,steering.normalized(),delta)
-  elif _wall_hit(e.global_position+Vector3.UP, hero.global_position+Vector3.UP).is_empty():
-   hp-=delta*float(e.get_meta("damage",12.0))
   var travel: Vector3 = e.position - previous_position
   actor.advance(delta,travel.length())
   var heading: Vector3 = travel if travel.length_squared()>0.000001 else diff
   if heading.length_squared()>0.000001:
    var angle := atan2(-heading.x,-heading.z)
    e.rotation.y = lerp_angle(e.rotation.y, angle, 1.0-exp(-delta*16.0))
+ _advance_bolts(delta)
  if hp<hp_before:
-  damage_flash=minf(0.55,damage_flash+delta*0.9)
-  camera_kick=minf(0.28,camera_kick+delta*0.5)
+  damage_flash=minf(0.55,damage_flash+.38)
  damage_flash=maxf(0.0,damage_flash-delta*1.7)
- camera_kick=maxf(0.0,camera_kick-delta*1.2)
+ camera_kick*=exp(-delta*8.0)
  if is_instance_valid(damage_overlay):
   damage_overlay.color=Color(0.82,0.09,0.07,damage_flash*0.5)
  if hit_flash_timer > 0.0:
@@ -464,17 +452,27 @@ func _process(delta: float) -> void:
   if target != null or (manual and not auto_fire):
    fire_timer=float(WEAPONS[weapon_index].cooldown)
    magazine_rounds[weapon_index]-=1
-   recoil_timer=0.14
-   camera_kick=minf(0.18,camera_kick+0.045)
    _refresh_ammo_ui()
+   var hits:Dictionary={}
+   if target!=null: hits[target]=float(WEAPONS[weapon_index].damage)
+   if weapon_index==3:
+    var spread:=get_viewport().get_visible_rect().size.y*.023
+    for pellet in 6:
+     var offset:=Vector2.RIGHT.rotated(TAU*pellet/6)*spread
+     var extra:=_aim_hit(float(WEAPONS[3].range),offset)
+     if extra.target!=null:
+      hits[extra.target]=float(hits.get(extra.target,0))+float(WEAPONS[3].damage)
    _show_shot_feedback(shot.position)
-   if target != null:
-    var remaining := float(target.get_meta("hp"))-float(WEAPONS[weapon_index].damage)
-    target.set_meta("hp",remaining)
-    _show_hit_feedback(target)
+   foreground.gesture("fire",fire_timer)
+   camera_kick=minf(.15,camera_kick+float(WEAPONS[weapon_index].kick))
+   for victim:Node3D in hits:
+    var remaining:=float(victim.get_meta("hp"))-float(hits[victim])
+    victim.set_meta("hp",remaining)
+    _show_hit_feedback(victim)
     if remaining<=0:
-     enemies.erase(target)
-     _animate_enemy_defeat(target)
+     ribbon.record(victim.get_child(0).kind)
+     enemies.erase(victim)
+     _animate_enemy_defeat(victim)
      kills+=1
      xp+=10
      kills_label.text="%d / ∞"%kills if endless else "%d / %d"%[kills,_target()]
@@ -518,8 +516,8 @@ func _wall_hit(start: Vector3, end: Vector3) -> Dictionary:
  query.hit_from_inside = true
  return get_world_3d().direct_space_state.intersect_ray(query)
 
-func _aim_hit(reach: float) -> Dictionary:
- var center := get_viewport().get_visible_rect().get_center()
+func _aim_hit(reach: float, offset:=Vector2.ZERO) -> Dictionary:
+ var center := get_viewport().get_visible_rect().get_center()+offset
  var start := cam.project_ray_origin(center)
  var end := start + cam.project_ray_normal(center) * reach
  var wall := _wall_hit(start, end)
@@ -545,41 +543,76 @@ func _animate_enemy_defeat(target:Node3D)->void:
  )
 
 func _show_shot_feedback(finish:Vector3)->void:
- var start:=cam.to_global(Vector3(0.19,-0.17,-0.64))
- var distance:=start.distance_to(finish)
- if distance<0.1: return
- var direction:Vector3=(finish-start).normalized()
- var tracer:=_box(world_root,"Shot tracer",(start+finish)*0.5,Vector3(0.014,0.014,distance),Color("#ffe5a0"))
- tracer.look_at(finish,Vector3.UP)
- var muzzle:=_box(world_root,"Muzzle flash",start+direction*0.3,Vector3(0.075,0.065,0.12),Color("#ffc75c"))
- var shot_tween:=create_tween()
- shot_tween.set_parallel(true)
- shot_tween.tween_property(tracer,"scale",Vector3(0.1,0.1,1.0),0.09)
- shot_tween.tween_property(muzzle,"scale",Vector3.ZERO,0.11)
- shot_tween.chain().tween_callback(func():
-  if is_instance_valid(tracer): tracer.queue_free()
-  if is_instance_valid(muzzle): muzzle.queue_free()
- )
+ glint.shoot(finish)
 
-func _show_hit_feedback(target:Node3D)->void:
- hit_flash_timer=0.13
- if is_instance_valid(hit_marker):
-  hit_marker.visible=true
- # Floating damage is attached to the arena, so a defeated enemy can disappear.
- var popup:=Label3D.new()
- popup.text="-%d"%int(WEAPONS[weapon_index]["damage"])
- popup.font_size=44
- popup.pixel_size=0.007
- popup.modulate=Color("#ffe2a0")
- popup.billboard=BaseMaterial3D.BILLBOARD_ENABLED
- popup.no_depth_test=true
- popup.position=target.global_position+Vector3(0.0,2.45,0.0)
- world_root.add_child(popup)
- var float_tween:=create_tween()
- float_tween.set_parallel(true)
- float_tween.tween_property(popup,"position:y",popup.position.y+0.85,0.52)
- float_tween.tween_property(popup,"modulate:a",0.0,0.52)
- float_tween.chain().tween_callback(popup.queue_free)
+func _show_hit_feedback(_target:Node3D)->void:
+ hit_flash_timer=.13
+ hit_marker.show()
+
+func _enemy_attack(enemy:Node3D,kind:int,delta:float,clear:bool)->void:
+ var wait:=float(enemy.get_meta("attack_wait"))-delta
+ enemy.set_meta("attack_wait",wait)
+ var windup:=float(enemy.get_meta("windup"))
+ if not clear:
+  enemy.set_meta("windup",0.0)
+  if enemy.has_node("Charge"): enemy.get_node("Charge").hide()
+  return
+ var origin:=enemy.to_global(Vector3(-.20,1.38,-.38))
+ if windup>0:
+  enemy.set_meta("windup",maxf(0,windup-delta))
+  if windup<=delta:
+   enemy.get_node("Charge").hide()
+   var aim:Vector3=enemy.get_meta("locked_point")
+   if _wall_hit(origin,aim).is_empty():
+    var bolt:=_pulse()
+    world_root.add_child(bolt)
+    bolt.position=origin
+    bolt.scale=Vector3(.052,.052,.21)
+    bolt.look_at(aim)
+    bolt.set_meta("velocity",origin.direction_to(aim)*18.0)
+    bolt.set_meta("damage",float(enemy.get_meta("damage"))*.65)
+    bolt.set_meta("ttl",1.6)
+    bolts.append(bolt)
+   enemy.set_meta("attack_wait",randf_range(1.9,2.9)+kind*.15)
+ elif wait<=0:
+  var charge:=enemy.get_node_or_null("Charge") as MeshInstance3D
+  if not charge:
+   charge=_pulse()
+   charge.name="Charge"
+   enemy.add_child(charge)
+   charge.scale=Vector3.ONE*.066
+  charge.position=enemy.to_local(origin)
+  charge.show()
+  enemy.set_meta("locked_point",hero.position+Vector3.UP*1.05)
+  enemy.set_meta("windup",.48)
+
+func _pulse()->MeshInstance3D:
+ if not bolt_mesh.material:
+  bolt_mesh.radial_segments=8
+  bolt_mesh.rings=3
+  var mat:=StandardMaterial3D.new()
+  mat.shading_mode=BaseMaterial3D.SHADING_MODE_UNSHADED
+  mat.albedo_color=Color("#ff8548")
+  bolt_mesh.material=mat
+ var pulse:=MeshInstance3D.new()
+ pulse.mesh=bolt_mesh
+ pulse.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+ return pulse
+
+func _advance_bolts(delta:float)->void:
+ for bolt in bolts.duplicate():
+  var end:Vector3=bolt.position+(bolt.get_meta("velocity") as Vector3)*delta
+  var query:=PhysicsRayQueryParameters3D.create(bolt.position,end,3)
+  query.hit_from_inside=true
+  var hit:=get_world_3d().direct_space_state.intersect_ray(query)
+  var ttl:=float(bolt.get_meta("ttl"))-delta
+  if not hit.is_empty() or ttl<=0:
+   if hit.get("collider")==hero: hp-=float(bolt.get_meta("damage"))
+   bolts.erase(bolt)
+   bolt.queue_free()
+  else:
+   bolt.position=end
+   bolt.set_meta("ttl",ttl)
 
 func _refresh_documents()->void:
  document_label.visible=registry!=null
@@ -592,11 +625,12 @@ func _target()->int:
 func _update_camera(delta: float)->void:
  if not is_instance_valid(hero) or not is_instance_valid(cam): return
  cam.global_position=hero.global_position+Vector3.UP*1.68
- cam.rotation=Vector3(pitch+camera_kick*0.08,hero.rotation.y,0)
- if is_instance_valid(foreground):
-  recoil_timer=maxf(0.0,recoil_timer-delta)
-  foreground.offset_top=-360.0+recoil_timer*62.0+sin(elapsed*2.4)*1.5
-  foreground.offset_bottom=8.0+recoil_timer*62.0+sin(elapsed*2.4)*1.5
+ cam.rotation=Vector3(pitch+camera_kick,hero.rotation.y,0)
+ if foreground:
+  foreground.pose(camera_kick,elapsed)
+ for tick in bloom_ticks:
+  var axis:Vector2=tick.get_meta("axis")
+  tick.position=hud.size*.5+axis*(8+camera_kick*135)-tick.size*.5
 
 func _hud_place(control:Control, anchor:Control.LayoutPreset, at:Vector2, extent:Vector2)->void:
  control.set_anchors_preset(anchor)
@@ -628,6 +662,39 @@ func _combat_button(value:String, anchor:Control.LayoutPreset, at:Vector2, exten
  _hud_place(b,anchor,at,extent)
  return b
 
+func _icon_button(glyph:String,description:String,anchor:Control.LayoutPreset,at:Vector2,extent:Vector2,action:Callable)->Button:
+ var button:=_combat_button("",anchor,at,extent,action)
+ button.tooltip_text=description
+ button.accessibility_name=description
+ var icon:=ActionIcon.new()
+ icon.glyph=glyph
+ icon.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ button.add_child(icon)
+ icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ return button
+
+func _weapon_slots()->void:
+ for i in WEAPONS.size():
+  var button:=Button.new()
+  button.focus_mode=Control.FOCUS_NONE
+  button.tooltip_text=WEAPONS[i].name
+  button.accessibility_name=WEAPONS[i].name
+  button.pressed.connect(_select_slot.bind(i))
+  _hud_place(button,Control.PRESET_TOP_RIGHT,Vector2(-102,135+i*45),Vector2(84,43))
+  var image:=TextureRect.new()
+  image.texture=load("res://assets/armory/catalog/slot-%d.png"%i)
+  image.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
+  image.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+  image.position=Vector2(7,8)
+  image.size=Vector2(58,25)
+  image.mouse_filter=Control.MOUSE_FILTER_IGNORE
+  button.add_child(image)
+  var number:=_label(str(i+1),13)
+  number.position=Vector2(68,1)
+  number.mouse_filter=Control.MOUSE_FILTER_IGNORE
+  button.add_child(number)
+  slot_buttons.append(button)
+
 func _build_ui()->void:
  var layer:=CanvasLayer.new()
  add_child(layer)
@@ -635,20 +702,24 @@ func _build_ui()->void:
  layer.add_child(hud)
  hud.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  hud.mouse_filter=Control.MOUSE_FILTER_IGNORE
- foreground=TextureRect.new()
- foreground.texture=preload("res://assets/briefing/first-person.webp")
- var paint:=ShaderMaterial.new()
- paint.shader=preload("res://assets/briefing/finish.gdshader")
- foreground.material=paint
- foreground.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
- foreground.stretch_mode=TextureRect.STRETCH_SCALE
- foreground.mouse_filter=Control.MOUSE_FILTER_IGNORE
- _hud_place(foreground,Control.PRESET_BOTTOM_RIGHT,Vector2(-545,-360),Vector2(561,368))
+ foreground=Armory.new()
+ hud.add_child(foreground)
+ foreground.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ glint=Glint.new()
+ glint.rig=foreground
+ glint.camera=cam
+ glint.mouse_filter=Control.MOUSE_FILTER_IGNORE
+ hud.add_child(glint)
+ glint.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  damage_overlay=ColorRect.new()
  damage_overlay.color=Color.TRANSPARENT
  damage_overlay.mouse_filter=Control.MOUSE_FILTER_IGNORE
  hud.add_child(damage_overlay)
  damage_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ ribbon=Ribbon.new()
+ ribbon.game=self
+ hud.add_child(ribbon)
+ ribbon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
  radar=Radar.new()
  radar.player=hero
  radar.contacts=enemies
@@ -656,24 +727,25 @@ func _build_ui()->void:
  _hud_place(radar,Control.PRESET_TOP_LEFT,Vector2(18,18),Vector2(154,154))
  status_label=_hud_text("",17,Control.PRESET_TOP_LEFT,Vector2(16,174),Vector2(159,27))
  status_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- var score:=_panel(Vector2.ZERO,Vector2(184,57),Color("#151e26ce"))
- _hud_place(score,Control.PRESET_CENTER_TOP,Vector2(-92,10),Vector2(184,57))
- timer_label=_hud_text("00:00",27,Control.PRESET_CENTER_TOP,Vector2(-78,14),Vector2(76,44))
- document_label=_hud_text("",20,Control.PRESET_CENTER_TOP,Vector2(-140,68),Vector2(280,38))
+ timer_label=_hud_text("00:00",26,Control.PRESET_CENTER_TOP,Vector2(-48,9),Vector2(96,30))
+ timer_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ document_label=_hud_text("",17,Control.PRESET_CENTER_TOP,Vector2(-140,66),Vector2(280,28))
  document_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
- kills_label=_hud_text("",23,Control.PRESET_CENTER_TOP,Vector2(7,17),Vector2(78,39))
- _combat_button("МЕНЮ",Control.PRESET_TOP_RIGHT,Vector2(-101,16),Vector2(85,46),_show_menu)
- fire_button=_combat_button("ОГОНЬ",Control.PRESET_BOTTOM_RIGHT,Vector2(-116,-245),Vector2(91,91),func():pass)
+ kills_label=_hud_text("",17,Control.PRESET_CENTER_TOP,Vector2(-48,37),Vector2(96,24))
+ kills_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
+ _icon_button("pause","Меню",Control.PRESET_TOP_RIGHT,Vector2(-68,12),Vector2(51,51),_show_menu)
+ fire_button=_icon_button("fire","Огонь",Control.PRESET_BOTTOM_RIGHT,Vector2(-146,-236),Vector2(84,84),func():pass)
  fire_button.button_down.connect(func():fire_requested=true)
- weapon_button=_combat_button("СМЕНА",Control.PRESET_BOTTOM_RIGHT,Vector2(-124,-101),Vector2(103,55),_cycle_weapon)
- reload_button=_combat_button("↻",Control.PRESET_BOTTOM_RIGHT,Vector2(-195,-150),Vector2(64,64),_start_reload)
- reload_button.add_theme_font_size_override("font_size",27)
- ammo_label=_hud_text("",28,Control.PRESET_CENTER_BOTTOM,Vector2(202,-58),Vector2(178,41))
- weapon_status=_hud_text("",14,Control.PRESET_CENTER_BOTTOM,Vector2(202,-79),Vector2(250,24))
+ _weapon_slots()
+ reload_button=_icon_button("reload","Перезарядить",Control.PRESET_BOTTOM_RIGHT,Vector2(-86,-143),Vector2(62,62),_start_reload)
+ ammo_label=_hud_text("",31,Control.PRESET_CENTER_BOTTOM,Vector2(251,-60),Vector2(200,43))
+ ammo_label.add_theme_color_override("font_color",Color("#fff3d9"))
+ weapon_status=_hud_text("",15,Control.PRESET_CENTER_BOTTOM,Vector2(253,-76),Vector2(216,25))
  reload_progress=ProgressBar.new()
  reload_progress.show_percentage=false
- _hud_place(reload_progress,Control.PRESET_CENTER_BOTTOM,Vector2(202,-18),Vector2(150,6))
- hp_label=_hud_text("✚ 100",31,Control.PRESET_CENTER_BOTTOM,Vector2(-292,-62),Vector2(110,47))
+ _hud_place(reload_progress,Control.PRESET_CENTER_BOTTOM,Vector2(251,-15),Vector2(192,4))
+ hp_label=_hud_text("✚ 100",34,Control.PRESET_CENTER_BOTTOM,Vector2(-330,-66),Vector2(110,47))
+ hp_label.add_theme_color_override("font_color",Color("#fff3d9"))
  health_bar=ProgressBar.new()
  health_bar.show_percentage=false
  var trough:=StyleBoxFlat.new()
@@ -682,7 +754,7 @@ func _build_ui()->void:
  fill.bg_color=Color("#ffd88c")
  health_bar.add_theme_stylebox_override("background",trough)
  health_bar.add_theme_stylebox_override("fill",fill)
- _hud_place(health_bar,Control.PRESET_CENTER_BOTTOM,Vector2(-290,-18),Vector2(85,4))
+ _hud_place(health_bar,Control.PRESET_CENTER_BOTTOM,Vector2(-327,-19),Vector2(85,4))
  var wallet:=_hud_text("",24,Control.PRESET_BOTTOM_LEFT,Vector2(28,-51),Vector2(160,34))
  wallet.name="Balance"
  joystick_base=_panel(Vector2.ZERO,Vector2(132,132),Color("#1a20264d"))
@@ -704,6 +776,8 @@ func _build_ui()->void:
   tick.mouse_filter=Control.MOUSE_FILTER_IGNORE
   var dimensions:=Vector2(2,7) if axis.x==0 else Vector2(7,2)
   _hud_place(tick,Control.PRESET_CENTER,axis*8-dimensions/2,dimensions)
+  tick.set_meta("axis",axis)
+  bloom_ticks.append(tick)
  hit_marker=_hud_text("×",30,Control.PRESET_CENTER,Vector2(-10,-24),Vector2(20,40))
  hit_marker.visible=false
  menu_layer=Control.new()
@@ -711,7 +785,11 @@ func _build_ui()->void:
  menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 
 func _cycle_weapon()->void:
- weapon_index=(weapon_index+1)%WEAPONS.size()
+ _select_slot((weapon_index+1)%WEAPONS.size())
+
+func _select_slot(index:int)->void:
+ if index==weapon_index: return
+ weapon_index=index
  reload_timer=0.0
  _refresh_ammo_ui()
  _refresh_weapon_button()
@@ -723,7 +801,9 @@ func _magazine_capacity()->int:
 func _start_reload()->void:
  if not playing or reload_timer>0.0: return
  if magazine_rounds[weapon_index]>=_magazine_capacity(): return
+ reload_duration=[1.55,1.22,1.78,1.90,2.25][weapon_index]
  reload_timer=reload_duration
+ foreground.gesture("reload",reload_duration)
  _refresh_ammo_ui()
 
 func _refresh_ammo_ui()->void:
@@ -737,19 +817,19 @@ func _refresh_ammo_ui()->void:
 
 func _apply_weapon_skin()->void:
  if not is_instance_valid(foreground): return
- foreground.texture=load("res://assets/briefing/"+str(HAND_ART[weapon_index])+".webp")
- var skin_id:int=equipped_skins[weapon_index]
- var paint:=foreground.material as ShaderMaterial
- paint.set_shader_parameter("equipped",skin_id>=0)
- if skin_id>=0:
-  paint.set_shader_parameter("finish",Color(SKIN_PALETTE[skin_id]))
-  paint.set_shader_parameter("pattern",skin_id%4)
+ foreground.equip(weapon_index,equipped_skins[weapon_index])
 
 func _refresh_weapon_button()->void:
- if is_instance_valid(weapon_button):
-  weapon_button.text="СМЕНА   %d"%(weapon_index+1)
+ for i in slot_buttons.size():
+  var style:=StyleBoxFlat.new()
+  var active:=i==weapon_index
+  style.bg_color=Color("#3a3225dc") if active else Color("#18202b94")
+  style.border_width_left=3 if active else 1
+  style.border_color=Color("#ffd184") if active else Color("#c2beb18c")
+  for state in ["normal","hover","pressed"]:slot_buttons[i].add_theme_stylebox_override(state,style)
+  slot_buttons[i].get_child(0).modulate=Color("#ffce75") if active else Color("#e1dfd4")
  if is_instance_valid(weapon_status):
-  weapon_status.text=("АВТО • " if auto_fire else "РУЧНОЙ • ")+str(WEAPONS[weapon_index]["name"])
+  weapon_status.text=str(WEAPONS[weapon_index]["name"])
 
 func _panel(pos:Vector2,dimensions:Vector2,tint:Color)->Panel:
  var p:=Panel.new()
@@ -973,7 +1053,6 @@ func _show_skin_preview(item_id:int)->void:
  var item:Dictionary=Loot.ITEMS[item_id]
  var rarity:int=int(item["rarity"])
  var weapon:int=int(item["weapon"])
- var tint:=Color(SKIN_PALETTE[item_id])
  var rarity_color:=Color(str(Loot.RARITY_COLORS[rarity]))
  var title:=_label("АРСЕНАЛ / ПРЕДПРОСМОТР СКИНА",23)
  title.position=Vector2(475,207)
@@ -981,19 +1060,7 @@ func _show_skin_preview(item_id:int)->void:
  var panel:=_panel(Vector2(475,255),Vector2(510,278),Color("#2e2a25"))
  panel.add_theme_stylebox_override("panel",_rarity_panel_style(rarity_color))
  page_body.add_child(panel)
- var preview:=TextureRect.new()
- preview.texture=load("res://assets/briefing/"+str(HAND_ART[weapon])+".webp")
- preview.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
- preview.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
- preview.position=Vector2(495,316)
- preview.size=Vector2(470,145)
- preview.mouse_filter=Control.MOUSE_FILTER_IGNORE
- var paint:=foreground.material.duplicate() as ShaderMaterial
- paint.set_shader_parameter("equipped",true)
- paint.set_shader_parameter("finish",tint)
- paint.set_shader_parameter("pattern",item_id%4)
- preview.material=paint
- page_body.add_child(preview)
+ _equipment_image(weapon,Vector2(495,312),Vector2(470,146),item_id)
  var name_label:=_label(str(item["name"]),26)
  name_label.position=Vector2(506,270)
  name_label.add_theme_color_override("font_color",rarity_color)
@@ -1028,9 +1095,9 @@ func _show_collection()->void:
  screen.caption("АРСЕНАЛ",Vector2(429,116),35,Briefing.PAPER)
  screen.caption("%d / %d   ПРЕДМЕТОВ"%[inventory.size(),Loot.ITEMS.size()],Vector2(432,170),17,Briefing.GOLD)
  screen.button("К КЕЙСАМ   ›",Vector2(1033,122),Vector2(192,48),_show_cases)
- var filters:=["ВСЕ","АВТОМАТ","СТЕПЛЕР","ПАПКА"]
+ var filters:=["ВСЕ","АВТОМАТ","ПИСТОЛЕТ","КАРАБИН","ДРОБОВИК","ПУЛЕМЁТ"]
  for i in filters.size():
-  screen.button(filters[i],Vector2(432+i*198,224),Vector2(188,46),_set_collection_filter.bind(i-1),collection_filter==i-1)
+  screen.button(filters[i],Vector2(432+i*132,224),Vector2(126,46),_set_collection_filter.bind(i-1),collection_filter==i-1)
  var filtered:Array[int]=[]
  for id in inventory:
   if collection_filter<0 or int(Loot.ITEMS[id].weapon)==collection_filter: filtered.append(id)
@@ -1093,33 +1160,34 @@ func _show_subpage(title_text:String)->Briefing:
 
 func _equipment_image(weapon:int, at: Vector2, extent:Vector2, skin_id: int = -1, parent: Control = null) -> TextureRect:
  var image := TextureRect.new()
- image.texture=load("res://assets/briefing/"+str(HAND_ART[weapon])+".webp")
+ var art:="base-%d"%weapon if skin_id<0 else "skin-%d"%skin_id
+ image.texture=load("res://assets/armory/catalog/"+art+".webp")
  image.expand_mode=TextureRect.EXPAND_IGNORE_SIZE
  image.stretch_mode=TextureRect.STRETCH_KEEP_ASPECT_CENTERED
  image.position=at
  image.size=extent
  image.mouse_filter=Control.MOUSE_FILTER_IGNORE
- if skin_id>=0:
-  var paint:=foreground.material.duplicate() as ShaderMaterial
-  paint.set_shader_parameter("equipped",true)
-  paint.set_shader_parameter("finish",Color(SKIN_PALETTE[skin_id]))
-  paint.set_shader_parameter("pattern",skin_id%4)
-  image.material=paint
  if parent == null: parent=page_body
  parent.add_child(image)
  return image
 
 func _show_loadout()->void:
  var screen:=_show_subpage("СНАРЯЖЕНИЕ / ОРУЖИЕ")
- screen.caption("ПОЛЕВОЕ СНАРЯЖЕНИЕ",Vector2(432,117),34,Briefing.PAPER)
- screen.panel(Vector2(432,192),Vector2(790,287),Briefing.INK)
- _equipment_image(weapon_index,Vector2(420,209),Vector2(510,270),equipped_skins[weapon_index])
- screen.caption(str(WEAPONS[weapon_index].name),Vector2(448,493),28,Briefing.PAPER)
- var skin_id:int=equipped_skins[weapon_index]
- var skin_text:="СТАНДАРТ" if skin_id<0 else str(Loot.ITEMS[skin_id].name)
- screen.caption("ПОКРЫТИЕ    /    "+skin_text,Vector2(449,540),17,Briefing.GOLD)
- screen.button("СМЕНИТЬ СНАРЯЖЕНИЕ",Vector2(445,601),Vector2(344,59),func(): _cycle_weapon(); _show_loadout(),true)
- screen.button("ВЫБРАТЬ СКИН",Vector2(801,601),Vector2(302,59),_show_collection)
+ screen.caption("ТАБЕЛЬНОЕ ОРУЖИЕ",Vector2(432,110),34,Briefing.PAPER)
+ for i in WEAPONS.size():
+  var at:=Vector2(432+(i%3)*265,184+floori(i/3.0)*208)
+  var active:=i==weapon_index
+  screen.panel(at,Vector2(254,196),Briefing.INK)
+  _equipment_image(i,at+Vector2(8,4),Vector2(238,94),equipped_skins[i],screen)
+  screen.caption(WEAPONS[i].name,at+Vector2(10,95),21,Briefing.PAPER)
+  screen.caption("%d В МАГАЗИНЕ   ·   %d М"%[MAGAZINE_CAPACITIES[i],WEAPONS[i].range],at+Vector2(11,126),15,Briefing.GOLD)
+  screen.button("✓  ВЫБРАНО" if active else "ВЫБРАТЬ",at+Vector2(0,153),Vector2(254,43),_choose_weapon.bind(i),active)
+ screen.button("ПОКРЫТИЯ ОРУЖИЯ  ›",Vector2(432,615),Vector2(264,52),_set_collection_filter.bind(weapon_index))
+
+func _choose_weapon(index:int)->void:
+ weapon_index=index
+ _save()
+ _show_loadout()
 
 func _show_file()->void:
  var screen:=_show_subpage("ПРОФИЛЬ / ЛИЧНОЕ ДЕЛО")
@@ -1192,7 +1260,6 @@ func _start(is_endless:bool, mission:=-1)->void:
  hero.rotation=Vector3.ZERO
  pitch=0
  elapsed=0
- recoil_timer=0
  look_touch_id=-1
  if not DisplayServer.is_touchscreen_available() and DisplayServer.get_name()!="headless":
   Input.mouse_mode=Input.MOUSE_MODE_CAPTURED
@@ -1202,6 +1269,11 @@ func _start(is_endless:bool, mission:=-1)->void:
  damage_flash=0.0
  camera_kick=0.0
  _update_camera(0)
+ for bolt in bolts: bolt.queue_free()
+ bolts.clear()
+ ribbon.feed_time=0.0
+ glint.life=0.0
+ glint.queue_redraw()
  enemy_timer=0
  for e in enemies:
   if is_instance_valid(e): e.queue_free()
@@ -1260,6 +1332,7 @@ func _input(event:InputEvent)->void:
   fire_requested=true
  if event is InputEventKey and event.pressed and not event.echo:
   if event.keycode==KEY_R: _start_reload()
+  if event.keycode>=KEY_1 and event.keycode<=KEY_5: _select_slot(event.keycode-KEY_1)
   if event.keycode==KEY_Q: _cycle_weapon()
  if not auto_fire and event is InputEventKey and event.keycode==KEY_SPACE:
   if event.pressed and not event.echo:
@@ -1331,20 +1404,21 @@ func _load()->void:
   loot_misses=clampi(int(data.get("loot_misses",0)),0,19)
   cases_opened=max(0,int(data.get("cases_opened",0)))
   last_drop=clampi(int(data.get("last_drop",-1)),-1,Loot.ITEMS.size()-1)
-  equipped_skins=[-1,-1,-1]
-  var saved_skins=data.get("equipped_skins",[-1,-1,-1])
-  if saved_skins is Array and saved_skins.size()==3:
-   for slot in range(3):
+  equipped_skins=[-1,-1,-1,-1,-1]
+  var saved_skins=data.get("equipped_skins",[-1,-1,-1,-1,-1])
+  weapon_index=clampi(int(data.get("weapon_index",0)),0,WEAPONS.size()-1)
+  if saved_skins is Array:
+   for slot in mini(saved_skins.size(),WEAPONS.size()):
     equipped_skins[slot]=clampi(int(saved_skins[slot]),-1,Loot.ITEMS.size()-1)
   inventory.clear()
   for value in data.get("inventory",[]):
    var item_id:int=int(value)
    if item_id>=0 and item_id<Loot.ITEMS.size() and not inventory.has(item_id):
     inventory.append(item_id)
-  for slot in range(3):
+  for slot in WEAPONS.size():
    if equipped_skins[slot]>=0 and (not inventory.has(equipped_skins[slot]) or int(Loot.ITEMS[equipped_skins[slot]]["weapon"])!=slot):
     equipped_skins[slot]=-1
 
 func _save()->void:
  var file:=FileAccess.open(SAVE_PATH,FileAccess.WRITE)
- file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete,"credits":credits,"loot_misses":loot_misses,"cases_opened":cases_opened,"last_drop":last_drop,"inventory":inventory,"equipped_skins":equipped_skins}))
+ file.store_string(JSON.stringify({"stage":stage,"xp":xp,"campaign_complete":campaign_complete,"credits":credits,"loot_misses":loot_misses,"cases_opened":cases_opened,"last_drop":last_drop,"inventory":inventory,"equipped_skins":equipped_skins,"weapon_index":weapon_index}))

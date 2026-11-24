@@ -112,6 +112,8 @@ func lobby()->void:
  idle_portrait = ShaderMaterial.new()
  idle_portrait.shader = preload("res://assets/briefing/lobby-idle.gdshader")
  idle_portrait.set_shader_parameter("silhouette",preload("res://assets/briefing/lobby-mask.png"))
+ idle_portrait.set_shader_parameter("grip",preload("res://assets/briefing/lobby-grip.png"))
+ idle_portrait.set_shader_parameter("underlay",preload("res://assets/briefing/lobby-underlay.webp"))
  portrait.material = idle_portrait
  chrome("ЛОББИ")
  panel(Vector2(28,315),Vector2(350,354),INK)

@@ -18,7 +18,13 @@ const ITEMS := [
  {"name":"РУБЕЖ", "rarity":2, "weapon":2},
  {"name":"ЗОЛОТОЙ ПРИКАЗ", "rarity":3, "weapon":0},
  {"name":"АЛЫЙ ПРОТОКОЛ", "rarity":3, "weapon":2},
- {"name":"ОТПУСК 2099", "rarity":4, "weapon":1}
+ {"name":"СПЕКТР 2099", "rarity":4, "weapon":1},
+ {"name":"ВОРОН", "rarity":0, "weapon":3},
+ {"name":"МАЛАХИТ", "rarity":1, "weapon":4},
+ {"name":"КРАСНЫЙ КАРП", "rarity":2, "weapon":3},
+ {"name":"ФИЛИГРАНЬ", "rarity":3, "weapon":4},
+ {"name":"МЕРЗЛОТА", "rarity":1, "weapon":3},
+ {"name":"ФОРСАЖ", "rarity":4, "weapon":4}
 ]
 const RARITY_NAMES := ["ОБЫЧНЫЙ","РЕДКИЙ","ЭПИЧЕСКИЙ","ЛЕГЕНДАРНЫЙ","УЛЬТРАРЕДКИЙ"]
 const RARITY_COLORS := ["#99a5af","#5aa8ff","#bb76ff","#ffc36b","#ff667c"]

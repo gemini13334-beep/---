@@ -18,8 +18,9 @@ func run() -> void:
  game = load("res://scenes/main.tscn").instantiate()
  root.add_child(game)
  var lobby = game.menu_layer.get_child(0)
- lobby._process(0.5)
- check(lobby.idle_portrait.get_shader_parameter("phase") > 0.0, "lobby idle clock")
+ lobby._process(2.6)
+ check(lobby.idle_portrait.get_shader_parameter("phase") >= 2.6, "inspection clock")
+ check(lobby.idle_portrait.get_shader_parameter("grip") != null, "original operator's grip layer")
  game.weapon_index = 1
  game._start(true)
  check(game.weapon_index == 1, "deployment retains selected equipment")
