@@ -74,7 +74,9 @@ const ActionIcon=preload("res://scripts/action_icon.gd")
 var ribbon:Ribbon
 var weapon_status: Label
 var kills_label: Label
-var hero: Node3D
+const PlayerMotion=preload("res://scripts/player_motion.gd")
+var hero:PlayerMotion
+var stance_icon:Control
 var cam: Camera3D
 const Inspector = preload("res://scripts/inspector.gd")
 const Registry = preload("res://scripts/registry.gd")
@@ -133,17 +135,9 @@ func _build_world() -> void:
  world_root = Node3D.new()
  world_root.name = "Sector"
  add_child(world_root)
- hero = CharacterBody3D.new()
+ hero = PlayerMotion.new()
  hero.name = "Player"
  add_child(hero)
- var hull:=CollisionShape3D.new()
- var capsule:=CapsuleShape3D.new()
- capsule.height=1.8
- capsule.radius=0.36
- hull.shape=capsule
- hull.position.y=0.92
- hero.add_child(hull)
- (hero as CharacterBody3D).collision_layer=2
  cam=Camera3D.new()
  cam.current=true
  cam.fov=69
@@ -154,6 +148,8 @@ func _build_world() -> void:
 
 # The four photographic surfaces tile in metres across the courtyard geometry.
 var courtyard_materials:Dictionary={}
+var marks:Array[MeshInstance3D]=[]
+var impact_mesh:=QuadMesh.new()
 
 func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:int, tint:Color, solid:=false)->MeshInstance3D:
  var id:=[atlas,tint]
@@ -161,6 +157,10 @@ func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:in
  if not courtyard_materials.has(id):
   var mat:=StandardMaterial3D.new()
   mat.albedo_texture=preload("res://assets/courtyard/pavers.webp") if atlas==1 else load("res://assets/courtyard/surface-%d.webp"%atlas)
+  if atlas in [0,1]:
+   mat.normal_enabled=true
+   mat.normal_scale=.64 if atlas==1 else .45
+   mat.normal_texture=preload("res://assets/courtyard/pavers-normal.png") if atlas==1 else preload("res://assets/courtyard/surface-0-normal.png")
   mat.albedo_color=tint*Color("#c5c7c6")
   mat.texture_filter=BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
   mat.uv1_triplanar=true
@@ -173,6 +173,7 @@ func _surface(parent:Node3D, title:String, pos:Vector3, extent:Vector3, atlas:in
 
 func _set_location(location: int)->void:
  if arena!=null and location==location_id: return
+ marks.clear()
  location_id=location
  if arena!=null:
   world_root.remove_child(arena)
@@ -321,6 +322,9 @@ func _facade(at:Vector3,extent:Vector2,yaw:float,photo:Texture2D,cutout:=false)-
  quad.size=extent
  var finish:=StandardMaterial3D.new()
  finish.albedo_texture=photo
+ finish.normal_enabled=true
+ finish.normal_scale=.72
+ finish.normal_texture=load(photo.resource_path.get_basename()+"-normal.png")
  finish.albedo_color=Color("#d8d4cb")
  finish.texture_filter=BaseMaterial3D.TEXTURE_FILTER_LINEAR_WITH_MIPMAPS_ANISOTROPIC
  finish.roughness=.95
@@ -371,7 +375,7 @@ func _spawn_enemy(requested_kind := -1) -> void:
  e.set_meta("windup",0.0)
  enemies.append(e)
 
-func _process(delta: float) -> void:
+func _physics_process(delta: float) -> void:
  if not playing: return
  var move: Vector2 = joystick
  if Input.is_key_pressed(KEY_A): move.x -= 1
@@ -381,10 +385,8 @@ func _process(delta: float) -> void:
  move = move.limit_length()
  elapsed+=delta
  timer_label.text="%02d:%02d"%[int(elapsed)/60,int(elapsed)%60]
- var motion:=Vector3(move.x,0,move.y).rotated(Vector3.UP,hero.rotation.y)*delta*6.0
- var collision:KinematicCollision3D=(hero as CharacterBody3D).move_and_collide(motion)
- if collision:
-  (hero as CharacterBody3D).move_and_collide(collision.get_remainder().slide(collision.get_normal()))
+ hero.step(move,delta)
+ stance_icon.modulate=Color("#ffcb72") if hero.crouching else Color.WHITE
  _update_camera(delta)
  radar.queue_redraw()
  enemy_timer -= delta
@@ -399,7 +401,7 @@ func _process(delta: float) -> void:
   var diff: Vector3 = hero.position-e.position
   diff.y = 0
   var distance_to_hero:float=diff.length()
-  var can_shoot:=distance_to_hero<([16.0,11.5,20.0][actor.kind] as float) and _wall_hit(e.position+Vector3.UP*1.38,hero.position+Vector3.UP*1.05).is_empty()
+  var can_shoot:=distance_to_hero<([16.0,11.5,20.0][actor.kind] as float) and _wall_hit(e.position+Vector3.UP*1.38,hero.position+Vector3.UP*(.70 if hero.crouching else 1.05)).is_empty()
   _enemy_attack(e,actor.kind,delta,can_shoot)
   if distance_to_hero>([8.5,5.0,11.5][actor.kind] as float) or (not can_shoot and distance_to_hero>1.4):
    var desired:Vector3=diff.normalized()
@@ -462,6 +464,7 @@ func _process(delta: float) -> void:
      var extra:=_aim_hit(float(WEAPONS[3].range),offset)
      if extra.target!=null:
       hits[extra.target]=float(hits.get(extra.target,0))+float(WEAPONS[3].damage)
+   if target==null and shot.has("normal"): _impact_at(shot.position,shot.normal)
    _show_shot_feedback(shot.position)
    foreground.gesture("fire",fire_timer)
    camera_kick=minf(.15,camera_kick+float(WEAPONS[weapon_index].kick))
@@ -529,7 +532,9 @@ func _aim_hit(reach: float, offset:=Vector2.ZERO) -> Dictionary:
   if point != null and start.distance_squared_to(point) < start.distance_squared_to(end):
    target = enemy
    end = point
- return {"target": target, "position": end}
+ var result:={"target":target,"position":end}
+ if target==null and not wall.is_empty(): result["normal"]=wall.normal
+ return result
 
 func _animate_enemy_defeat(target:Node3D)->void:
  if not is_instance_valid(target): return
@@ -541,6 +546,28 @@ func _animate_enemy_defeat(target:Node3D)->void:
  collapse.chain().tween_callback(func():
   if is_instance_valid(target): target.queue_free()
  )
+
+func _impact_at(point:Vector3,normal:Vector3)->void:
+ if normal.length_squared()<.8:return
+ if not impact_mesh.material:
+  var mat:=StandardMaterial3D.new()
+  mat.albedo_texture=preload("res://assets/courtyard/impact.png")
+  mat.transparency=BaseMaterial3D.TRANSPARENCY_ALPHA
+  mat.cull_mode=BaseMaterial3D.CULL_DISABLED
+  mat.roughness=1.0
+  impact_mesh.material=mat
+  impact_mesh.size=Vector2(.14,.14)
+ var mark:MeshInstance3D
+ if marks.size()>=24:
+  mark=marks.pop_front()
+ else:
+  mark=MeshInstance3D.new()
+  mark.mesh=impact_mesh
+  mark.cast_shadow=GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+  arena.add_child(mark)
+ marks.append(mark)
+ var up:=Vector3.RIGHT if absf(normal.y)>.9 else Vector3.UP
+ mark.global_transform=Transform3D(Basis.looking_at(-normal,up).rotated(normal,randf()*TAU),point+normal*.004)
 
 func _show_shot_feedback(finish:Vector3)->void:
  glint.shoot(finish)
@@ -583,7 +610,7 @@ func _enemy_attack(enemy:Node3D,kind:int,delta:float,clear:bool)->void:
    charge.scale=Vector3.ONE*.066
   charge.position=enemy.to_local(origin)
   charge.show()
-  enemy.set_meta("locked_point",hero.position+Vector3.UP*1.05)
+  enemy.set_meta("locked_point",hero.position+Vector3.UP*(.70 if hero.crouching else 1.05))
   enemy.set_meta("windup",.48)
 
 func _pulse()->MeshInstance3D:
@@ -624,7 +651,7 @@ func _target()->int:
 
 func _update_camera(delta: float)->void:
  if not is_instance_valid(hero) or not is_instance_valid(cam): return
- cam.global_position=hero.global_position+Vector3.UP*1.68
+ cam.global_position=hero.global_position+Vector3.UP*(hero.eye_height-hero.landing_offset)
  cam.rotation=Vector3(pitch+camera_kick,hero.rotation.y,0)
  if foreground:
   foreground.pose(camera_kick,elapsed)
@@ -734,9 +761,12 @@ func _build_ui()->void:
  kills_label=_hud_text("",17,Control.PRESET_CENTER_TOP,Vector2(-48,37),Vector2(96,24))
  kills_label.horizontal_alignment=HORIZONTAL_ALIGNMENT_CENTER
  _icon_button("pause","Меню",Control.PRESET_TOP_RIGHT,Vector2(-68,12),Vector2(51,51),_show_menu)
- fire_button=_icon_button("fire","Огонь",Control.PRESET_BOTTOM_RIGHT,Vector2(-146,-236),Vector2(84,84),func():pass)
+ fire_button=_icon_button("fire","Огонь",Control.PRESET_BOTTOM_RIGHT,Vector2(-198,-245),Vector2(86,86),func():pass)
  fire_button.button_down.connect(func():fire_requested=true)
  _weapon_slots()
+ _icon_button("jump","Прыжок",Control.PRESET_BOTTOM_RIGHT,Vector2(-80,-236),Vector2(57,57),hero.queue_jump)
+ var stance:=_icon_button("crouch","Присесть / встать",Control.PRESET_BOTTOM_RIGHT,Vector2(-161,-143),Vector2(62,62),hero.toggle_stance)
+ stance_icon=stance.get_child(0)
  reload_button=_icon_button("reload","Перезарядить",Control.PRESET_BOTTOM_RIGHT,Vector2(-86,-143),Vector2(62,62),_start_reload)
  ammo_label=_hud_text("",31,Control.PRESET_CENTER_BOTTOM,Vector2(251,-60),Vector2(200,43))
  ammo_label.add_theme_color_override("font_color",Color("#fff3d9"))
@@ -782,7 +812,11 @@ func _build_ui()->void:
  hit_marker.visible=false
  menu_layer=Control.new()
  layer.add_child(menu_layer)
- menu_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+ menu_layer.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
+ menu_layer.offset_left=-640
+ menu_layer.offset_top=-360
+ menu_layer.offset_right=640
+ menu_layer.offset_bottom=360
 
 func _cycle_weapon()->void:
  _select_slot((weapon_index+1)%WEAPONS.size())
@@ -1256,8 +1290,11 @@ func _start(is_endless:bool, mission:=-1)->void:
   registry.reset_files()
   radar.objectives=registry.files
  _refresh_documents()
+ for mark in marks:mark.queue_free()
+ marks.clear()
  hero.position=Vector3(0,0,9 if registry!=null else 4)
  hero.rotation=Vector3.ZERO
+ hero.reset_motion()
  pitch=0
  elapsed=0
  look_touch_id=-1
@@ -1331,6 +1368,8 @@ func _input(event:InputEvent)->void:
  if event is InputEventMouseButton and event.button_index==MOUSE_BUTTON_LEFT and event.pressed and Input.mouse_mode==Input.MOUSE_MODE_CAPTURED:
   fire_requested=true
  if event is InputEventKey and event.pressed and not event.echo:
+  if event.keycode==KEY_C: hero.toggle_stance()
+  if event.keycode==KEY_J: hero.queue_jump()
   if event.keycode==KEY_R: _start_reload()
   if event.keycode>=KEY_1 and event.keycode<=KEY_5: _select_slot(event.keycode-KEY_1)
   if event.keycode==KEY_Q: _cycle_weapon()

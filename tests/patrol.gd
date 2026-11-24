@@ -25,7 +25,7 @@ func run() -> void:
  game._start(true)
  check(game.weapon_index == 1, "deployment retains selected equipment")
  game.weapon_index = 0
- game.set_process(false)
+ game.set_physics_process(false)
  game.enemy_timer = 999.0
  var actors: Array[Node3D] = []
  for kind in 3:
@@ -74,19 +74,19 @@ func run() -> void:
  check(game._aim_hit(17).target == front, "visible upper body over low cover")
  game.hero.rotation.y = 0.28
  game.auto_fire = true
- game._process(0.02)
+ game._physics_process(0.02)
  check(game.magazine_rounds[0] == 30, "auto miss leaves magazine intact")
  game.auto_fire = false
  game.fire_requested = true
- game._process(0.02)
+ game._physics_process(0.02)
  check(game.magazine_rounds[0] == 29, "one manual miss consumes one round")
  game.hero.rotation.y = 0
  game.pitch = atan2(1.35-1.68, 7)
  game.auto_fire = true
  game.fire_timer = 0
- game._process(0.02)
+ game._physics_process(0.02)
  check(game.magazine_rounds[0] == 28, "auto fires at visible body")
- game._process(0.01)
+ game._physics_process(0.01)
  check(game.magazine_rounds[0] == 28, "cooldown")
  game.queue_free()
  await process_frame

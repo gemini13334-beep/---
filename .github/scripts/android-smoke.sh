@@ -96,6 +96,19 @@ PY
   if (( attempt == 24 )); then exit 1; fi
   sleep 1
 done
+adb shell input tap 1150 608
+for attempt in {1..24}; do
+  adb exec-out screencap -p > device-check/crouched.png
+  if python3 - <<'PY'
+from PIL import Image
+im=Image.open("device-check/crouched.png").convert("RGB")
+r,g,b=im.getpixel((1154,598))
+raise SystemExit(0 if r>195 and 130<g<217 and b<145 and r>g+25 else 1)
+PY
+  then break; fi
+  if (( attempt == 24 )); then exit 1; fi
+  sleep 1
+done
 adb logcat -d -s godot:E AndroidRuntime:E > device-check/first-run.log
 if grep -E 'SCRIPT ERROR|Parse Error|FATAL EXCEPTION|Failed to load script' device-check/first-run.log; then exit 1; fi
 adb install -r "dist/$APK"
