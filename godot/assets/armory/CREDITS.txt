@@ -8,11 +8,12 @@ Mobile source conversions and scope by FPS Mode, CC0 1.0.
 https://github.com/kter1/fps-mode-public/blob/main/content/manifest/weapons.json
 https://creativecommons.org/publicdomain/zero/1.0/
 
-First-person hands, rigs and motion: Unvanquished contributors, CC BY-SA 2.5.
+First-person rigs and motion: Unvanquished contributors, CC BY-SA 2.5.
 https://github.com/UnvanquishedAssets/res-weapons_src.dpkdir
 https://github.com/UnvanquishedAssets/res-players_src.dpkdir
 https://creativecommons.org/licenses/by-sa/2.5/
-Adaptations include new gun rigs, glove and sleeve treatment, grip positions,
+First-person glove artwork comes from the original departmental view image.
+Adaptations include new gun rigs, separate hand layers, grip positions,
 muzzle markers, texture resampling, illustrated finishes and inventory renders.
 The adapted composite models and rendered derivatives are distributed under CC BY-SA 2.5.
 Enemy portraits derive from the patrol model, detailed in assets/patrol/CREDITS.txt.

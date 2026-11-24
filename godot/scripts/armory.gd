@@ -10,6 +10,8 @@ var model:Node3D
 var animation:AnimationPlayer
 var skeleton:Skeleton3D
 var muzzle := -1
+const PhotoGrip=preload("res://scripts/photo_grip.gd")
+var gloves:Array[PhotoGrip]=[]
 
 func _ready()->void:
  mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -46,43 +48,58 @@ static func studio(parent:Node)->void:
   lamp.light_color=spec[2]
   parent.add_child(lamp)
 
-static func assemble(index:int,skin:int,show_hands:bool)->Node3D:
+static func assemble(index:int,skin:int)->Node3D:
  var actor:Node3D=load("res://assets/armory/%s.glb"%MODELS[index]).instantiate()
+ if skin<0:return actor
  for node in actor.find_children("*","MeshInstance3D",true,false):
-  if node.name.begins_with("Sleeve"):
-   node.visible=show_hands
-   if show_hands:
-    var sleeve:=ShaderMaterial.new()
-    sleeve.shader=preload("res://assets/armory/sleeve.gdshader")
-    sleeve.set_shader_parameter("fabric",node.mesh.surface_get_material(0).albedo_texture)
-    node.material_override=sleeve
-  elif skin>=0:
-   var original:StandardMaterial3D=node.mesh.surface_get_material(0)
-   if node.name.begins_with("Scope") or original.resource_name.ends_with("_optic"): continue
-   var finish:=ShaderMaterial.new()
-   finish.shader=preload("res://assets/armory/enamel.gdshader")
-   finish.set_shader_parameter("steel",original.albedo_texture)
-   finish.set_shader_parameter("surface_detail",original.normal_texture)
-   finish.set_shader_parameter("orm",original.roughness_texture if original.roughness_texture else original.get("orm_texture"))
-   finish.set_shader_parameter("decal",load("res://assets/armory/finish-%d.webp"%PATTERNS[skin]))
-   finish.set_shader_parameter("tone",Color(TONES[skin]))
-   finish.set_shader_parameter("ink",.48 if skin<3 or skin==12 else .86)
-   node.material_override=finish
+  var original:StandardMaterial3D=node.mesh.surface_get_material(0)
+  if node.name.begins_with("Scope") or original.resource_name.ends_with("_optic"): continue
+  var finish:=ShaderMaterial.new()
+  finish.shader=preload("res://assets/armory/enamel.gdshader")
+  finish.set_shader_parameter("steel",original.albedo_texture)
+  finish.set_shader_parameter("surface_detail",original.normal_texture)
+  finish.set_shader_parameter("orm",original.roughness_texture if original.roughness_texture else original.get("orm_texture"))
+  finish.set_shader_parameter("decal",load("res://assets/armory/finish-%d.webp"%PATTERNS[skin]))
+  finish.set_shader_parameter("tone",Color(TONES[skin]))
+  finish.set_shader_parameter("ink",.48 if skin<3 or skin==12 else .86)
+  node.material_override=finish
  return actor
 
 func equip(index:int,skin:int)->void:
  if model:
   mount.remove_child(model)
   model.queue_free()
- model=assemble(index,skin,true)
+ for hand in gloves:
+  hand.hide()
+  hand.queue_free()
+ gloves.clear()
+ model=assemble(index,skin)
  mount.add_child(model)
  skeleton=model.find_children("*","Skeleton3D",true,false)[0]
  muzzle=skeleton.find_bone("BarrelTip")
  animation=model.find_children("*","AnimationPlayer",true,false)[0]
+ animation.callback_mode_process=AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_MANUAL
  animation.get_animation("idle").loop_mode=Animation.LOOP_LINEAR
  animation.play("idle")
  animation.advance(0)
- mount.position=Vector3(.052,-.010,-.052)
+ mount.position=Vector3(.126,.034,-.172)
+ for left:bool in [true,false]:
+  if left and index==1:continue
+  var ids:=["L_finger_middle_mid","l_F2"] if left else ["R_finger_middle_mid","r_f2"]
+  var joint:=skeleton.find_bone(ids[0])
+  if joint<0:joint=skeleton.find_bone(ids[1])
+  var hand:=PhotoGrip.new()
+  stage.add_child(hand)
+  var wrist_names:=["L_palm","l_Hand"] if left else ["R_palm","r_hand"]
+  var wrist_bone:=skeleton.find_bone(wrist_names[0])
+  if wrist_bone<0:wrist_bone=skeleton.find_bone(wrist_names[1])
+  hand.configure(skeleton,joint,wrist_bone,left,index,preload("res://assets/armory/left.webp") if left else preload("res://assets/armory/right.webp"))
+  gloves.append(hand)
+
+func _process(delta:float)->void:
+ if not animation or not is_visible_in_tree():return
+ animation.advance(delta)
+ for hand in gloves:hand.update_pose()
 
 func gesture(clip:String,duration:float)->void:
  if not animation: return
@@ -92,8 +109,9 @@ func gesture(clip:String,duration:float)->void:
 
 func pose(kick:float,phase:float)->void:
  mount.rotation.x=kick*.85
- mount.position.y=-.010+sin(phase*2.4)*.0016
- mount.position.z=-.052+kick*.22
+ mount.rotation.y=.060
+ mount.position.y=.034+sin(phase*2.4)*.0016
+ mount.position.z=-.172+kick*.22
 
 func muzzle_pixel()->Vector2:
  var point:=skeleton.to_global(skeleton.get_bone_global_pose(muzzle).origin)

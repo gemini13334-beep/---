@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://vhsdvefdrfue"
-path="res://.godot/imported/hand.jpg-eb8f6c2c4d6180a0a35b54b1222ed044.ctex"
+uid="uid://c81wyi7sla2tg"
+path="res://.godot/imported/left.webp-a30c2d67187ba5b2cb9521360cd94290.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/armory/hand.jpg"
-dest_files=["res://.godot/imported/hand.jpg-eb8f6c2c4d6180a0a35b54b1222ed044.ctex"]
+source_file="res://assets/armory/left.webp"
+dest_files=["res://.godot/imported/left.webp-a30c2d67187ba5b2cb9521360cd94290.ctex"]
 
 [params]
 

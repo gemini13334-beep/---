@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cc37nec7rs6by"
-path="res://.godot/imported/legacy_hand.jpg-168ed69dfed0dfd09acbd7cd1088480b.ctex"
+uid="uid://bqpjyltxn1p3p"
+path="res://.godot/imported/right.webp-98f710702f702f95fb336e0a3e434bcc.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/armory/legacy_hand.jpg"
-dest_files=["res://.godot/imported/legacy_hand.jpg-168ed69dfed0dfd09acbd7cd1088480b.ctex"]
+source_file="res://assets/armory/right.webp"
+dest_files=["res://.godot/imported/right.webp-98f710702f702f95fb336e0a3e434bcc.ctex"]
 
 [params]
 
