@@ -114,7 +114,9 @@ func equip(index:int,skin:int)->void:
   var contact := Transform3D(mount.global_transform.basis.orthonormalized(), point)
   var hand := WeaponGrip.new()
   stage.add_child(hand)
-  hand.configure(skeleton, joint, contact, pair.get_node("Left" if left else "Right"), left, index == 1)
+  var side := "Left" if left else "Right"
+  var elbow: Node3D = pair.get_node(side + "Elbow")
+  hand.configure(skeleton, joint, contact, pair.get_node(side), elbow.position, left, index == 1)
   gloves.append(hand)
  pair.queue_free()
 

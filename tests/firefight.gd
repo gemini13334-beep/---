@@ -51,6 +51,8 @@ func run()->void:
   for hand in game.foreground.gloves:
    check(hand.joint>=0 and hand.release_shape>=0 and hand.glove.mesh.get_surface_count()==3,"articulated hand with glove, cuff and sleeve")
    check(hand.global_transform.basis.get_scale().is_equal_approx(Vector3.ONE),"consistent viewmodel hand scale")
+   var sleeve=hand.glove.get_surface_override_material(1)
+   check(sleeve is ShaderMaterial and sleeve.get_shader_parameter("elbow_view").z>0,"open sleeve end stays behind the camera")
   game.fire_timer=0
   game.fire_requested=true
   game._physics_process(.016)
@@ -60,6 +62,12 @@ func run()->void:
   check(game.cam.rotation.x>game.pitch and game.camera_kick<recoil,"recoil moves sight and recovers")
   game._start_reload()
   check(game.foreground.animation.current_animation=="reload","reload clip %d"%i)
+  game.foreground._process(game.reload_duration*.5)
+  var support=game.foreground.gloves[1]
+  check(support.glove.get_blend_shape_value(support.release_shape)>.9,"support fingers open during reload")
+  game.foreground._process(game.reload_duration*.5+.05)
+  game.foreground._process(.02)
+  check(support.glove.get_blend_shape_value(support.release_shape)<.01,"support fingers close again after reload")
   game._physics_process(game.reload_duration)
   check(game.magazine_rounds[i]==game.MAGAZINE_CAPACITIES[i],"reload restores selected magazine")
  game._start(true)
