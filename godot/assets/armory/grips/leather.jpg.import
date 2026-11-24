@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c81wyi7sla2tg"
-path="res://.godot/imported/left.webp-a30c2d67187ba5b2cb9521360cd94290.ctex"
+uid="uid://dknep7wpgwlmg"
+path="res://.godot/imported/leather.jpg-5cc9b6cb0b6657b9fcc997b2cdc34d1b.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/armory/left.webp"
-dest_files=["res://.godot/imported/left.webp-a30c2d67187ba5b2cb9521360cd94290.ctex"]
+source_file="res://assets/armory/grips/leather.jpg"
+dest_files=["res://.godot/imported/leather.jpg-5cc9b6cb0b6657b9fcc997b2cdc34d1b.ctex"]
 
 [params]
 
@@ -23,7 +23,7 @@ compress/rdo_quality_loss=0.0
 compress/hdr_compression=1
 compress/normal_map=0
 compress/channel_pack=0
-mipmaps/generate=false
+mipmaps/generate=true
 mipmaps/limit=-1
 roughness/mode=0
 roughness/src_normal=""

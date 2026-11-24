@@ -12,8 +12,13 @@ First-person rigs and motion: Unvanquished contributors, CC BY-SA 2.5.
 https://github.com/UnvanquishedAssets/res-weapons_src.dpkdir
 https://github.com/UnvanquishedAssets/res-players_src.dpkdir
 https://creativecommons.org/licenses/by-sa/2.5/
-First-person glove artwork comes from the original departmental view image.
-Adaptations include new gun rigs, separate hand layers, grip positions,
+First-person hand topology: FPS Arms (rigged only), para / MakeHuman, CC0 1.0.
+https://opengameart.org/content/fps-arms-rigged-only
+GLB conversion used for the five authored poses:
+https://github.com/kter1/fps-mode-public/blob/41fc12d8bb095dcd03451060d2aa62a96d9667d5/content/models/realism/arms.glb
+Each weapon uses its own pair of posed meshes, opening fingers, padded glove
+surfaces, cuffs and sleeves. Glove and cloth textures were generated for this game.
+Adaptations include new gun rigs, grip positions,
 muzzle markers, texture resampling, illustrated finishes and inventory renders.
 The adapted composite models and rendered derivatives are distributed under CC BY-SA 2.5.
 Enemy portraits derive from the patrol model, detailed in assets/patrol/CREDITS.txt.

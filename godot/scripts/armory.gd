@@ -3,6 +3,12 @@ extends SubViewportContainer
 const MODELS := ["cordon","iskra","vizir","shtorm","bastion"]
 const PATTERNS := [0,5,2,2,4,5,0,4,1,3,1,5,0,4,1,3,2,5]
 const TONES := ["#818a92","#ba9c70","#a3aeab","#93d4ed","#50e6bf","#ffc077","#8c9bd4","#bca4ea","#eacfb5","#ffdd87","#f48780","#e9e6ff","#8c9489","#77b18a","#efae88","#f4cc86","#adc8e2","#ffc679"]
+# Model-space grip sockets in the imported idle pose and their baked length scales.
+const GRIPS := [Vector3(.139,-.221,-.264),Vector3(.135,-.184,-.259),Vector3(.104,-.224,-.212),Vector3(.120,-.226,-.298),Vector3(.139,-.221,-.264)]
+const BAKED_SCALES := [.87,1.29,.82,.84,.86]
+# Support contacts are relative to the main socket in unscaled asset units.
+const SUPPORTS := [Vector3(0,.099,-.280),Vector3.ZERO,Vector3(0,.042,-.325),Vector3(0,.017,-.440),Vector3(.001,.110,-.291)]
+
 var stage := SubViewport.new()
 var camera := Camera3D.new()
 var mount := Node3D.new()
@@ -10,8 +16,8 @@ var model:Node3D
 var animation:AnimationPlayer
 var skeleton:Skeleton3D
 var muzzle := -1
-const PhotoGrip=preload("res://scripts/photo_grip.gd")
-var gloves:Array[PhotoGrip]=[]
+const WeaponGrip = preload("res://scripts/weapon_grip.gd")
+var gloves: Array[WeaponGrip] = []
 
 func _ready()->void:
  mouse_filter=Control.MOUSE_FILTER_IGNORE
@@ -25,9 +31,9 @@ func _ready()->void:
  camera.near=.015
  camera.fov=60
  stage.add_child(mount)
- studio(stage)
+ studio(stage, true)
 
-static func studio(parent:Node)->void:
+static func studio(parent:Node, contact_shadows:bool = false)->void:
  var world:=WorldEnvironment.new()
  var env:=Environment.new()
  env.background_mode=Environment.BG_COLOR
@@ -46,6 +52,12 @@ static func studio(parent:Node)->void:
   lamp.rotation_degrees=spec[0]
   lamp.light_energy=spec[1]
   lamp.light_color=spec[2]
+  if contact_shadows and spec[1] > 1.0:
+   lamp.shadow_enabled = true
+   lamp.directional_shadow_mode = DirectionalLight3D.SHADOW_ORTHOGONAL
+   lamp.directional_shadow_max_distance = 2.2
+   lamp.shadow_bias = .025
+   lamp.shadow_normal_bias = .18
   parent.add_child(lamp)
 
 static func assemble(index:int,skin:int)->Node3D:
@@ -83,23 +95,37 @@ func equip(index:int,skin:int)->void:
  animation.play("idle")
  animation.advance(0)
  mount.position=Vector3(.126,.034,-.172)
- for left:bool in [true,false]:
-  if left and index==1:continue
-  var ids:=["L_finger_middle_mid","l_F2"] if left else ["R_finger_middle_mid","r_f2"]
-  var joint:=skeleton.find_bone(ids[0])
-  if joint<0:joint=skeleton.find_bone(ids[1])
-  var hand:=PhotoGrip.new()
+ # Keep the main contact fixed while returning all five imports to the same
+ # unit scale. This also scales animated travel and the muzzle bone together.
+ var socket:Vector3 = GRIPS[index]
+ var model_scale:float = 1.0 / BAKED_SCALES[index]
+ model.scale = Vector3.ONE * model_scale
+ model.position = socket * (1.0 - model_scale)
+ var primary := model.to_global(socket)
+ var pair:Node3D = load("res://assets/armory/grips/%s.glb" % MODELS[index]).instantiate()
+ stage.add_child(pair)
+ for left:bool in [false,true]:
+  var names := ["L_palm","l_Hand"] if left and index != 1 else ["gun","r_hand"]
+  var joint := skeleton.find_bone(names[0])
+  if joint < 0:joint = skeleton.find_bone(names[1])
+  var point := primary
+  if left:
+   point += mount.global_transform.basis * SUPPORTS[index]
+  var contact := Transform3D(mount.global_transform.basis.orthonormalized(), point)
+  var hand := WeaponGrip.new()
   stage.add_child(hand)
-  var wrist_names:=["L_palm","l_Hand"] if left else ["R_palm","r_hand"]
-  var wrist_bone:=skeleton.find_bone(wrist_names[0])
-  if wrist_bone<0:wrist_bone=skeleton.find_bone(wrist_names[1])
-  hand.configure(skeleton,joint,wrist_bone,left,index,preload("res://assets/armory/left.webp") if left else preload("res://assets/armory/right.webp"))
+  hand.configure(skeleton, joint, contact, pair.get_node("Left" if left else "Right"), left, index == 1)
   gloves.append(hand)
+ pair.queue_free()
 
 func _process(delta:float)->void:
  if not animation or not is_visible_in_tree():return
  animation.advance(delta)
- for hand in gloves:hand.update_pose()
+ var release := 0.0
+ if animation.current_animation == "reload":
+  var progress := animation.current_animation_position / animation.current_animation_length
+  release = smoothstep(.10, .35, progress) * (1.0 - smoothstep(.60, .87, progress))
+ for hand in gloves:hand.update_pose(release)
 
 func gesture(clip:String,duration:float)->void:
  if not animation: return

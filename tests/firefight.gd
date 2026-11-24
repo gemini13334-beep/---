@@ -47,9 +47,10 @@ func run()->void:
  for i in game.WEAPONS.size():
   game._select_slot(i)
   check(game.foreground.muzzle>=0 and game.foreground.animation.has_animation("reload"),"animated weapon and muzzle %d"%i)
-  check(game.foreground.gloves.size()==(1 if i==1 else 2),"one or two glove grips per weapon")
-  for glove in game.foreground.gloves:
-   check(glove.finger>=0 and glove.wrist>=0 and glove.global_position.is_finite(),"valid wrist and finger attachments")
+  check(game.foreground.gloves.size()==2,"paired grip for every weapon")
+  for hand in game.foreground.gloves:
+   check(hand.joint>=0 and hand.release_shape>=0 and hand.glove.mesh.get_surface_count()==3,"articulated hand with glove, cuff and sleeve")
+   check(hand.global_transform.basis.get_scale().is_equal_approx(Vector3.ONE),"consistent viewmodel hand scale")
   game.fire_timer=0
   game.fire_requested=true
   game._physics_process(.016)

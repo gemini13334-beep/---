@@ -83,18 +83,25 @@ PY
   if (( attempt == 40 )); then exit 1; fi
   sleep 1
 done
-adb shell input tap 1221 331
-for attempt in {1..24}; do
-  adb exec-out screencap -p > device-check/slot-five.png
-  if python3 - <<'PY'
+# Capture the same combat view with each hand pose on the Android renderer.
+for entry in two:201 three:246 four:291 five:336; do
+  slot=${entry%:*}
+  y=${entry#*:}
+  adb shell input tap 1221 "$y"
+  for attempt in {1..24}; do
+    adb exec-out screencap -p > "device-check/slot-$slot.png"
+    if python3 - "$slot" "$y" <<'PYCODE'
+import sys
 from PIL import Image
-im=Image.open("device-check/slot-five.png").convert("RGB")
-pixels=[im.getpixel((x,y)) for x in range(1178,1184) for y in range(330,345)]
+im = Image.open("device-check/slot-" + sys.argv[1] + ".png").convert("RGB")
+center = int(sys.argv[2])
+pixels = [im.getpixel((x,y)) for x in range(1178,1184) for y in range(center-4,center+5)]
 raise SystemExit(0 if any(r>200 and r>g+20 and g>b+40 for r,g,b in pixels) else 1)
-PY
-  then break; fi
-  if (( attempt == 24 )); then exit 1; fi
-  sleep 1
+PYCODE
+    then break; fi
+    if (( attempt == 24 )); then exit 1; fi
+    sleep 1
+  done
 done
 adb shell input tap 1150 608
 for attempt in {1..24}; do
