@@ -26,7 +26,7 @@ fi
 activity=$(adb shell cmd package resolve-activity --brief "$PACKAGE" | tail -1 | tr -d '\r')
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity" | tee device-check/launch.txt
 grep -F 'Status: ok' device-check/launch.txt
-# The landscape viewport is 1280x720. Wait for the rust-red deployment button
+# The landscape viewport is 1280x720. Wait for the highlighted deployment button
 # before sending input so a slow emulator can finish importing the first frame.
 wait_for_button() {
   local screen=$1 x=$2 y=$3
@@ -39,7 +39,7 @@ image = Image.open("device-check/" + sys.argv[1] + ".png").convert("RGB")
 if image.width < image.height:
     sys.exit(1)
 r,g,b = image.getpixel((int(sys.argv[2]), int(sys.argv[3])))
-sys.exit(0 if r > 155 and 42 < g < 135 and b < 105 and r > g + 60 else 1)
+sys.exit(0 if r > 155 and 42 < g < 198 and b < 113 and r > g + 42 else 1)
 PYCODE
     then return; fi
     if (( attempt == 15 )); then adb shell pidof "$PACKAGE" || return 1; fi
@@ -76,7 +76,7 @@ PY
     if python3 - <<'PY'
 from PIL import Image
 r,g,b=Image.open("device-check/combat.png").convert("RGB").getpixel((1010,612))
-raise SystemExit(0 if r>155 and 42<g<135 and b<105 and r>g+60 else 1)
+raise SystemExit(0 if r>155 and 42<g<198 and b<113 and r>g+42 else 1)
 PY
     then adb shell input tap 1105 608; fi
   fi
@@ -122,3 +122,17 @@ adb install -r "dist/$APK"
 adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity"
 sleep 3
 adb shell pidof "$PACKAGE"
+# Render the full-width lobby after an Android configuration change. In 20:9
+# the controls stay in the safe area and the portrait reaches the screen edges.
+adb shell am force-stop "$PACKAGE"
+adb shell wm size 720x1600
+adb shell am start -W -a android.intent.action.MAIN -c android.intent.category.LAUNCHER -n "$activity"
+wait_for_button wide-lobby 1185 652
+python3 - <<'PYCODE'
+from PIL import Image, ImageStat
+im=Image.open("device-check/wide-lobby.png").convert("RGB")
+assert im.size==(1600,720), im.size
+for x in (0,1520):
+    panel=im.crop((x,150,x+80,510))
+    assert max(ImageStat.Stat(panel).stddev)>8, "flat margin at edge of lobby"
+PYCODE

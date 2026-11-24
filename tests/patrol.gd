@@ -18,6 +18,17 @@ func run() -> void:
  game = load("res://scenes/main.tscn").instantiate()
  root.add_child(game)
  var lobby = game.menu_layer.get_child(0)
+ var targets:Array[Rect2]=[]
+ var launch:Button
+ for control in lobby.find_children("*","Button",true,false):
+  var rect:Rect2=control.get_global_rect()
+  check(game.get_viewport().get_visible_rect().encloses(rect),"lobby target inside viewport")
+  for other in targets:check(not rect.intersects(other),"lobby hit areas are separate")
+  targets.append(rect)
+  check(not control.accessibility_name.is_empty(),"lobby action has an accessible name")
+  if control.text=="В БОЙ":launch=control
+ check(launch!=null and not game.hud.visible,"landscape deployment action and hidden combat HUD")
+ check(lobby.portrait.position.y>=64 and lobby.idle_portrait.get_shader_parameter("crop_scale").y<=1,"portrait starts below tabs")
  lobby._process(2.6)
  check(lobby.idle_portrait.get_shader_parameter("phase") >= 2.6, "inspection clock")
  check(lobby.idle_portrait.get_shader_parameter("grip") != null, "original operator's grip layer")

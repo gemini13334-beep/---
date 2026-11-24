@@ -26,3 +26,9 @@ Enemy portraits derive from the patrol model, detailed in assets/patrol/CREDITS.
 Courtyard panorama: Kloofendal 48d Partly Cloudy by Greg Zaal, Poly Haven, CC0.
 https://polyhaven.com/a/kloofendal_48d_partly_cloudy
 Adapted for mobile display.
+
+Checkpoint asphalt: Asphalt 04, photography by Sergej Majboroda and processing
+by Jenelle van Heerden, Poly Haven, CC0 1.0. Adapted base color, normal and
+roughness maps; the damp patches and gate markings were made for this project.
+https://polyhaven.com/a/asphalt_04
+https://polyhaven.com/license

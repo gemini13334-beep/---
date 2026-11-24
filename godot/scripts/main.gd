@@ -216,7 +216,15 @@ func _build_courtyard()->void:
  sun.shadow_enabled=true
  sun.directional_shadow_max_distance=45
  arena.add_child(sun)
- _surface(arena,"Paving",Vector3(0,-0.23,0),Vector3(41,0.46,42),1,Color("#e1d6c6"),true)
+ var floor_mesh := _box(arena,"Paving",Vector3(0,-0.23,0),Vector3(41,0.46,42),Color.WHITE,true)
+ var road := ShaderMaterial.new()
+ road.shader = preload("res://assets/courtyard/road/access-road.gdshader")
+ road.set_shader_parameter("paving",preload("res://assets/courtyard/pavers.webp"))
+ road.set_shader_parameter("paving_normal",preload("res://assets/courtyard/pavers-normal.png"))
+ road.set_shader_parameter("asphalt",preload("res://assets/courtyard/road/asphalt.webp"))
+ road.set_shader_parameter("asphalt_normal",preload("res://assets/courtyard/road/asphalt-normal.webp"))
+ road.set_shader_parameter("masks",preload("res://assets/courtyard/road/road-masks.png"))
+ floor_mesh.material_override = road
  for side in [-1,1]:
   _surface(arena,"Boundary",Vector3(side*20,2.7,0),Vector3(0.8,5.4,42),0,Color.WHITE,true)
   for row in 3:
@@ -812,11 +820,26 @@ func _build_ui()->void:
  hit_marker.visible=false
  menu_layer=Control.new()
  layer.add_child(menu_layer)
- menu_layer.set_anchors_and_offsets_preset(Control.PRESET_CENTER)
- menu_layer.offset_left=-640
- menu_layer.offset_top=-360
- menu_layer.offset_right=640
- menu_layer.offset_bottom=360
+ menu_layer.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
+ menu_layer.size = Vector2(1280,720)
+ get_viewport().size_changed.connect(_layout_menu)
+ _layout_menu()
+
+func _layout_menu()->void:
+ var bounds := get_viewport().get_visible_rect()
+ var usable := bounds
+ if OS.get_name() == "Android":
+  var safe := Rect2(DisplayServer.get_display_safe_area())
+  var window_size := Vector2(DisplayServer.window_get_size())
+  if safe.has_area() and window_size.x > 0 and window_size.y > 0:
+   var ratio := bounds.size / window_size
+   var clipped := bounds.intersection(Rect2(safe.position * ratio, safe.size * ratio))
+   if clipped.has_area(): usable = clipped
+ var fit := minf(usable.size.x / menu_layer.size.x, usable.size.y / menu_layer.size.y)
+ menu_layer.scale = Vector2.ONE * fit
+ menu_layer.position = usable.get_center() - menu_layer.size * fit * .5
+ for page in menu_layer.get_children():
+  if page is Briefing: page.fit_background()
 
 func _cycle_weapon()->void:
  _select_slot((weapon_index+1)%WEAPONS.size())

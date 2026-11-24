@@ -3,6 +3,7 @@ render_mode unshaded;
 uniform sampler2D silhouette : filter_linear, repeat_disable;
 uniform sampler2D grip : filter_linear, repeat_disable;
 uniform sampler2D underlay : source_color, filter_linear, repeat_disable;
+uniform vec2 crop_scale = vec2(1.0);
 uniform float phase = 0.0;
 
 vec2 rotated(vec2 p,float a){
@@ -10,7 +11,10 @@ vec2 rotated(vec2 p,float a){
 }
 void fragment(){
  vec2 ratio=vec2(760.0,428.0);
- vec2 p=UV*ratio;
+ // Anchor the original portrait at the top, below the navigation bar. All
+ // animated layers sample the same crop, including on ultrawide phones.
+ vec2 source_uv=UV*crop_scale+vec2((1.0-crop_scale.x)*.5,0.0);
+ vec2 p=source_uv*ratio;
  float t=mod(phase,10.8);
  float lift=smoothstep(.9,2.35,t)*(1.0-smoothstep(4.75,6.2,t));
  float roll=lift*(.177+.033*sin((t-2.2)*2.1));
@@ -29,9 +33,9 @@ void fragment(){
  float head=1.0-smoothstep(73.0,122.0,p.y);
  body=mix(body,vec2(411,101)+rotated(body-vec2(411,101),-.045*lift)-vec2(.1,2.3)*lift,head);
  vec2 uv=body/ratio;
- vec3 mask=texture(silhouette,UV).rgb;
+ vec3 mask=texture(silhouette,source_uv).rgb;
  vec2 edge=(mask.gb*255.0-128.0)*.25/vec2(800,450);
- vec4 back=texture(TEXTURE,UV+edge*mask.r);
+ vec4 back=texture(TEXTURE,source_uv+edge*mask.r);
  vec4 torso=texture(underlay,uv);
  vec4 result=mix(back,torso,texture(silhouette,uv).r);
  result=mix(result,texture(TEXTURE,glove_uv),texture(grip,glove_uv).r);
