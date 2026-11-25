@@ -104,7 +104,7 @@ func rebuild_scenery() -> void:
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(1.1,1.4,1.1)
 		var prop := model(mesh,Color(GROUND_COLORS[biome]).lightened(0.25),Vector3(cos(angle)*radius,0.5,sin(angle)*radius))
-		attach_art(prop,BIOMES[biome].to_lower())
+		attach_art(prop,BIOMES[biome].to_lower() if i%2 == 0 else ["tree","ruin","cactus","ice_spire","lava_vent"][biome])
 		prop.rotation.y = angle
 		scenery.append(prop)
 
@@ -125,6 +125,10 @@ var runs := 0
 var total_kills := 0
 var vehicle: MeshInstance3D
 var vehicle_time := 0.0
+var vehicle_kind := 0
+const VEHICLES = ["buggy","hovercraft","tank","mech"]
+const VEHICLE_SPEED = [4.0,6.0,1.5,2.5]
+const VEHICLE_FIRE = [0.3,0.15,0.45,0.35]
 var next_event := 15.0
 var event_label: Label
 var achievements: Label
@@ -153,8 +157,9 @@ func spawn_vehicle() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1.7,0.65,2.4)
 	vehicle = model(mesh,Color("#ffc45c"),Vector3(clampf(hero.position.x+5,-19,19),0.5,clampf(hero.position.z+3,-19,19)))
-	attach_art(vehicle,"buggy")
-	event_label.text = "BOOST BUGGY • Collect the gold vehicle"
+	vehicle_kind = randi_range(0,3)
+	attach_art(vehicle,VEHICLES[vehicle_kind])
+	event_label.text = "BOOST "+VEHICLES[vehicle_kind].to_upper()+" • Collect vehicle"
 
 func update_events(dt: float) -> void:
 	if elapsed >= next_event:
@@ -168,12 +173,12 @@ func update_events(dt: float) -> void:
 	if is_instance_valid(vehicle) and not vehicle.is_queued_for_deletion():
 		if hero.position.distance_to(vehicle.position) < 1.4:
 			vehicle.queue_free()
-			vehicle_time = 10.0
+			vehicle_time = [10.0,8.0,12.0,15.0][vehicle_kind]
 			play_fx("boost")
 			pulse(hero.position,3.0,Color("#ffc45c"))
 	if vehicle_time > 0:
 		vehicle_time = maxf(0,vehicle_time-dt)
-		event_label.text = "BUGGY BOOST • %.1fs" % vehicle_time
+		event_label.text = "%s BOOST • %.1fs" % [VEHICLES[vehicle_kind].to_upper(),vehicle_time]
 		if vehicle_time <= 0:
 			event_label.text = ""
 
@@ -633,7 +638,7 @@ func _physics_process(dt: float) -> void:
 	for child in hero.get_children():
 		if child is Node3D:
 			child.position.y = -0.5+sin(elapsed*10.0)*0.07*move.length()
-	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(4.0 if vehicle_time > 0 else 0.0))
+	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
 	camera.position = hero.position + Vector3(0,19,15)
@@ -647,23 +652,29 @@ func _physics_process(dt: float) -> void:
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(0.8,0.8,0.8)
 		var enemy := model(mesh,Color("#ff7865"),p)
-		attach_art(enemy,"enemy")
 		if randf() < 0.25:
+			attach_art(enemy,"enemy_armored")
 			enemy.set_meta("health",3)
 			enemy.set_meta("speed",1.3)
 			enemy.scale = Vector3.ONE*1.35
 		elif randf() < 0.35:
+			attach_art(enemy,"enemy_fast")
 			enemy.set_meta("speed",3.8)
 			enemy.scale = Vector3.ONE*0.7
+		else:
+			attach_art(enemy,"enemy")
 		enemies.append(enemy)
 	if elapsed >= 45 and not boss_spawned:
 		boss_spawned = true
 		var boss_mesh := BoxMesh.new()
 		var boss := model(boss_mesh,Color("#a56bff"),Vector3(clampf(hero.position.x+9,-20,20),0.5,hero.position.z))
-		attach_art(boss,"enemy")
-		boss.scale = Vector3.ONE*2.7
+		var boss_kind := 1 if biome == 3 else (2 if biome == 4 else 0)
+		attach_art(boss,["boss_overlord","boss_crystal","boss_inferno"][boss_kind])
+		boss.scale = Vector3.ONE*1.35
+		boss.set_meta("kind",boss_kind)
+		boss.set_meta("next_pulse",elapsed+4.0)
 		boss.set_meta("boss",true)
-		boss.set_meta("health",18)
+		boss.set_meta("health",24+boss_kind*6)
 		boss.set_meta("speed",1.5)
 		enemies.append(boss)
 	var nearest: MeshInstance3D = null
@@ -672,6 +683,13 @@ func _physics_process(dt: float) -> void:
 		var offset := hero.position-e.position
 		var d := offset.length()
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
+		if e.get_meta("boss",false) and elapsed >= float(e.get_meta("next_pulse",99999.0)):
+			var kind := int(e.get_meta("kind",0))
+			var radius := 3.0+kind
+			pulse(e.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
+			if d < radius:
+				hp -= (12.0+kind*4.0)*(1.0-armor)
+			e.set_meta("next_pulse",elapsed+4.0)
 		if d < 0.9*e.scale.x:
 			hp -= dt*(24 if e.get_meta("boss",false) else 12)*(1.0-armor)
 		if d < distance:
@@ -679,7 +697,7 @@ func _physics_process(dt: float) -> void:
 			nearest = e
 	attack_timer -= dt
 	if nearest != null and attack_timer <= 0:
-		attack_timer = maxf(0.15,0.7-power*0.08-(0.3 if vehicle_time > 0 else 0.0))
+		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
 		var impact := nearest.position
 		hit_enemy(nearest)
 		if blast > 0:

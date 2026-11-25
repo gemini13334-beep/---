@@ -1,2 +1,2 @@
-# 0.10.0
-Added 16 total abilities, three randomized distinct offers per level, rarity weighting, two one-time synergies, damage, armor, regeneration, range and score modifiers. Latest prior strict Blender run failed; new run pending. APK unverified. New gameplay not tested yet.
+# 0.13.0
+Verified Blender run 45688458960 published asset artifact 15057547184 (14 model pairs). Expanded 28-model run pending. Integrated variant enemy models, biome boss variants and periodic area attacks, four vehicle boosts and biome scenery variants. New gameplay not yet tested; APK not confirmed.
