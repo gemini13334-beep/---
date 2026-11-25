@@ -150,6 +150,7 @@ func play_fx(key: String) -> void:
 		voice = fx_voices[fx_cursor]
 		fx_cursor = (fx_cursor+1)%6
 	voice.volume_db = -20.0 if key == "shot" else (-9.0 if key == "boss" else -15.0)
+	voice.volume_db += linear_to_db(maxf(0.0001,float(advanced["master"])*float(advanced["effects"])))
 	voice.stream = sounds[key]
 	voice.pitch_scale = randf_range(0.94,1.06) if key == "hit" else 1.0
 	voice.play()
@@ -440,21 +441,72 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
+var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0}
+var advanced_sliders: Dictionary = {}
+var settings_tabs: TabContainer
+
+func setting_slider(parent: Control, key: String, caption: String, low: float, high: float, step: float) -> void:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size",22)
+	label.text = caption+"  "+str(advanced[key])
+	parent.add_child(label)
+	var slider := HSlider.new()
+	slider.min_value = low
+	slider.max_value = high
+	slider.step = step
+	slider.value = float(advanced[key])
+	slider.custom_minimum_size = Vector2(500,44)
+	parent.add_child(slider)
+	advanced_sliders[key] = slider
+	slider.value_changed.connect(func(value: float):
+		advanced[key] = value
+		label.text = caption+"  "+str(value)
+		apply_settings()
+	)
+	slider.drag_ended.connect(func(_changed: bool): save_settings())
+
+func settings_page(caption: String) -> VBoxContainer:
+	var page := VBoxContainer.new()
+	page.name = caption
+	page.add_theme_constant_override("separation",10)
+	settings_tabs.add_child(page)
+	return page
+
 func build_settings(layer: CanvasLayer) -> void:
 	settings_panel = VBoxContainer.new()
 	layer.add_child(settings_panel)
-	settings_panel.position = Vector2(90,320)
-	settings_panel.add_theme_constant_override("separation",18)
+	settings_panel.position = Vector2(90,160)
+	settings_panel.add_theme_constant_override("separation",12)
 	var heading := Label.new()
 	heading.text = "SETTINGS"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size",40)
 	settings_panel.add_child(heading)
-	fps_button = menu_button(settings_panel,"",toggle_fps)
-	quality_button = menu_button(settings_panel,"",toggle_quality)
-	audio_button = menu_button(settings_panel,"",toggle_audio)
-	menu_button(settings_panel,"BACK",show_menu)
+	settings_tabs = TabContainer.new()
+	settings_tabs.custom_minimum_size = Vector2(540,650)
+	settings_tabs.add_theme_font_size_override("font_size",22)
+	settings_panel.add_child(settings_tabs)
+	var controls := settings_page("CONTROLS")
+	setting_slider(controls,"sensitivity","TOUCH SENSITIVITY",0.25,2.5,0.05)
+	setting_slider(controls,"deadzone","JOYSTICK DEADZONE",0.0,0.35,0.01)
+	setting_slider(controls,"camera_speed","CAMERA RESPONSE",2.0,20.0,0.5)
+	setting_slider(controls,"zoom","CAMERA DISTANCE",18.0,28.0,0.5)
+	var graphics := settings_page("VIDEO")
+	fps_button = menu_button(graphics,"",toggle_fps)
+	quality_button = menu_button(graphics,"",toggle_quality)
+	setting_slider(graphics,"particles","EFFECT DENSITY",0.25,1.0,0.05)
+	setting_slider(graphics,"brightness","LIGHT INTENSITY",0.65,1.35,0.05)
+	var audio := settings_page("AUDIO")
+	audio_button = menu_button(audio,"",toggle_audio)
+	setting_slider(audio,"master","MASTER VOLUME",0.0,1.0,0.05)
+	setting_slider(audio,"music","MUSIC VOLUME",0.0,1.0,0.05)
+	setting_slider(audio,"effects","EFFECTS VOLUME",0.0,1.0,0.05)
+	menu_button(settings_panel,"BACK",close_settings)
 	settings_panel.hide()
+
+func close_settings() -> void:
+	save_settings()
+	show_menu()
 
 func show_settings() -> void:
 	menu.hide()
@@ -462,6 +514,10 @@ func show_settings() -> void:
 	settings_panel.show()
 
 func apply_settings() -> void:
+	camera.size = float(advanced["zoom"])
+	world_light.light_energy = 1.35*float(advanced["brightness"])
+	if is_instance_valid(ambient_player):
+		ambient_player.volume_db = -26.0+linear_to_db(maxf(0.0001,float(advanced["master"])*float(advanced["music"])))
 	if is_instance_valid(ambient_player):
 		if audio_enabled and not ambient_player.playing:
 			ambient_player.play()
@@ -487,6 +543,10 @@ func load_settings() -> void:
 		fps_limit = saved_fps if FPS_OPTIONS.has(saved_fps) else 60
 		high_quality = bool(cfg.get_value("video","shadows",false))
 		audio_enabled = bool(cfg.get_value("audio","enabled",true))
+		for key in advanced:
+			var slider := advanced_sliders[key] as HSlider
+			advanced[key] = clampf(float(cfg.get_value("advanced",key,advanced[key])),slider.min_value,slider.max_value)
+			slider.value = float(advanced[key])
 	apply_settings()
 
 func save_settings() -> void:
@@ -495,6 +555,8 @@ func save_settings() -> void:
 	cfg.set_value("video","fps",fps_limit)
 	cfg.set_value("video","shadows",high_quality)
 	cfg.set_value("audio","enabled",audio_enabled)
+	for key in advanced:
+		cfg.set_value("advanced",key,advanced[key])
 	if cfg.save("user://settings.cfg") != OK:
 		push_warning("Settings save failed")
 
@@ -824,7 +886,7 @@ func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
 	var sparks := CPUParticles3D.new()
 	sparks.emitting = false
 	sparks.one_shot = true
-	sparks.amount = count
+	sparks.amount = maxi(1,int(count*float(advanced["particles"])))
 	sparks.lifetime = 0.32
 	sparks.explosiveness = 1.0
 	sparks.direction = Vector3.UP
@@ -1280,7 +1342,9 @@ func _input(event: InputEvent) -> void:
 			finger = -1
 			direction = Vector2.ZERO
 	elif event is InputEventScreenDrag and event.index == finger:
-		direction = ((event.position-origin)/90.0).limit_length()
+		var raw := ((event.position-origin)/90.0*float(advanced["sensitivity"])).limit_length()
+		var dead := float(advanced["deadzone"])
+		direction = raw.normalized()*maxf(0.0,(raw.length()-dead)/(1.0-dead))
 
 var visual_stride := 0.0
 var visual_lean := Vector2.ZERO
@@ -1316,7 +1380,7 @@ func _physics_process(dt: float) -> void:
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
-	camera.position = camera.position.lerp(hero.position + Vector3(0,19,15),1.0-exp(-10.0*dt))
+	camera.position = camera.position.lerp(hero.position + Vector3(0,19,15),1.0-exp(-float(advanced["camera_speed"])*dt))
 	spawn_timer -= dt
 	if spawn_timer <= 0 and enemies.size() < 100:
 		spawn_timer = maxf(0.25,1.1-elapsed/150.0)
