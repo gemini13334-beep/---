@@ -87,6 +87,12 @@ func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamW
 		var envelope := minf(1.0,t*400.0)*pow(1.0-p,2.0)
 		var wave := sin(TAU*freq*t)
 		match kind:
+			"shot":
+				wave = 0.6*sin(TAU*(freq*t-900.0*t*t))+0.25*rng.randf_range(-1.0,1.0)+0.15*sin(TAU*freq*2.0*t)
+			"destroy":
+				wave = 0.65*sin(TAU*(freq*t-100.0*t*t))+0.35*rng.randf_range(-1.0,1.0)*exp(-t*18.0)
+			"boss":
+				wave = 0.5*sin(TAU*(freq*t-20.0*t*t))+0.25*sin(TAU*freq*1.5*t)+0.25*rng.randf_range(-1.0,1.0)*exp(-t*8.0)
 			"hit":
 				wave = 0.55*sin(TAU*freq*t*(1.0-0.4*p))+0.45*rng.randf_range(-1.0,1.0)
 			"pickup":
@@ -112,8 +118,16 @@ func play_fx(key: String) -> void:
 	if now-int(fx_last.get(key,-1000)) < 45:
 		return
 	fx_last[key] = now
-	var voice := fx_voices[fx_cursor]
-	fx_cursor = (fx_cursor+1)%fx_voices.size()
+	if fx_voices.is_empty():
+		return
+	# Reserve two voices for important cues, avoiding interruption by rapid fire.
+	var voice: AudioStreamPlayer
+	if key == "boss" or key == "level":
+		voice = fx_voices[7 if key == "boss" else 6]
+	else:
+		voice = fx_voices[fx_cursor]
+		fx_cursor = (fx_cursor+1)%6
+	voice.volume_db = -20.0 if key == "shot" else (-9.0 if key == "boss" else -15.0)
 	voice.stream = sounds[key]
 	voice.pitch_scale = randf_range(0.94,1.06) if key == "hit" else 1.0
 	voice.play()
@@ -680,6 +694,7 @@ func shot_tracer(from: Vector3, to: Vector3) -> void:
 	var length := from.distance_to(to)
 	if length < 0.05:
 		return
+	play_fx("shot")
 	var beam := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(0.085,0.085,length)
@@ -741,6 +756,7 @@ func hit_enemy(enemy: MeshInstance3D) -> void:
 		impact_sparks(enemy.position,Color("#ffc879"),4)
 		return
 	var boss := bool(enemy.get_meta("boss",false))
+	play_fx("boss" if boss else "destroy")
 	impact_sparks(enemy.position,Color("#bc8cff") if boss else Color("#ff9460"),24 if boss else 9)
 	pulse(enemy.position,3.2 if boss else 1.2,Color("#bc8cff") if boss else Color("#ff9460"))
 	drop_gem(enemy.position)
@@ -853,7 +869,7 @@ func _ready() -> void:
 		add_child(voice)
 		voice.volume_db = -12
 		fx_voices.append(voice)
-	sounds = {"hit":tone(180,0.09,"hit"),"pickup":tone(880,0.12,"pickup"),"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost")}
+	sounds = {"hit":tone(180,0.09,"hit"),"pickup":tone(880,0.12,"pickup"),"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost"),"shot":tone(620,0.11,"shot"),"destroy":tone(95,0.32,"destroy"),"boss":tone(55,0.85,"boss")}
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
 	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
