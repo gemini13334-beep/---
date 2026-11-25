@@ -1,0 +1,41 @@
+name: ONE MORE Blender Assets
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'one-more/tools/generate_assets.py'
+      - '.github/workflows/one-more-blender.yml'
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Blender
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y blender
+          blender --version
+      - name: Generate and verify
+        run: |
+          blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          root=Path("one-more/assets/models")
+          for name in "hero cyborg inferno ghost titan cryo enemy crate forest city desert ice volcano buggy".split():
+              glb=root/(name+".glb")
+              blend=root/(name+".blend")
+              assert blend.stat().st_size>0, name
+              with glb.open("rb") as f:
+                  magic,version,length=struct.unpack("<4sII",f.read(12))
+              assert magic==b"glTF" and version==2 and length==glb.stat().st_size,name
+              print(name,glb.stat().st_size,blend.stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ONE-MORE-Verified-Blender-Assets
+          path: |
+            one-more/assets/models/*.glb
+            one-more/assets/models/*.blend
+          if-no-files-found: error

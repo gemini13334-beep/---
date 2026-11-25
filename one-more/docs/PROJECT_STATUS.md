@@ -1,2 +1,2 @@
-# 0.7.0
-0.6.0 headless validation succeeded. Added 60-second score attack with separate record, temporary buggy pickup with movement and attack boost, energy rain events, persistent runs and kills, three achievement thresholds. Buggy is a placeholder mesh and does not replace hero model. Android build still pending.
+# 0.8.0
+0.7.0 headless validation succeeded. Added five selectable arena color themes, buggy GLB loading, five environment prop generators and standalone strict Blender workflow verifying 14 GLB and 14 blend files. Environment props not yet placed in gameplay. Previous Android build was exporting; APK not confirmed.

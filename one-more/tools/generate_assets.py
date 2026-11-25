@@ -62,3 +62,19 @@ reset()
 part("Crate",(0,0,.45),(.48,.48,.45),dark,'cube')
 for x in [-.38,.38]: part("Armor",(x,0,.46),(.08,.5,.46),gold,'cube')
 save("crate")
+
+# Environment and vehicle assets
+for name,c in [("forest",(.18,.48,.22)),("city",(.35,.4,.48)),("desert",(.72,.45,.18)),("ice",(.3,.72,.88)),("volcano",(.35,.09,.05))]:
+ reset()
+ surface=mat(name+" surface",c)
+ part("Base",(0,0,.12),(1.2,1.2,.12),dark,'cube')
+ for i in range(3):
+  part("Formation "+str(i),((i-1)*.65,0,.55+i*.15),(.3,.38,.45+i*.15),surface,'cube' if name=="city" else 'sphere')
+ save(name)
+reset()
+part("Chassis",(0,0,.5),(.65,1,.25),gold,'cube')
+part("Cabin",(0,.1,.85),(.45,.5,.3),dark,'cube')
+for x in [-.7,.7]:
+ for y in [-.65,.65]:
+  part("Wheel",(x,y,.3),(.22,.32,.32),dark)
+save("buggy")

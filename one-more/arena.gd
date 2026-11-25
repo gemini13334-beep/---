@@ -37,6 +37,18 @@ var menu: VBoxContainer
 var result_label: Label
 var max_hp := 100.0
 var mode := 0
+var biome := 0
+var ground: MeshInstance3D
+var biome_button: Button
+const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
+const GROUND_COLORS = ["#294a37","#34404c","#82613d","#426c80","#4d292c"]
+
+func cycle_biome() -> void:
+	biome = (biome+1)%BIOMES.size()
+	biome_button.text = "MAP • "+BIOMES[biome]
+	var mat := ground.material_override as StandardMaterial3D
+	mat.albedo_color = Color(GROUND_COLORS[biome])
+
 var best_sprint := 0
 var runs := 0
 var total_kills := 0
@@ -70,6 +82,7 @@ func spawn_vehicle() -> void:
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1.7,0.65,2.4)
 	vehicle = model(mesh,Color("#ffc45c"),Vector3(clampf(hero.position.x+5,-19,19),0.5,clampf(hero.position.z+3,-19,19)))
+	attach_art(vehicle,"buggy")
 	event_label.text = "BOOST BUGGY • Collect the gold vehicle"
 
 func update_events(dt: float) -> void:
@@ -276,7 +289,7 @@ func model(mesh: Mesh, color: Color, pos: Vector3) -> MeshInstance3D:
 func _ready() -> void:
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
-	model(floor_mesh, Color("#243d46"), Vector3(0,-0.2,0))
+	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
 	for i in range(-20,21,4):
 		var line := BoxMesh.new()
 		line.size = Vector3(0.035,0.02,44)
@@ -350,6 +363,7 @@ func _ready() -> void:
 	menu.add_child(result_label)
 	menu_button(menu,"PLAY • ENDLESS",start)
 	menu_button(menu,"SCORE ATTACK • 60s",sprint)
+	biome_button = menu_button(menu,"MAP • FOREST",cycle_biome)
 	achievements = Label.new()
 	achievements.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	achievements.add_theme_font_size_override("font_size",24)
