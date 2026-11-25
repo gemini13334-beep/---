@@ -29,6 +29,38 @@ var boss_spawned := false
 var kills := 0
 var credits := 0
 var blast := 0
+var damage := 1
+var armor := 0.0
+var reach := 0.0
+var regen := 0.0
+var score_bonus := 0
+var ranks: Dictionary = {}
+var offers: Array[int] = []
+var offer_buttons: Array[Button] = []
+const ABILITIES = [
+	["OVERDRIVE","Faster attacks",0],["DASH","Movement speed",0],
+	["MAGNET","Pickup + heal",0],["NOVA","Area attack",1],
+	["PIERCER","Extra damage",1],["ARMOR","Damage resistance",0],
+	["RADAR","Attack range",0],["REGEN","Health recovery",1],
+	["FORTRESS","Maximum health",1],["JACKPOT","Extra score",1],
+	["THUNDER","Damage + area",2],["PHANTOM","Speed + armor",2],
+	["GRAVITY","Magnet + range",2],["BERSERK","Damage + attack speed",2],
+	["PHOENIX","Heal + regeneration",2],["TITAN CORE","Health + armor",2]
+]
+
+func roll_offers() -> void:
+	offers.clear()
+	while offers.size() < 3:
+		var id := randi_range(0,ABILITIES.size()-1)
+		var rarity := int(ABILITIES[id][2])
+		if offers.has(id) or (rarity == 2 and randf() > 0.35):
+			continue
+		offers.append(id)
+	for i in range(3):
+		var a: Array = ABILITIES[offers[i]]
+		offer_buttons[i].text = "%s • %s\n%s" % [["COMMON","RARE","EPIC"][a[2]],a[0],a[1]]
+		offer_buttons[i].modulate = [Color.WHITE,Color("#85d9ff"),Color("#e2b2ff")][a[2]]
+
 var selected := 0
 var owned: Array[int] = [0]
 var collection: VBoxContainer
@@ -262,7 +294,7 @@ func pulse(pos: Vector3, radius: float, color: Color) -> void:
 
 func hit_enemy(enemy: MeshInstance3D) -> void:
 	play_fx("hit")
-	var health := int(enemy.get_meta("health",1))-1
+	var health := int(enemy.get_meta("health",1))-damage
 	enemy.set_meta("health",health)
 	pulse(enemy.position,0.8,Color("#ffb85a"))
 	if health > 0:
@@ -292,7 +324,7 @@ func attach_art(host: MeshInstance3D, asset: String) -> void:
 func award(points: int) -> void:
 	combo = mini(combo + 1, 20)
 	combo_time = 3.0
-	score += points * (1 + int(combo / 5.0))
+	score += int(points * (1 + int(combo / 5.0)) * (1.0+score_bonus*0.1))
 
 func drop_gem(pos: Vector3) -> void:
 	var mesh := SphereMesh.new()
@@ -304,13 +336,52 @@ func drop_gem(pos: Vector3) -> void:
 func choose_upgrade(index: int) -> void:
 	if not choosing:
 		return
-	match index:
+	if index >= offers.size():
+		return
+	var id := offers[index]
+	ranks[id] = int(ranks.get(id,0))+1
+	match id:
 		0: power += 1
 		1: speed_bonus += 0.65
 		2:
 			magnet += 0.65
 			hp = minf(max_hp,hp+20)
 		3: blast += 1
+		4: damage += 1
+		5: armor = minf(0.65,armor+0.08)
+		6: reach += 0.7
+		7: regen += 0.5
+		8:
+			max_hp += 25
+			hp += 25
+		9: score_bonus += 1
+		10:
+			damage += 1
+			blast += 1
+		11:
+			speed_bonus += 0.7
+			armor = minf(0.65,armor+0.1)
+		12:
+			magnet += 1.0
+			reach += 0.8
+		13:
+			damage += 1
+			power += 1
+		14:
+			hp = max_hp
+			regen += 1.0
+		15:
+			max_hp += 35
+			hp += 35
+			armor = minf(0.65,armor+0.1)
+	if ranks.has(0) and ranks.has(3) and not ranks.has(100):
+		ranks[100] = 1
+		blast += 2
+		event_label.text = "SYNERGY • OVERDRIVE NOVA"
+	if ranks.has(1) and ranks.has(2) and not ranks.has(101):
+		ranks[101] = 1
+		magnet += 2
+		event_label.text = "SYNERGY • GRAVITY DASH"
 	choosing = false
 	upgrades.hide()
 	finger = -1
@@ -436,9 +507,10 @@ func _ready() -> void:
 	heading.text = "EVOLUTION • CHOOSE ONE"
 	heading.add_theme_font_size_override("font_size",28)
 	upgrades.add_child(heading)
-	for i in range(4):
+	for i in range(3):
 		var btn := Button.new()
-		btn.text = ["OVERDRIVE • Faster attacks","DASH • Movement speed","MAGNET • Pickup + heal","NOVA • Chain blast"][i]
+		btn.text = "UPGRADE"
+		offer_buttons.append(btn)
 		btn.custom_minimum_size = Vector2(540,85)
 		btn.add_theme_font_size_override("font_size",24)
 		upgrades.add_child(btn)
@@ -491,6 +563,12 @@ func start() -> void:
 	boss_spawned = false
 	kills = 0
 	blast = 0
+	damage = 1
+	armor = 0
+	reach = 0
+	regen = 0
+	score_bonus = 0
+	ranks.clear()
 	combo = 0
 	combo_time = 0
 	power = 0
@@ -538,6 +616,7 @@ func _physics_process(dt: float) -> void:
 	if not running or choosing:
 		return
 	elapsed += dt
+	hp = minf(max_hp,hp+regen*dt)
 	update_events(dt)
 	if mode == 1 and elapsed >= 60:
 		finish_run()
@@ -588,13 +667,13 @@ func _physics_process(dt: float) -> void:
 		boss.set_meta("speed",1.5)
 		enemies.append(boss)
 	var nearest: MeshInstance3D = null
-	var distance := 4.0+level*0.3
+	var distance := 4.0+level*0.3+reach
 	for e in enemies:
 		var offset := hero.position-e.position
 		var d := offset.length()
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
 		if d < 0.9*e.scale.x:
-			hp -= dt*(24 if e.get_meta("boss",false) else 12)
+			hp -= dt*(24 if e.get_meta("boss",false) else 12)*(1.0-armor)
 		if d < distance:
 			distance = d
 			nearest = e
@@ -634,6 +713,7 @@ func _physics_process(dt: float) -> void:
 		play_fx("level")
 		hero.scale = Vector3.ONE*(1.0+minf((level-1)*0.12,1.5))
 		choosing = true
+		roll_offers()
 		upgrades.show()
 	if hp <= 0:
 		finish_run()
