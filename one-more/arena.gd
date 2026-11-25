@@ -191,6 +191,9 @@ func finish_run() -> void:
 	credits += int(score/100.0)
 	runs += 1
 	total_kills += kills
+	quest_progress[0] += kills
+	quest_progress[1] += 1
+	quest_progress[2] += maxi(0,score)
 	save_profile()
 	show_menu()
 
@@ -312,7 +315,9 @@ func save_profile() -> void:
 	cfg.set_value("awakening","xp",hunter_xp)
 	cfg.set_value("awakening","points",stat_points)
 	cfg.set_value("awakening","stats",hunter_stats)
-	cfg.set_value("meta","version",2)
+	cfg.set_value("quests","progress",quest_progress)
+	cfg.set_value("quests","tiers",quest_tiers)
+	cfg.set_value("meta","version",3)
 	if cfg.save(PROFILE_TEMP) != OK:
 		push_warning("Profile temporary write failed")
 		return
@@ -454,7 +459,9 @@ func build_awakening(layer: CanvasLayer) -> void:
 	awakening_panel.add_child(awakening_status)
 	for i in range(5):
 		stat_buttons.append(menu_button(awakening_panel,"",spend_stat.bind(i)))
+	menu_button(awakening_panel,"SYSTEM QUESTS",show_quests)
 	menu_button(awakening_panel,"BACK",show_menu)
+	build_quests(layer)
 	awakening_panel.hide()
 
 func refresh_awakening() -> void:
@@ -472,9 +479,60 @@ func spend_stat(index: int) -> void:
 	refresh_awakening()
 
 func show_awakening() -> void:
+	quest_panel.hide()
 	menu.hide()
 	awakening_panel.show()
 	refresh_awakening()
+
+var quest_progress: Array[int] = [0,0,0]
+var quest_tiers: Array[int] = [0,0,0]
+const QUEST_NAMES = ["HUNT","SURVIVE","BREAK RECORDS"]
+const QUEST_BASE = [20,3,5000]
+var quest_panel: VBoxContainer
+var quest_buttons: Array[Button] = []
+
+func quest_target(index: int) -> int:
+	return int(QUEST_BASE[index])*(quest_tiers[index]+1)
+
+func build_quests(layer: CanvasLayer) -> void:
+	quest_panel = VBoxContainer.new()
+	layer.add_child(quest_panel)
+	quest_panel.position = Vector2(90,240)
+	quest_panel.add_theme_constant_override("separation",18)
+	var heading := Label.new()
+	heading.text = "SYSTEM QUESTS"
+	heading.add_theme_font_size_override("font_size",36)
+	quest_panel.add_child(heading)
+	for i in range(3):
+		var btn := menu_button(quest_panel,"",claim_quest.bind(i))
+		btn.custom_minimum_size = Vector2(540,132)
+		btn.add_theme_font_size_override("font_size",23)
+		quest_buttons.append(btn)
+	menu_button(quest_panel,"BACK",show_awakening)
+	quest_panel.hide()
+
+func refresh_quests() -> void:
+	for i in range(3):
+		var tier := quest_tiers[i]+1
+		var ready := quest_progress[i] >= quest_target(i) and quest_tiers[i] < 1000
+		quest_buttons[i].text = "%s  /  TIER %d\n%d / %d\n+%d XP  +%d CR  %s" % [QUEST_NAMES[i],tier,mini(quest_progress[i],quest_target(i)),quest_target(i),100*tier,50*tier,"CLAIM" if ready else ""]
+		quest_buttons[i].disabled = not ready
+
+func claim_quest(index: int) -> void:
+	if index < 0 or index >= 3 or quest_tiers[index] >= 1000 or quest_progress[index] < quest_target(index):
+		return
+	var tier := quest_tiers[index]+1
+	quest_progress[index] -= quest_target(index)
+	quest_tiers[index] += 1
+	gain_hunter_xp(100*tier)
+	credits += 50*tier
+	save_profile()
+	refresh_quests()
+
+func show_quests() -> void:
+	awakening_panel.hide()
+	quest_panel.show()
+	refresh_quests()
 
 func show_collection() -> void:
 	menu.hide()
@@ -483,6 +541,7 @@ func show_collection() -> void:
 	refresh_collection()
 
 func show_menu() -> void:
+	quest_panel.hide()
 	awakening_panel.hide()
 	settings_panel.hide()
 	collection.hide()
@@ -825,6 +884,11 @@ func load_profile() -> void:
 	selected = 0
 	var cfg := ConfigFile.new()
 	if cfg.load(PROFILE_PATH) == OK or cfg.load(PROFILE_BACKUP) == OK:
+		var qp: Variant = cfg.get_value("quests","progress",[0,0,0])
+		var qt: Variant = cfg.get_value("quests","tiers",[0,0,0])
+		for i in range(3):
+			quest_progress[i] = clampi(int(qp[i]),0,1000000000) if qp is Array and qp.size() == 3 else 0
+			quest_tiers[i] = clampi(int(qt[i]),0,1000) if qt is Array and qt.size() == 3 else 0
 		hunter_level = clampi(int(cfg.get_value("awakening","level",1)),1,1000)
 		hunter_xp = clampi(int(cfg.get_value("awakening","xp",0)),0,hunter_level*100-1)
 		stat_points = clampi(int(cfg.get_value("awakening","points",0)),0,3000)
