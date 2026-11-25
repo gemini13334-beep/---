@@ -624,6 +624,12 @@ func _ready() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	hud_panel = ui_panel(layer,Vector2(12,12),Vector2(696,236))
+	fps_label = Label.new()
+	fps_label.position = Vector2(560,24)
+	fps_label.add_theme_font_size_override("font_size",20)
+	fps_label.add_theme_color_override("font_color",Color("#8df4d5"))
+	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(fps_label)
 	hud = Label.new()
 	layer.add_child(hud)
 	hud.position = Vector2(24,24)
@@ -844,9 +850,10 @@ func _physics_process(dt: float) -> void:
 		move = Input.get_vector("ui_left","ui_right","ui_up","ui_down")
 	if move.length() > 0.05:
 		hero.rotation.y = lerp_angle(hero.rotation.y,atan2(move.x,move.y),minf(dt*12,1.0))
+	var bob := -0.5+sin(elapsed*10.0)*0.07*move.length()
 	for child in hero.get_children():
 		if child is Node3D:
-			child.position.y = -0.5+sin(elapsed*10.0)*0.07*move.length()
+			child.position.y = bob
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
@@ -940,7 +947,20 @@ func _physics_process(dt: float) -> void:
 		upgrades.show()
 	if hp <= 0:
 		finish_run()
-	update_hud()
+
+var hud_elapsed := 0.0
+var fps_elapsed := 0.0
+var fps_label: Label
+
+func _process(dt: float) -> void:
+	hud_elapsed += dt
+	fps_elapsed += dt
+	if hud_elapsed >= 0.1:
+		hud_elapsed = 0.0
+		update_hud()
+	if fps_elapsed >= 0.5:
+		fps_elapsed = 0.0
+		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
 
 func update_hud() -> void:
 	hp_bar.max_value = max_hp
