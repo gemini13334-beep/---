@@ -186,8 +186,12 @@ func finish_run() -> void:
 	upgrades.hide()
 	if mode == 1:
 		best_sprint = maxi(best_sprint,score)
-	else:
+	elif mode == 0:
 		best = maxi(best,score)
+	elif mode == 2 and gate_cleared:
+		gate_wins[gate_rank] += 1
+		gain_hunter_xp(150*(gate_rank+1))
+		credits += 100*(gate_rank+1)
 	credits += int(score/100.0)
 	runs += 1
 	total_kills += kills
@@ -196,6 +200,8 @@ func finish_run() -> void:
 	quest_progress[2] += maxi(0,score)
 	save_profile()
 	show_menu()
+	if mode == 2:
+		result_label.text = ("GATE CLEARED" if gate_cleared else "GATE FAILED")+"\n"+result_label.text
 
 func spawn_vehicle() -> void:
 	if is_instance_valid(vehicle):
@@ -317,7 +323,8 @@ func save_profile() -> void:
 	cfg.set_value("awakening","stats",hunter_stats)
 	cfg.set_value("quests","progress",quest_progress)
 	cfg.set_value("quests","tiers",quest_tiers)
-	cfg.set_value("meta","version",3)
+	cfg.set_value("gates","wins",gate_wins)
+	cfg.set_value("meta","version",4)
 	if cfg.save(PROFILE_TEMP) != OK:
 		push_warning("Profile temporary write failed")
 		return
@@ -459,6 +466,8 @@ func build_awakening(layer: CanvasLayer) -> void:
 	awakening_panel.add_child(awakening_status)
 	for i in range(5):
 		stat_buttons.append(menu_button(awakening_panel,"",spend_stat.bind(i)))
+	menu_button(awakening_panel,"DIMENSIONAL GATES",show_gates)
+	build_gates(layer)
 	menu_button(awakening_panel,"SYSTEM QUESTS",show_quests)
 	menu_button(awakening_panel,"BACK",show_menu)
 	build_quests(layer)
@@ -479,6 +488,7 @@ func spend_stat(index: int) -> void:
 	refresh_awakening()
 
 func show_awakening() -> void:
+	gate_panel.hide()
 	quest_panel.hide()
 	menu.hide()
 	awakening_panel.show()
@@ -534,6 +544,46 @@ func show_quests() -> void:
 	quest_panel.show()
 	refresh_quests()
 
+const GATE_RANKS = ["E","D","C","B","A","S","SS"]
+const GATE_LEVELS = [1,10,20,35,50,75,100]
+var gate_rank := 0
+var gate_cleared := false
+var gate_wins: Array[int] = [0,0,0,0,0,0,0]
+var gate_panel: VBoxContainer
+var gate_buttons: Array[Button] = []
+
+func build_gates(layer: CanvasLayer) -> void:
+	gate_panel = VBoxContainer.new()
+	layer.add_child(gate_panel)
+	gate_panel.position = Vector2(90,130)
+	gate_panel.add_theme_constant_override("separation",10)
+	var heading := Label.new()
+	heading.text = "DIMENSIONAL GATES"
+	heading.add_theme_font_size_override("font_size",32)
+	gate_panel.add_child(heading)
+	for i in range(7):
+		var btn := menu_button(gate_panel,"",enter_gate.bind(i))
+		btn.custom_minimum_size = Vector2(540,100)
+		btn.add_theme_font_size_override("font_size",22)
+		gate_buttons.append(btn)
+	menu_button(gate_panel,"BACK",show_awakening)
+	gate_panel.hide()
+
+func show_gates() -> void:
+	awakening_panel.hide()
+	gate_panel.show()
+	for i in range(7):
+		gate_buttons[i].text = "RANK %s  /  LEVEL %d\nCLEARS %d  /  +%d XP" % [GATE_RANKS[i],GATE_LEVELS[i],gate_wins[i],150*(i+1)]
+		gate_buttons[i].disabled = hunter_level < int(GATE_LEVELS[i])
+
+func enter_gate(index: int) -> void:
+	if index < 0 or index >= 7 or hunter_level < int(GATE_LEVELS[index]):
+		return
+	gate_rank = index
+	start()
+	mode = 2
+	event_label.text = "GATE "+GATE_RANKS[index]+" / DEFEAT BOSS IN 120s"
+
 func show_collection() -> void:
 	menu.hide()
 	menu_scrim.show()
@@ -541,6 +591,7 @@ func show_collection() -> void:
 	refresh_collection()
 
 func show_menu() -> void:
+	gate_panel.hide()
 	quest_panel.hide()
 	awakening_panel.hide()
 	settings_panel.hide()
@@ -639,6 +690,8 @@ func hit_enemy(enemy: MeshInstance3D) -> void:
 	enemy.queue_free()
 	kills += 1
 	award(1500 if boss else 100)
+	if boss and mode == 2:
+		gate_cleared = true
 
 
 func attach_art(host: MeshInstance3D, asset: String) -> void:
@@ -884,6 +937,10 @@ func load_profile() -> void:
 	selected = 0
 	var cfg := ConfigFile.new()
 	if cfg.load(PROFILE_PATH) == OK or cfg.load(PROFILE_BACKUP) == OK:
+		var gw: Variant = cfg.get_value("gates","wins",[])
+		if gw is Array and gw.size() == 7:
+			for i in range(7):
+				gate_wins[i] = maxi(0,int(gw[i]))
 		var qp: Variant = cfg.get_value("quests","progress",[0,0,0])
 		var qt: Variant = cfg.get_value("quests","tiers",[0,0,0])
 		for i in range(3):
@@ -911,6 +968,8 @@ func load_profile() -> void:
 			selected = 0
 
 func start() -> void:
+	gate_panel.hide()
+	gate_cleared = false
 	mode = 0
 	vehicle_time = 0
 	next_event = 15
@@ -1043,6 +1102,8 @@ func _physics_process(dt: float) -> void:
 			enemy.scale = Vector3.ONE*0.7
 		else:
 			attach_art(enemy,"enemy")
+		if mode == 2:
+			enemy.set_meta("health",int(enemy.get_meta("health",1))+gate_rank)
 		enemies.append(enemy)
 	if elapsed >= 45 and not boss_spawned:
 		boss_spawned = true
@@ -1054,7 +1115,7 @@ func _physics_process(dt: float) -> void:
 		boss.set_meta("kind",boss_kind)
 		boss.set_meta("next_pulse",elapsed+4.0)
 		boss.set_meta("boss",true)
-		boss.set_meta("health",24+boss_kind*6)
+		boss.set_meta("health",24+boss_kind*6+(gate_rank*12 if mode == 2 else 0))
 		boss.set_meta("speed",1.5)
 		enemies.append(boss)
 	var nearest: MeshInstance3D = null
@@ -1109,7 +1170,7 @@ func _physics_process(dt: float) -> void:
 		choosing = true
 		roll_offers()
 		upgrades.show()
-	if hp <= 0:
+	if hp <= 0 or (mode == 2 and (gate_cleared or elapsed >= 120.0)):
 		finish_run()
 
 var hud_elapsed := 0.0
