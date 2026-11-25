@@ -680,7 +680,7 @@ func _physics_process(dt: float) -> void:
 	var nearest: MeshInstance3D = null
 	var distance := 4.0+level*0.3+reach
 	for e in enemies:
-		var offset := hero.position-e.position
+		var offset: Vector3 = hero.position-e.position
 		var d := offset.length()
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
 		if e.get_meta("boss",false) and elapsed >= float(e.get_meta("next_pulse",99999.0)):
@@ -716,7 +716,7 @@ func _physics_process(dt: float) -> void:
 			crates.erase(crate)
 			crate.queue_free()
 	for gem in gems.duplicate():
-		var offset := hero.position-gem.position
+		var offset: Vector3 = hero.position-gem.position
 		if offset.length() < magnet:
 			gem.position += offset.normalized()*dt*9
 		if offset.length() < 0.65:
