@@ -1,2 +1,2 @@
-# 0.2.0
-0.1.0 headless validation succeeded. Added procedural Blender source for hero, enemy and crate, Android export preset and cloud APK workflow. Generated models are not yet integrated into arena; verify workflow and APK before claiming device compatibility. Debug key is ephemeral, so subsequent builds may require uninstalling the previous debug build (backup saves first).
+# 0.3.0 Evolution
+Added optional GLB model integration (fallback primitives), energy pickups, XP, paused upgrade selection, destructible crates, combo scoring and growth. Android workflow from 0.2.0 was in progress at start of this update. New gameplay requires CI and device testing. No claim of verified APK.
