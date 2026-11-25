@@ -58,12 +58,13 @@ func roll_offers() -> void:
 		offers.append(id)
 	for i in range(3):
 		var a: Array = ABILITIES[offers[i]]
-		offer_buttons[i].text = "%s • %s\n%s" % [["COMMON","RARE","EPIC"][a[2]],a[0],a[1]]
+		offer_buttons[i].text = "%s  /  %s  •  RANK %d\n%s" % [["COMMON","RARE","EPIC"][a[2]],a[0],int(ranks.get(a[0],0))+1,a[1]]
 		offer_buttons[i].modulate = [Color.WHITE,Color("#85d9ff"),Color("#e2b2ff")][a[2]]
 
 var selected := 0
 var owned: Array[int] = [0]
 var collection: VBoxContainer
+var collection_balance: Label
 var collection_buttons: Array[Button] = []
 var menu: VBoxContainer
 var result_label: Label
@@ -300,10 +301,12 @@ func save_profile() -> void:
 		push_warning("Profile replacement failed: "+str(err))
 
 func refresh_collection() -> void:
+	collection_balance.text = "CREDITS %d  /  OWNED %d OF %d" % [credits,owned.size(),HEROES.size()]
 	for i in range(HEROES.size()):
 		var h: Array = HEROES[i]
 		var status := "SELECTED" if selected == i else ("SELECT" if owned.has(i) else "%d CR" % int(h[1]))
-		collection_buttons[i].text = "%s  •  %s\n%s" % [h[0],h[2],status]
+		collection_buttons[i].text = "%s  /  %s\nHP %d  •  SPEED %.1f  •  MAGNET %.1f\n%s" % [h[0],h[2],int(h[3]),6.0+float(h[4]),float(h[5]),status]
+		collection_buttons[i].add_theme_color_override("font_color",Color("#8df4d5") if selected == i else Color("#edf8f5"))
 		collection_buttons[i].disabled = not owned.has(i) and credits < int(h[1])
 	result_label.text = "BEST %d  |  CR %d\n60s BEST %d" % [best,credits,best_sprint]
 	achievements.text = "BADGES: %d / 3" % (int(runs >= 1)+int(total_kills >= 100)+int(best >= 10000))
@@ -609,10 +612,23 @@ func _ready() -> void:
 	menu_button(menu,"HERO COLLECTION",show_collection)
 	collection = VBoxContainer.new()
 	layer.add_child(collection)
-	collection.position = Vector2(90,270)
+	collection.position = Vector2(90,150)
 	collection.add_theme_constant_override("separation",10)
+	var collection_title := Label.new()
+	collection_title.text = "HERO COLLECTION"
+	collection_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	collection_title.add_theme_font_size_override("font_size",36)
+	collection.add_child(collection_title)
+	collection_balance = Label.new()
+	collection_balance.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	collection_balance.add_theme_font_size_override("font_size",24)
+	collection_balance.add_theme_color_override("font_color",Color("#f9c95b"))
+	collection.add_child(collection_balance)
 	for i in range(HEROES.size()):
-		collection_buttons.append(menu_button(collection,"",select_hero.bind(i)))
+		var card := menu_button(collection,"",select_hero.bind(i))
+		card.custom_minimum_size = Vector2(540,112)
+		card.add_theme_font_size_override("font_size",22)
+		collection_buttons.append(card)
 	menu_button(collection,"BACK",show_menu)
 	collection.hide()
 	upgrades = VBoxContainer.new()
@@ -628,7 +644,7 @@ func _ready() -> void:
 		var btn := Button.new()
 		btn.text = "UPGRADE"
 		offer_buttons.append(btn)
-		btn.custom_minimum_size = Vector2(540,85)
+		btn.custom_minimum_size = Vector2(540,110)
 		btn.add_theme_font_size_override("font_size",24)
 		upgrades.add_child(btn)
 		style_button(btn)
