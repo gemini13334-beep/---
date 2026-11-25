@@ -314,6 +314,38 @@ func pulse(pos: Vector3, radius: float, color: Color) -> void:
 	tween.tween_property(effect,"scale",Vector3.ONE*radius*2,0.22)
 	tween.tween_callback(effect.queue_free)
 
+func update_boss_attack(enemy: MeshInstance3D) -> void:
+	var kind := int(enemy.get_meta("kind",0))
+	var radius := 3.0+kind
+	var deadline := float(enemy.get_meta("next_pulse",99999.0))
+	if elapsed >= deadline:
+		var warning = enemy.get_meta("warning_ring",null)
+		if is_instance_valid(warning):
+			warning.queue_free()
+		if enemy.has_meta("warning_ring"):
+			enemy.remove_meta("warning_ring")
+		pulse(enemy.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
+		if hero.position.distance_to(enemy.position) < radius:
+			hp -= (12.0+kind*4.0)*(1.0-armor)
+		enemy.set_meta("next_pulse",elapsed+4.0)
+	elif deadline-elapsed <= 1.2:
+		var ring = enemy.get_meta("warning_ring",null)
+		if not is_instance_valid(ring):
+			var mesh := TorusMesh.new()
+			mesh.inner_radius = radius-0.09
+			mesh.outer_radius = radius+0.09
+			ring = MeshInstance3D.new()
+			ring.mesh = mesh
+			var mat := StandardMaterial3D.new()
+			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+			mat.albedo_color = Color("#ffb34f")
+			ring.material_override = mat
+			enemy.add_child(ring)
+			ring.scale = Vector3.ONE/enemy.scale.x
+			ring.position.y = -0.42
+			enemy.set_meta("warning_ring",ring)
+		ring.visible = int(elapsed*8.0)%2 == 0
+
 func hit_enemy(enemy: MeshInstance3D) -> void:
 	play_fx("hit")
 	var health := int(enemy.get_meta("health",1))-damage
@@ -705,13 +737,8 @@ func _physics_process(dt: float) -> void:
 		var offset: Vector3 = hero.position-e.position
 		var d := offset.length()
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
-		if e.get_meta("boss",false) and elapsed >= float(e.get_meta("next_pulse",99999.0)):
-			var kind := int(e.get_meta("kind",0))
-			var radius := 3.0+kind
-			pulse(e.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
-			if d < radius:
-				hp -= (12.0+kind*4.0)*(1.0-armor)
-			e.set_meta("next_pulse",elapsed+4.0)
+		if e.get_meta("boss",false):
+			update_boss_attack(e)
 		if d < 0.9*e.scale.x:
 			hp -= dt*(24 if e.get_meta("boss",false) else 12)*(1.0-armor)
 		if d < distance:

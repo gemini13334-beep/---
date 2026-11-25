@@ -41,6 +41,19 @@ func run_tests() -> void:
 	scene.elapsed = 45.0
 	scene._physics_process(0.016)
 	check(scene.boss_spawned,"Boss spawns")
+	var boss = scene.enemies.back()
+	scene.elapsed = float(boss.get_meta("next_pulse"))-0.5
+	scene.update_boss_attack(boss)
+	check(is_instance_valid(boss.get_meta("warning_ring",null)),"Boss telegraphs attack")
+	scene.hero.position = boss.position + Vector3(8,0,0)
+	var safe_hp: float = scene.hp
+	scene.elapsed += 0.6
+	scene.update_boss_attack(boss)
+	check(scene.hp == safe_hp,"Boss attack can be dodged")
+	scene.hero.position = boss.position
+	scene.elapsed = float(boss.get_meta("next_pulse"))
+	scene.update_boss_attack(boss)
+	check(scene.hp < safe_hp,"Boss attack damages within radius")
 	scene.hp = 0
 	scene._physics_process(0.016)
 	check(not scene.running,"Death ends run")
