@@ -329,6 +329,7 @@ var world_light: DirectionalLight3D
 var fps_button: Button
 var quality_button: Button
 var audio_button: Button
+const FPS_OPTIONS = [30,60,90,120,144]
 var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
@@ -365,7 +366,8 @@ func apply_settings() -> void:
 func load_settings() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://settings.cfg") == OK:
-		fps_limit = 30 if int(cfg.get_value("video","fps",60)) == 30 else 60
+		var saved_fps := int(cfg.get_value("video","fps",60))
+		fps_limit = saved_fps if FPS_OPTIONS.has(saved_fps) else 60
 		high_quality = bool(cfg.get_value("video","shadows",false))
 		audio_enabled = bool(cfg.get_value("audio","enabled",true))
 	apply_settings()
@@ -380,7 +382,7 @@ func save_settings() -> void:
 		push_warning("Settings save failed")
 
 func toggle_fps() -> void:
-	fps_limit = 30 if fps_limit == 60 else 60
+	fps_limit = int(FPS_OPTIONS[(FPS_OPTIONS.find(fps_limit)+1)%FPS_OPTIONS.size()])
 	save_settings()
 
 func toggle_quality() -> void:
