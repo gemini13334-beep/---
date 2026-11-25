@@ -233,6 +233,10 @@ const HEROES = [
 	["CRYO",800,"Energy magnet",120.0,0.0,4.0,0]
 ]
 
+const PROFILE_PATH = "user://records.cfg"
+const PROFILE_BACKUP = "user://records.backup.cfg"
+const PROFILE_TEMP = "user://records.tmp.cfg"
+
 func save_profile() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("records","best",best)
@@ -242,7 +246,18 @@ func save_profile() -> void:
 	cfg.set_value("records","kills",total_kills)
 	cfg.set_value("collection","owned",owned)
 	cfg.set_value("collection","selected",selected)
-	cfg.save("user://records.cfg")
+	cfg.set_value("meta","version",1)
+	if cfg.save(PROFILE_TEMP) != OK:
+		push_warning("Profile temporary write failed")
+		return
+	var current := ConfigFile.new()
+	if current.load(PROFILE_PATH) == OK:
+		if current.save(PROFILE_BACKUP) != OK:
+			push_warning("Profile backup failed")
+			return
+	var err := DirAccess.rename_absolute(PROFILE_TEMP,PROFILE_PATH)
+	if err != OK:
+		push_warning("Profile replacement failed: "+str(err))
 
 func refresh_collection() -> void:
 	for i in range(HEROES.size()):
@@ -254,6 +269,8 @@ func refresh_collection() -> void:
 	achievements.text = "BADGES: %d / 3" % (int(runs >= 1)+int(total_kills >= 100)+int(best >= 10000))
 
 func select_hero(index: int) -> void:
+	if index < 0 or index >= HEROES.size():
+		return
 	if not owned.has(index):
 		var cost := int(HEROES[index][1])
 		if credits < cost:
@@ -522,13 +539,20 @@ func _ready() -> void:
 		style_button(btn)
 		btn.pressed.connect(choose_upgrade.bind(i))
 	upgrades.hide()
+	load_profile()
+	refresh_collection()
+	update_hud()
+
+func load_profile() -> void:
+	owned = [0]
+	selected = 0
 	var cfg := ConfigFile.new()
-	if cfg.load("user://records.cfg") == OK:
-		best = int(cfg.get_value("records","best",0))
+	if cfg.load(PROFILE_PATH) == OK or cfg.load(PROFILE_BACKUP) == OK:
+		best = maxi(0,int(cfg.get_value("records","best",0)))
 		credits = maxi(0,int(cfg.get_value("records","credits",0)))
-		best_sprint = int(cfg.get_value("records","sprint",0))
-		runs = int(cfg.get_value("records","runs",0))
-		total_kills = int(cfg.get_value("records","kills",0))
+		best_sprint = maxi(0,int(cfg.get_value("records","sprint",0)))
+		runs = maxi(0,int(cfg.get_value("records","runs",0)))
+		total_kills = maxi(0,int(cfg.get_value("records","kills",0)))
 		var saved: Variant = cfg.get_value("collection","owned",[0])
 		if saved is Array:
 			for id in saved:
@@ -537,8 +561,6 @@ func _ready() -> void:
 		selected = int(cfg.get_value("collection","selected",0))
 		if not owned.has(selected):
 			selected = 0
-	refresh_collection()
-	update_hud()
 
 func start() -> void:
 	mode = 0

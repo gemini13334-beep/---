@@ -50,6 +50,20 @@ func run_tests() -> void:
 	scene.elapsed = 60.0
 	scene._physics_process(0.016)
 	check(not scene.running,"Sprint time limit")
+	scene.credits = 1234
+	scene.best = 9876
+	scene.save_profile()
+	scene.credits = 4321
+	scene.save_profile()
+	scene.credits = 0
+	scene.best = 0
+	scene.load_profile()
+	check(scene.credits == 4321 and scene.best == 9876,"Profile reload")
+	var broken := FileAccess.open("user://records.cfg",FileAccess.WRITE)
+	broken.store_string("[invalid")
+	broken.close()
+	scene.load_profile()
+	check(scene.credits == 1234 and scene.best == 9876,"Corrupt profile backup recovery")
 	scene.queue_free()
 	await process_frame
 	print("Gameplay tests: ",failures.size()," failures")
