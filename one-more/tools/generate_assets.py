@@ -197,12 +197,37 @@ for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)
  shell=mat(name,c)
  part("Base",(0,0,.12),(.75,.75,.12),dark,'cube')
  if name=="tree":
-  part("Trunk",(0,0,.65),(.16,.16,.65),dark,'cube')
+  bark=mat("Warm bark",(.22,.12,.065))
+  leaf=mat("Young leaves",(.23,.62,.19))
+  part("Trunk",(0,0,.65),(.16,.16,.65),bark,'cube')
   part("Crown",(0,0,1.4),(.7,.65,.75),shell)
+  for i in range(3):
+   angle=i*math.tau/3
+   part("Leaf cluster",(math.cos(angle)*.42,math.sin(angle)*.42,1.35),(.36,.34,.43),leaf)
+ elif name=="cactus":
+  part("Stem",(0,0,.8),(.23,.23,.8),shell)
+  for x in [-1,1]:
+   part("Branch",(x*.29,0,.65),(.32,.13,.13),shell)
+   part("Branch tip",(x*.52,0,.85),(.13,.13,.32),shell)
+ elif name=="lava_vent":
+  ember=glow("Molten core",(1,.18,.015))
+  part("Molten core",(0,0,.27),(.38,.38,.15),ember)
+  for i in range(5):
+   angle=i*math.tau/5
+   part("Basalt rim",(math.cos(angle)*.48,math.sin(angle)*.48,.38),(.23,.24,.34),dark,'cube')
+ elif name=="ice_spire":
+  frost=mat("Frost facets",(.58,.87,.96),.2)
+  for i in range(3):
+   obj=part("Ice facet",((i-1)*.35,0,.55+i*.24),(.22,.23,.55+i*.24),frost if i==1 else shell,'cube')
+   obj.rotation_euler.y=(i-1)*.18
  else:
   for i in range(3):
-   obj=part("Detail "+str(i),((i-1)*.38,0,.4+i*.22),(.26,.35,.4+i*.2),shell,'cube' if name in ["ruin","ice_spire"] else 'sphere')
+   obj=part("Detail "+str(i),((i-1)*.38,0,.4+i*.22),(.26,.35,.4+i*.2),shell,'cube' if name=="ruin" else 'sphere')
    obj.rotation_euler.z=i*.3
+  if name=="ruin":
+   part("Broken lintel",(0,0,1.12),(.48,.16,.11),dark,'cube')
+  else:
+   part("Mineral vein",(.15,-.28,.55),(.24,.07,.12),gold,'cube')
  save(name)
 
 # Preview rendering is a separate optional invocation.
