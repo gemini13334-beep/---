@@ -75,6 +75,28 @@ var scenery: Array[MeshInstance3D] = []
 var sound: AudioStreamPlayer
 var sounds: Dictionary = {}
 
+var ambient_player: AudioStreamPlayer
+func ambient_loop() -> AudioStreamWAV:
+	var rate := 16000
+	var count := rate*8
+	var data := PackedByteArray()
+	data.resize(count*2)
+	for i in range(count):
+		var t := float(i)/rate
+		var pad := (sin(TAU*55.0*t)+0.4*sin(TAU*82.5*t)+0.25*sin(TAU*110.0*t))*0.25
+		var swell := 0.65+0.35*cos(TAU*t/8.0)
+		var beat := fmod(t,0.5)
+		var bass := sin(TAU*55.0*t)*exp(-beat*14.0)*minf(1.0,beat*200.0)*0.22
+		var note := sin(TAU*220.0*t)*sin(TAU*0.25*t)*0.08
+		data.encode_s16(i*2,int(clampf(pad*swell+bass+note,-1.0,1.0)*24000))
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = rate
+	wav.data = data
+	wav.loop_mode = AudioStreamWAV.LOOP_FORWARD
+	wav.loop_end = count
+	return wav
+
 func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamWAV:
 	var data := PackedByteArray()
 	var count := int(22050*duration)
@@ -424,6 +446,14 @@ func show_settings() -> void:
 	settings_panel.show()
 
 func apply_settings() -> void:
+	if is_instance_valid(ambient_player):
+		if audio_enabled and not ambient_player.playing:
+			ambient_player.play()
+		elif not audio_enabled:
+			ambient_player.stop()
+	if not audio_enabled:
+		for voice in fx_voices:
+			voice.stop()
 	Engine.max_fps = fps_limit
 	world_light.shadow_enabled = high_quality
 	for voice in fx_voices:
@@ -908,6 +938,10 @@ func _ready() -> void:
 		voice.volume_db = -12
 		fx_voices.append(voice)
 	sounds = {"hit":tone(180,0.09,"hit"),"pickup":tone(880,0.12,"pickup"),"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost"),"shot":tone(620,0.11,"shot"),"destroy":tone(95,0.32,"destroy"),"boss":tone(55,0.85,"boss")}
+	ambient_player = AudioStreamPlayer.new()
+	add_child(ambient_player)
+	ambient_player.volume_db = -26.0
+	ambient_player.stream = ambient_loop()
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
 	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
