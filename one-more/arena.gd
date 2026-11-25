@@ -106,18 +106,39 @@ func rebuild_scenery() -> void:
 		var prop := model(mesh,Color(GROUND_COLORS[biome]).lightened(0.25),Vector3(cos(angle)*radius,0.5,sin(angle)*radius))
 		attach_art(prop,BIOMES[biome].to_lower() if i%2 == 0 else ["tree","ruin","cactus","ice_spire","lava_vent"][biome])
 		prop.rotation.y = angle
+		prop.scale = Vector3.ONE*(0.8+0.45*abs(sin(float(i)*2.7)))
 		scenery.append(prop)
+	if biome == 0:
+		var rng := RandomNumberGenerator.new()
+		rng.seed = 8271
+		for i in range(30):
+			var angle := rng.randf_range(0,TAU)
+			var radius := rng.randf_range(21.5,23.5)
+			var mesh := SphereMesh.new()
+			mesh.radius = 0.45
+			mesh.height = 0.65
+			var prop := model(mesh,Color("#52634c"),Vector3(cos(angle)*radius,0.3,sin(angle)*radius))
+			attach_art(prop,"rock" if i%3 == 0 else "tree")
+			prop.scale = Vector3.ONE*rng.randf_range(0.65,1.5)
+			prop.rotation.y = angle
+			scenery.append(prop)
 
 var ground: MeshInstance3D
 var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
 const GROUND_COLORS = ["#294a37","#34404c","#82613d","#426c80","#4d292c"]
 
+func update_ground_material() -> void:
+	var mat := ShaderMaterial.new()
+	mat.shader = preload("res://shaders/terrain.gdshader")
+	mat.set_shader_parameter("base_color",Color(GROUND_COLORS[biome]))
+	mat.set_shader_parameter("forest",1.0 if biome == 0 else 0.0)
+	ground.material_override = mat
+
 func cycle_biome() -> void:
 	biome = (biome+1)%BIOMES.size()
 	biome_button.text = "MAP • "+BIOMES[biome]
-	var mat := ground.material_override as StandardMaterial3D
-	mat.albedo_color = Color(GROUND_COLORS[biome])
+	update_ground_material()
 	rebuild_scenery()
 
 var best_sprint := 0
@@ -479,27 +500,8 @@ func _ready() -> void:
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
 	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
+	update_ground_material()
 	rebuild_scenery()
-	for i in range(-20,21,4):
-		var line := BoxMesh.new()
-		line.size = Vector3(0.035,0.02,44)
-		model(line,Color("#36535a"),Vector3(i,-0.08,0))
-		var cross := BoxMesh.new()
-		cross.size = Vector3(44,0.02,0.035)
-		model(cross,Color("#36535a"),Vector3(0,-0.08,i))
-	for i in range(32):
-		var angle := TAU*float(i)/32.0
-		var rock := BoxMesh.new()
-		rock.size = Vector3(1.3,randf_range(0.5,2.0),1.3)
-		var prop := model(rock,Color("#45616a"),Vector3(cos(angle)*23,0.5,sin(angle)*23))
-		prop.rotation.y = angle
-	for i in range(12):
-		var pillar := CylinderMesh.new()
-		pillar.top_radius = 0.18
-		pillar.bottom_radius = 0.35
-		pillar.height = 2.4
-		var angle := TAU*float(i)/12.0
-		model(pillar,Color("#8cc9c1"),Vector3(cos(angle)*21,1.2,sin(angle)*21))
 	var sphere := SphereMesh.new()
 	hero = model(sphere,Color("#62f5c5"),Vector3(0,0.5,0))
 	apply_hero_art()
@@ -507,12 +509,14 @@ func _ready() -> void:
 	add_child(light)
 	light.rotation_degrees = Vector3(-60,-30,0)
 	light.shadow_enabled = true
+	light.light_color = Color("#fff1d2")
+	light.light_energy = 1.15
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
 	env.environment.background_color = Color("#13242c")
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
-	env.environment.ambient_light_color = Color.WHITE
+	env.environment.ambient_light_color = Color("#b5d3df")
 	env.environment.ambient_light_energy = 0.65
 	add_child(env)
 	camera = Camera3D.new()
