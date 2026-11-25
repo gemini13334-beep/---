@@ -18,3 +18,16 @@ jobs:
         run: |
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path one-more --editor --import
           /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path one-more --quit-after 120
+      - name: Gameplay regression tests
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/one-more-test-data
+        run: |
+          set -o pipefail
+          timeout 60s /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path one-more --script res://tests/gameplay_test.gd 2>&1 | tee gameplay-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error|FAIL:' gameplay-test.log; then exit 1; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ONE-MORE-gameplay-test-log
+          path: gameplay-test.log
+          if-no-files-found: warn
