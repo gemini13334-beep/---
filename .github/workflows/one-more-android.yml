@@ -15,10 +15,10 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Blender and generate models
-        continue-on-error: true
         run: |
           sudo apt-get update
-          sudo apt-get install -y blender
+          sudo apt-get install -y blender python3-numpy python3-pil
+          blender -b --python-exit-code 1 --python-expr "import numpy; print(numpy.__version__)"
           blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py
           test -s one-more/assets/models/hero.glb
       - name: Install Godot and templates
