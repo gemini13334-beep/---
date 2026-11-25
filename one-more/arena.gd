@@ -441,7 +441,7 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
-var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0}
+var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0}
 var advanced_sliders: Dictionary = {}
 var settings_tabs: TabContainer
 var preset_button: Button
@@ -466,7 +466,7 @@ func setting_slider(parent: Control, key: String, caption: String, low: float, h
 	slider.max_value = high
 	slider.step = step
 	slider.value = float(advanced[key])
-	slider.custom_minimum_size = Vector2(500,44)
+	slider.custom_minimum_size = Vector2(500,36)
 	parent.add_child(slider)
 	advanced_sliders[key] = slider
 	slider.value_changed.connect(func(value: float):
@@ -494,7 +494,7 @@ func build_settings(layer: CanvasLayer) -> void:
 	heading.add_theme_font_size_override("font_size",40)
 	settings_panel.add_child(heading)
 	settings_tabs = TabContainer.new()
-	settings_tabs.custom_minimum_size = Vector2(540,760)
+	settings_tabs.custom_minimum_size = Vector2(540,800)
 	settings_tabs.add_theme_font_size_override("font_size",22)
 	settings_panel.add_child(settings_tabs)
 	var controls := settings_page("CONTROLS")
@@ -502,6 +502,9 @@ func build_settings(layer: CanvasLayer) -> void:
 	setting_slider(controls,"deadzone","JOYSTICK DEADZONE",0.0,0.35,0.01)
 	setting_slider(controls,"camera_speed","CAMERA RESPONSE",2.0,20.0,0.5)
 	setting_slider(controls,"zoom","CAMERA DISTANCE",18.0,28.0,0.5)
+	setting_slider(controls,"stick_size","JOYSTICK RADIUS",55.0,125.0,5.0)
+	setting_slider(controls,"stick_opacity","JOYSTICK OPACITY",0.0,1.0,0.05)
+	setting_slider(controls,"vibration","HAPTICS (0 OFF / 1 ON)",0.0,1.0,1.0)
 	var graphics := settings_page("VIDEO")
 	preset_button = menu_button(graphics,"",cycle_preset)
 	preset_button.custom_minimum_size.y = 56
@@ -953,6 +956,8 @@ func hit_enemy(enemy: MeshInstance3D) -> void:
 		return
 	var boss := bool(enemy.get_meta("boss",false))
 	play_fx("boss" if boss else "destroy")
+	if boss and float(advanced["vibration"]) > 0.5:
+		Input.vibrate_handheld(70)
 	impact_sparks(enemy.position,Color("#bc8cff") if boss else Color("#ff9460"),24 if boss else 9)
 	pulse(enemy.position,3.2 if boss else 1.2,Color("#bc8cff") if boss else Color("#ff9460"))
 	drop_gem(enemy.position)
@@ -1126,6 +1131,7 @@ func _ready() -> void:
 	camera.current = true
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	build_touch_stick(layer)
 	hud_panel = ui_panel(layer,Vector2(12,12),Vector2(696,236))
 	fps_label = Label.new()
 	fps_label.position = Vector2(560,24)
@@ -1353,7 +1359,44 @@ func start() -> void:
 	menu.hide()
 	collection.hide()
 
+var stick_base: Panel
+var stick_knob: Panel
+func stick_circle(parent: Node, tint: Color) -> Panel:
+	var panel := Panel.new()
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = tint
+	style.border_color = Color("#9bdfff")
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(256)
+	panel.add_theme_stylebox_override("panel",style)
+	parent.add_child(panel)
+	return panel
+
+func build_touch_stick(layer: CanvasLayer) -> void:
+	stick_base = stick_circle(layer,Color(0.06,0.15,0.22,0.65))
+	stick_knob = stick_circle(stick_base,Color(0.35,0.78,0.95,0.85))
+	stick_base.hide()
+
+func refresh_touch_stick() -> void:
+	if not is_instance_valid(stick_base):
+		return
+	stick_base.visible = running and not choosing and finger != -1
+	if not stick_base.visible:
+		return
+	var radius := float(advanced["stick_size"])
+	stick_base.size = Vector2.ONE*radius*2.0
+	stick_base.position = origin-Vector2.ONE*radius
+	stick_base.modulate.a = float(advanced["stick_opacity"])
+	stick_knob.size = Vector2.ONE*radius*0.7
+	stick_knob.position = Vector2.ONE*radius-stick_knob.size*0.5+direction*radius*0.65
+
 func _input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch and not event.pressed and event.index == finger:
+		finger = -1
+		direction = Vector2.ZERO
+		refresh_touch_stick()
+		return
 	if not running or choosing:
 		return
 	if event is InputEventScreenTouch:
@@ -1364,14 +1407,16 @@ func _input(event: InputEvent) -> void:
 			finger = -1
 			direction = Vector2.ZERO
 	elif event is InputEventScreenDrag and event.index == finger:
-		var raw := ((event.position-origin)/90.0*float(advanced["sensitivity"])).limit_length()
+		var raw := ((event.position-origin)/float(advanced["stick_size"])*float(advanced["sensitivity"])).limit_length()
 		var dead := float(advanced["deadzone"])
 		direction = raw.normalized()*maxf(0.0,(raw.length()-dead)/(1.0-dead))
+	refresh_touch_stick()
 
 var visual_stride := 0.0
 var visual_lean := Vector2.ZERO
 var visual_recoil := 0.0
 func _physics_process(dt: float) -> void:
+	refresh_touch_stick()
 	if not running or choosing:
 		return
 	elapsed += dt
