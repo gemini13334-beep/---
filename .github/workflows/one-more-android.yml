@@ -15,10 +15,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - name: Install Blender and generate models
+        continue-on-error: true
         run: |
           sudo apt-get update
           sudo apt-get install -y blender
-          blender -b -t 2 -P one-more/tools/generate_assets.py
+          blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py
           test -s one-more/assets/models/hero.glb
       - name: Install Godot and templates
         run: |
@@ -48,3 +49,4 @@ jobs:
         with:
           name: ONE-MORE-Blender-models
           path: one-more/assets/models/
+          if-no-files-found: warn

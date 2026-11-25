@@ -25,7 +25,39 @@ var speed_bonus := 0.0
 var magnet := 2.0
 var choosing := false
 var upgrades: VBoxContainer
-var hero_art: Node3D
+var boss_spawned := false
+var kills := 0
+var credits := 0
+var blast := 0
+
+func pulse(pos: Vector3, radius: float, color: Color) -> void:
+	var mesh := SphereMesh.new()
+	var effect := model(mesh,color,pos)
+	var material := effect.material_override as StandardMaterial3D
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color.a = 0.28
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	effect.scale = Vector3.ONE*0.2
+	var tween := create_tween()
+	tween.tween_property(effect,"scale",Vector3.ONE*radius*2,0.22)
+	tween.tween_callback(effect.queue_free)
+
+func hit_enemy(enemy: MeshInstance3D) -> void:
+	var health := int(enemy.get_meta("health",1))-1
+	enemy.set_meta("health",health)
+	pulse(enemy.position,0.8,Color("#ffb85a"))
+	if health > 0:
+		return
+	var boss := bool(enemy.get_meta("boss",false))
+	drop_gem(enemy.position)
+	if boss:
+		for i in range(8):
+			drop_gem(enemy.position+Vector3(randf_range(-2,2),0,randf_range(-2,2)))
+	enemies.erase(enemy)
+	enemy.queue_free()
+	kills += 1
+	award(1500 if boss else 100)
+
 
 func attach_art(host: MeshInstance3D, asset: String) -> void:
 	var path := "res://assets/models/" + asset + ".glb"
@@ -59,6 +91,7 @@ func choose_upgrade(index: int) -> void:
 		2:
 			magnet += 0.65
 			hp = minf(100,hp+20)
+		3: blast += 1
 	choosing = false
 	upgrades.hide()
 	finger = -1
@@ -130,9 +163,9 @@ func _ready() -> void:
 	heading.text = "EVOLUTION • CHOOSE ONE"
 	heading.add_theme_font_size_override("font_size",28)
 	upgrades.add_child(heading)
-	for i in range(3):
+	for i in range(4):
 		var btn := Button.new()
-		btn.text = ["OVERDRIVE • Faster attacks","DASH • Movement speed","MAGNET • Pickup + heal"][i]
+		btn.text = ["OVERDRIVE • Faster attacks","DASH • Movement speed","MAGNET • Pickup + heal","NOVA • Chain blast"][i]
 		btn.custom_minimum_size = Vector2(540,85)
 		btn.add_theme_font_size_override("font_size",24)
 		upgrades.add_child(btn)
@@ -141,6 +174,7 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://records.cfg") == OK:
 		best = int(cfg.get_value("records","best",0))
+		credits = int(cfg.get_value("records","credits",0))
 	update_hud()
 
 func start() -> void:
@@ -162,6 +196,9 @@ func start() -> void:
 		attach_art(crate,"crate")
 		crates.append(crate)
 	xp = 0
+	boss_spawned = false
+	kills = 0
+	blast = 0
 	combo = 0
 	combo_time = 0
 	power = 0
@@ -220,28 +257,52 @@ func _physics_process(dt: float) -> void:
 		mesh.size = Vector3(0.8,0.8,0.8)
 		var enemy := model(mesh,Color("#ff7865"),p)
 		attach_art(enemy,"enemy")
+		if randf() < 0.25:
+			enemy.set_meta("health",3)
+			enemy.set_meta("speed",1.3)
+			enemy.scale = Vector3.ONE*1.35
+		elif randf() < 0.35:
+			enemy.set_meta("speed",3.8)
+			enemy.scale = Vector3.ONE*0.7
 		enemies.append(enemy)
+	if elapsed >= 45 and not boss_spawned:
+		boss_spawned = true
+		var boss_mesh := BoxMesh.new()
+		var boss := model(boss_mesh,Color("#a56bff"),Vector3(clampf(hero.position.x+9,-20,20),0.5,hero.position.z))
+		attach_art(boss,"enemy")
+		boss.scale = Vector3.ONE*2.7
+		boss.set_meta("boss",true)
+		boss.set_meta("health",18)
+		boss.set_meta("speed",1.5)
+		enemies.append(boss)
 	var nearest: MeshInstance3D = null
 	var distance := 4.0+level*0.3
 	for e in enemies:
 		var offset := hero.position-e.position
 		var d := offset.length()
-		e.position += offset.normalized()*dt*(2.0+minf(elapsed/90.0,2.0))
-		if d < 0.9:
-			hp -= dt*12
+		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
+		if d < 0.9*e.scale.x:
+			hp -= dt*(24 if e.get_meta("boss",false) else 12)
 		if d < distance:
 			distance = d
 			nearest = e
 	attack_timer -= dt
 	if nearest != null and attack_timer <= 0:
 		attack_timer = maxf(0.15,0.7-power*0.08)
-		drop_gem(nearest.position)
-		enemies.erase(nearest)
-		nearest.queue_free()
-		award(100)
+		var impact := nearest.position
+		hit_enemy(nearest)
+		if blast > 0:
+			pulse(impact,1.5+blast*0.4,Color("#64cfff"))
+			for other in enemies.duplicate():
+				if other != nearest and other.position.distance_to(impact) < 1.5+blast*0.4:
+					hit_enemy(other)
 	for crate in crates.duplicate():
 		if hero.position.distance_to(crate.position) < 1.0+level*0.12:
 			drop_gem(crate.position)
+			pulse(crate.position,2.2,Color("#ff9d45"))
+			for enemy in enemies.duplicate():
+				if enemy.position.distance_to(crate.position) < 2.2:
+					hit_enemy(enemy)
 			award(50)
 			crates.erase(crate)
 			crate.queue_free()
@@ -265,12 +326,14 @@ func _physics_process(dt: float) -> void:
 		choosing = false
 		upgrades.hide()
 		best = maxi(best,score)
+		credits += int(score/100.0)
 		var cfg := ConfigFile.new()
 		cfg.set_value("records","best",best)
+		cfg.set_value("records","credits",credits)
 		cfg.save("user://records.cfg")
 		retry.text = "ONE MORE • RETRY"
 		retry.show()
 	update_hud()
 
 func update_hud() -> void:
-	hud.text = "ONE MORE\nSCORE %d  |  BEST %d\nHP %d  |  LV %d  |  %ds\nXP %d/%d  |  COMBO %d" % [score,best,maxi(0,int(hp)),level,int(elapsed),xp,level*3,combo]
+	hud.text = "ONE MORE\nSCORE %d  |  BEST %d\nHP %d  |  LV %d  |  %ds\nXP %d/%d  |  COMBO %d\nKILLS %d  |  CREDITS %d" % [score,best,maxi(0,int(hp)),level,int(elapsed),xp,level*3,combo,kills,credits]

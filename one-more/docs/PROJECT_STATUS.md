@@ -1,2 +1,2 @@
-# 0.3.0 Evolution
-Added optional GLB model integration (fallback primitives), energy pickups, XP, paused upgrade selection, destructible crates, combo scoring and growth. Android workflow from 0.2.0 was in progress at start of this update. New gameplay requires CI and device testing. No claim of verified APK.
+# 0.4.0
+0.3.0 validation succeeded. Added fast and armored enemies, timed boss, area attack upgrade, explosion effects, crate splash damage, kill count and persistent credits. Blender step is now non-blocking for APK export; exact failure cause still needs logs. No verified APK or device test yet.
