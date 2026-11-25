@@ -346,6 +346,25 @@ func update_boss_attack(enemy: MeshInstance3D) -> void:
 			enemy.set_meta("warning_ring",ring)
 		ring.visible = int(elapsed*8.0)%2 == 0
 
+func shot_tracer(from: Vector3, to: Vector3) -> void:
+	var length := from.distance_to(to)
+	if length < 0.05:
+		return
+	var beam := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.055,0.055,length)
+	beam.mesh = mesh
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = Color("#ffe39b")
+	beam.material_override = mat
+	add_child(beam)
+	beam.position = (from+to)*0.5
+	beam.look_at(to,Vector3.UP)
+	var tween := create_tween()
+	tween.tween_property(beam,"scale",Vector3(0.1,0.1,1.0),0.12)
+	tween.tween_callback(beam.queue_free)
+
 func hit_enemy(enemy: MeshInstance3D) -> void:
 	play_fx("hit")
 	var health := int(enemy.get_meta("health",1))-damage
@@ -636,6 +655,7 @@ func start() -> void:
 	choosing = false
 	upgrades.hide()
 	hero.position = Vector3(0,0.5,0)
+	camera.position = hero.position + Vector3(0,19,15)
 	hero.scale = Vector3.ONE
 	elapsed = 0
 	score = 0
@@ -695,7 +715,7 @@ func _physics_process(dt: float) -> void:
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
-	camera.position = hero.position + Vector3(0,19,15)
+	camera.position = camera.position.lerp(hero.position + Vector3(0,19,15),1.0-exp(-10.0*dt))
 	spawn_timer -= dt
 	if spawn_timer <= 0 and enemies.size() < 100:
 		spawn_timer = maxf(0.25,1.1-elapsed/150.0)
@@ -748,6 +768,7 @@ func _physics_process(dt: float) -> void:
 	if nearest != null and attack_timer <= 0:
 		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
 		var impact := nearest.position
+		shot_tracer(hero.position+Vector3.UP*0.45,impact+Vector3.UP*0.2)
 		hit_enemy(nearest)
 		if blast > 0:
 			pulse(impact,1.5+blast*0.4,Color("#64cfff"))
