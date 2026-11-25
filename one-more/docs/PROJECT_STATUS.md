@@ -1,2 +1,2 @@
-# 0.5.0
-0.4.0 headless validation succeeded. Added six selectable hero archetypes, credit purchases, persistent ownership and selection, distinct starting stats, menu and collection. All heroes still share the same art. Android build remains unverified.
+# 0.6.0
+0.5.0 headless validation succeeded. Added six hero color palettes and procedural model variants, model switching on run start, arena boundary props, styled buttons, health and XP bars. Blender output and Android APK still need confirmation. Visuals are procedural prototypes, not final art.

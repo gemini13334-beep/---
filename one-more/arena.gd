@@ -36,6 +36,48 @@ var collection_buttons: Array[Button] = []
 var menu: VBoxContainer
 var result_label: Label
 var max_hp := 100.0
+var hp_bar: ProgressBar
+var xp_bar: ProgressBar
+var hero_visual: Node3D
+const PALETTE = ["#62f5c5","#8caee9","#ff7043","#b998ff","#e2b45d","#72e5ff"]
+
+func style_button(btn: Button) -> void:
+	for state in ["normal","hover","pressed","disabled"]:
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color("#203743") if state == "normal" else Color("#365b68")
+		if state == "disabled":
+			style.bg_color = Color("#273038")
+		style.border_color = Color("#65d9c0")
+		style.set_border_width_all(2)
+		style.set_corner_radius_all(14)
+		btn.add_theme_stylebox_override(state,style)
+
+func apply_hero_art() -> void:
+	for child in hero.get_children():
+		hero.remove_child(child)
+		child.queue_free()
+	hero.mesh = SphereMesh.new()
+	var mat := hero.material_override as StandardMaterial3D
+	mat.albedo_color = Color(PALETTE[selected])
+	attach_art(hero,["hero","cyborg","inferno","ghost","titan","cryo"][selected])
+
+func make_bar(layer: CanvasLayer, y: float, color: Color) -> ProgressBar:
+	var bar := ProgressBar.new()
+	layer.add_child(bar)
+	bar.position = Vector2(24,y)
+	bar.size = Vector2(672,18)
+	bar.show_percentage = false
+	var bg := StyleBoxFlat.new()
+	bg.bg_color = Color("#182b36")
+	bg.set_corner_radius_all(8)
+	var fill := StyleBoxFlat.new()
+	fill.bg_color = color
+	fill.set_corner_radius_all(8)
+	bar.add_theme_stylebox_override("background",bg)
+	bar.add_theme_stylebox_override("fill",fill)
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	return bar
+
 const HEROES = [
 	["SLIME",0,"Balanced",100.0,0.0,2.0,0],
 	["CYBORG",150,"Rapid fire",100.0,0.0,2.0,2],
@@ -88,6 +130,7 @@ func menu_button(parent: Control, label: String, action: Callable) -> Button:
 	btn.custom_minimum_size = Vector2(540,78)
 	btn.add_theme_font_size_override("font_size",26)
 	parent.add_child(btn)
+	style_button(btn)
 	btn.pressed.connect(action)
 	return btn
 
@@ -181,9 +224,22 @@ func _ready() -> void:
 		var cross := BoxMesh.new()
 		cross.size = Vector3(44,0.02,0.035)
 		model(cross,Color("#36535a"),Vector3(0,-0.08,i))
+	for i in range(32):
+		var angle := TAU*float(i)/32.0
+		var rock := BoxMesh.new()
+		rock.size = Vector3(1.3,randf_range(0.5,2.0),1.3)
+		var prop := model(rock,Color("#45616a"),Vector3(cos(angle)*23,0.5,sin(angle)*23))
+		prop.rotation.y = angle
+	for i in range(12):
+		var pillar := CylinderMesh.new()
+		pillar.top_radius = 0.18
+		pillar.bottom_radius = 0.35
+		pillar.height = 2.4
+		var angle := TAU*float(i)/12.0
+		model(pillar,Color("#8cc9c1"),Vector3(cos(angle)*21,1.2,sin(angle)*21))
 	var sphere := SphereMesh.new()
 	hero = model(sphere,Color("#62f5c5"),Vector3(0,0.5,0))
-	attach_art(hero,"hero")
+	apply_hero_art()
 	var light := DirectionalLight3D.new()
 	add_child(light)
 	light.rotation_degrees = Vector3(-60,-30,0)
@@ -209,6 +265,8 @@ func _ready() -> void:
 	layer.add_child(hud)
 	hud.position = Vector2(24,24)
 	hud.add_theme_font_size_override("font_size",28)
+	hp_bar = make_bar(layer,190,Color("#65e5a5"))
+	xp_bar = make_bar(layer,218,Color("#f9c95b"))
 	retry = Button.new()
 	layer.add_child(retry)
 	retry.position = Vector2(110,550)
@@ -255,6 +313,7 @@ func _ready() -> void:
 		btn.custom_minimum_size = Vector2(540,85)
 		btn.add_theme_font_size_override("font_size",24)
 		upgrades.add_child(btn)
+		style_button(btn)
 		btn.pressed.connect(choose_upgrade.bind(i))
 	upgrades.hide()
 	var cfg := ConfigFile.new()
@@ -305,6 +364,7 @@ func start() -> void:
 	hero.scale = Vector3.ONE
 	elapsed = 0
 	score = 0
+	apply_hero_art()
 	var stats: Array = HEROES[selected]
 	max_hp = float(stats[3])
 	hp = max_hp
@@ -436,4 +496,8 @@ func _physics_process(dt: float) -> void:
 	update_hud()
 
 func update_hud() -> void:
+	hp_bar.max_value = max_hp
+	hp_bar.value = hp
+	xp_bar.max_value = level*3
+	xp_bar.value = xp
 	hud.text = "ONE MORE\nSCORE %d  |  BEST %d\nHP %d  |  LV %d  |  %ds\nXP %d/%d  |  COMBO %d\nKILLS %d  |  CREDITS %d" % [score,best,maxi(0,int(hp)),level,int(elapsed),xp,level*3,combo,kills,credits]

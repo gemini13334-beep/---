@@ -27,6 +27,32 @@ for x in [-.19,.19]: part("Eye",(x,-.55,.86),(.08,.035,.075),gold)
 for x in [-.65,.65]: part("Arm",(x,0,.56),(.19,.22,.33),dark)
 for x in [-.25,.25]: part("Boot",(x,-.08,.12),(.23,.32,.13),dark,'cube')
 save("hero")
+for name,color,shape in [
+ ("cyborg",(.25,.45,.8),"cube"),
+ ("inferno",(.95,.18,.035),"sphere"),
+ ("ghost",(.48,.25,.85),"sphere"),
+ ("titan",(.65,.42,.12),"cube"),
+ ("cryo",(.08,.7,.95),"cube")]:
+ reset()
+ shell=mat(name+" shell",color,.35)
+ part("Body",(0,0,.65),(.64,.48,.62),shell,shape)
+ part("Visor",(0,-.43,.83),(.43,.13,.24),dark)
+ for x in [-.19,.19]: part("Eye",(x,-.55,.86),(.08,.035,.075),gold)
+ for x in [-.65,.65]:
+  part("Shoulder",(x,0,.68),(.24,.25,.26),shell,shape)
+  part("Arm",(x,0,.38),(.16,.18,.25),dark)
+ for x in [-.25,.25]: part("Boot",(x,-.08,.12),(.23,.32,.13),dark,'cube')
+ if name=="titan":
+  part("Chest plate",(0,-.4,.48),(.46,.13,.22),gold,'cube')
+ if name=="inferno":
+  for x in [-.35,.35]: part("Heat fin",(x,.1,1.2),(.13,.15,.35),gold)
+ if name=="cryo":
+  part("Cooling core",(0,.43,.65),(.32,.2,.4),gold,'cube')
+ if name=="ghost":
+  part("Crest",(0,0,1.2),(.18,.35,.2),shell)
+ if name=="cyborg":
+  part("Antenna",(.35,0,1.35),(.05,.05,.25),gold)
+ save(name)
 reset()
 part("Core",(0,0,.48),(.46,.43,.45),red,'cube')
 part("Visor",(0,-.43,.55),(.32,.08,.12),dark,'cube')
