@@ -29,6 +29,68 @@ var boss_spawned := false
 var kills := 0
 var credits := 0
 var blast := 0
+var selected := 0
+var owned: Array[int] = [0]
+var collection: VBoxContainer
+var collection_buttons: Array[Button] = []
+var menu: VBoxContainer
+var result_label: Label
+var max_hp := 100.0
+const HEROES = [
+	["SLIME",0,"Balanced",100.0,0.0,2.0,0],
+	["CYBORG",150,"Rapid fire",100.0,0.0,2.0,2],
+	["INFERNO",300,"Area blast",100.0,0.0,2.0,0],
+	["GHOST",450,"Fast movement",80.0,2.0,2.0,0],
+	["TITAN",600,"Heavy armor",180.0,-0.5,2.0,0],
+	["CRYO",800,"Energy magnet",120.0,0.0,4.0,0]
+]
+
+func save_profile() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("records","best",best)
+	cfg.set_value("records","credits",credits)
+	cfg.set_value("collection","owned",owned)
+	cfg.set_value("collection","selected",selected)
+	cfg.save("user://records.cfg")
+
+func refresh_collection() -> void:
+	for i in range(HEROES.size()):
+		var h: Array = HEROES[i]
+		var status := "SELECTED" if selected == i else ("SELECT" if owned.has(i) else "%d CR" % int(h[1]))
+		collection_buttons[i].text = "%s  •  %s\n%s" % [h[0],h[2],status]
+		collection_buttons[i].disabled = not owned.has(i) and credits < int(h[1])
+	result_label.text = "BEST %d  |  CREDITS %d" % [best,credits]
+
+func select_hero(index: int) -> void:
+	if not owned.has(index):
+		var cost := int(HEROES[index][1])
+		if credits < cost:
+			return
+		credits -= cost
+		owned.append(index)
+	selected = index
+	save_profile()
+	refresh_collection()
+
+func show_collection() -> void:
+	menu.hide()
+	collection.show()
+	refresh_collection()
+
+func show_menu() -> void:
+	collection.hide()
+	menu.show()
+	refresh_collection()
+
+func menu_button(parent: Control, label: String, action: Callable) -> Button:
+	var btn := Button.new()
+	btn.text = label
+	btn.custom_minimum_size = Vector2(540,78)
+	btn.add_theme_font_size_override("font_size",26)
+	parent.add_child(btn)
+	btn.pressed.connect(action)
+	return btn
+
 
 func pulse(pos: Vector3, radius: float, color: Color) -> void:
 	var mesh := SphereMesh.new()
@@ -90,7 +152,7 @@ func choose_upgrade(index: int) -> void:
 		1: speed_bonus += 0.65
 		2:
 			magnet += 0.65
-			hp = minf(100,hp+20)
+			hp = minf(max_hp,hp+20)
 		3: blast += 1
 	choosing = false
 	upgrades.hide()
@@ -154,6 +216,30 @@ func _ready() -> void:
 	retry.add_theme_font_size_override("font_size",34)
 	retry.text = "PLAY • ONE MORE"
 	retry.pressed.connect(start)
+	retry.hide()
+	menu = VBoxContainer.new()
+	layer.add_child(menu)
+	menu.position = Vector2(90,400)
+	menu.add_theme_constant_override("separation",18)
+	var title := Label.new()
+	title.text = "ONE MORE"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_size_override("font_size",64)
+	menu.add_child(title)
+	result_label = Label.new()
+	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	result_label.add_theme_font_size_override("font_size",26)
+	menu.add_child(result_label)
+	menu_button(menu,"PLAY • ENDLESS",start)
+	menu_button(menu,"HERO COLLECTION",show_collection)
+	collection = VBoxContainer.new()
+	layer.add_child(collection)
+	collection.position = Vector2(90,270)
+	collection.add_theme_constant_override("separation",10)
+	for i in range(HEROES.size()):
+		collection_buttons.append(menu_button(collection,"",select_hero.bind(i)))
+	menu_button(collection,"BACK",show_menu)
+	collection.hide()
 	upgrades = VBoxContainer.new()
 	layer.add_child(upgrades)
 	upgrades.position = Vector2(90,430)
@@ -174,7 +260,16 @@ func _ready() -> void:
 	var cfg := ConfigFile.new()
 	if cfg.load("user://records.cfg") == OK:
 		best = int(cfg.get_value("records","best",0))
-		credits = int(cfg.get_value("records","credits",0))
+		credits = maxi(0,int(cfg.get_value("records","credits",0)))
+		var saved: Variant = cfg.get_value("collection","owned",[0])
+		if saved is Array:
+			for id in saved:
+				if id is int and id >= 0 and id < HEROES.size() and not owned.has(id):
+					owned.append(id)
+		selected = int(cfg.get_value("collection","selected",0))
+		if not owned.has(selected):
+			selected = 0
+	refresh_collection()
 	update_hud()
 
 func start() -> void:
@@ -210,7 +305,14 @@ func start() -> void:
 	hero.scale = Vector3.ONE
 	elapsed = 0
 	score = 0
-	hp = 100
+	var stats: Array = HEROES[selected]
+	max_hp = float(stats[3])
+	hp = max_hp
+	speed_bonus = float(stats[4])
+	magnet = float(stats[5])
+	power = int(stats[6])
+	if selected == 2:
+		blast = 1
 	level = 1
 	spawn_timer = 0
 	attack_timer = 0
@@ -218,6 +320,8 @@ func start() -> void:
 	direction = Vector2.ZERO
 	running = true
 	retry.hide()
+	menu.hide()
+	collection.hide()
 
 func _input(event: InputEvent) -> void:
 	if not running or choosing:
@@ -327,12 +431,8 @@ func _physics_process(dt: float) -> void:
 		upgrades.hide()
 		best = maxi(best,score)
 		credits += int(score/100.0)
-		var cfg := ConfigFile.new()
-		cfg.set_value("records","best",best)
-		cfg.set_value("records","credits",credits)
-		cfg.save("user://records.cfg")
-		retry.text = "ONE MORE • RETRY"
-		retry.show()
+		save_profile()
+		show_menu()
 	update_hud()
 
 func update_hud() -> void:
