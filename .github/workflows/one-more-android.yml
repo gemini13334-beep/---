@@ -40,6 +40,16 @@ jobs:
           "$GODOT" --headless --path one-more --editor --import
           "$GODOT" --headless --path one-more --export-debug Android "$GITHUB_WORKSPACE/one-more.apk"
           test -s one-more.apk
+      - name: Verify Android 14 compatibility
+        run: |
+          set -euo pipefail
+          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
+          "$AAPT" dump badging one-more.apk | tee android-compatibility.txt
+          python3 -c 'import re; s=open("android-compatibility.txt").read(); m=re.search(r"sdkVersion:\x27(\d+)\x27",s); t=re.search(r"targetSdkVersion:\x27(\d+)\x27",s); assert m and int(m[1])<=34, "APK must install on Android 14"; assert t and int(t[1])>=34, "Target SDK must be at least 34"; assert "arm64-v8a" in s, "ARM64 required"'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ONE-MORE-Android-compatibility
+          path: android-compatibility.txt
       - uses: actions/upload-artifact@v4
         with:
           name: ONE-MORE-Android
