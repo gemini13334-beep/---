@@ -451,7 +451,8 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
-var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
+const DEFAULT_ADVANCED = {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
+var advanced: Dictionary = DEFAULT_ADVANCED.duplicate()
 var advanced_sliders: Dictionary = {}
 var settings_tabs: TabContainer
 var preset_button: Button
@@ -487,16 +488,20 @@ func setting_slider(parent: Control, key: String, caption: String, low: float, h
 	slider.drag_ended.connect(func(_changed: bool): save_settings())
 
 func settings_page(caption: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = caption
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	settings_tabs.add_child(scroll)
 	var page := VBoxContainer.new()
-	page.name = caption
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	page.add_theme_constant_override("separation",10)
-	settings_tabs.add_child(page)
+	scroll.add_child(page)
 	return page
 
 func build_settings(layer: CanvasLayer) -> void:
 	settings_panel = VBoxContainer.new()
 	layer.add_child(settings_panel)
-	settings_panel.position = Vector2(90,160)
+	settings_panel.position = Vector2(90,125)
 	settings_panel.add_theme_constant_override("separation",12)
 	var heading := Label.new()
 	heading.text = "SETTINGS"
@@ -504,7 +509,7 @@ func build_settings(layer: CanvasLayer) -> void:
 	heading.add_theme_font_size_override("font_size",40)
 	settings_panel.add_child(heading)
 	settings_tabs = TabContainer.new()
-	settings_tabs.custom_minimum_size = Vector2(540,800)
+	settings_tabs.custom_minimum_size = Vector2(540,720)
 	settings_tabs.add_theme_font_size_override("font_size",22)
 	settings_panel.add_child(settings_tabs)
 	var controls := settings_page("CONTROLS")
@@ -536,8 +541,21 @@ func build_settings(layer: CanvasLayer) -> void:
 	setting_slider(audio,"notifications","SYSTEM NOTIFICATIONS",0.0,1.0,0.05)
 	setting_slider(audio,"vehicles","VEHICLE BOOST",0.0,1.0,0.05)
 	audio_button.custom_minimum_size.y = 56
+	var reset := menu_button(settings_panel,"RESTORE DEFAULTS",reset_settings)
+	reset.custom_minimum_size.y = 56
 	menu_button(settings_panel,"BACK",close_settings)
 	settings_panel.hide()
+
+func reset_settings() -> void:
+	fps_limit = 60
+	high_quality = false
+	audio_enabled = true
+	preset_index = 1
+	for key in DEFAULT_ADVANCED:
+		var slider := advanced_sliders[key] as HSlider
+		slider.value = float(DEFAULT_ADVANCED[key])
+		advanced[key] = slider.value
+	save_settings()
 
 func close_settings() -> void:
 	save_settings()
@@ -550,7 +568,10 @@ func show_settings() -> void:
 
 func apply_settings() -> void:
 	get_viewport().scaling_3d_scale = float(advanced["render_scale"])
-	get_viewport().msaa_3d = int(advanced["msaa"]) as Viewport.MSAA
+	match int(advanced["msaa"]):
+		1: get_viewport().msaa_3d = Viewport.MSAA_2X
+		2: get_viewport().msaa_3d = Viewport.MSAA_4X
+		_: get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	preset_button.text = "APPLY PRESET / "+PRESET_NAMES[preset_index]
 	camera.size = float(advanced["zoom"])
 	world_light.light_energy = 1.35*float(advanced["brightness"])
