@@ -22,7 +22,7 @@ jobs:
           from pathlib import Path
           import struct
           root=Path("one-more/assets/models")
-          for name in "hero cyborg inferno ghost titan cryo enemy crate forest city desert ice volcano buggy".split():
+          for name in "hero cyborg inferno ghost titan cryo enemy crate forest city desert ice volcano buggy enemy_fast enemy_armored boss_overlord boss_crystal boss_inferno hovercraft tank mech tree rock ruin cactus ice_spire lava_vent".split():
               glb=root/(name+".glb")
               blend=root/(name+".blend")
               assert blend.stat().st_size>0, name

@@ -79,6 +79,43 @@ for x in [-.7,.7]:
   part("Wheel",(x,y,.3),(.22,.32,.32),dark)
 save("buggy")
 
+
+# Additional original modular assets.
+for name,c,size in [
+ ("enemy_fast",(.95,.32,.12),.65),("enemy_armored",(.48,.12,.15),1.2),
+ ("boss_overlord",(.65,.08,.2),2.0),("boss_crystal",(.12,.65,.95),1.8),("boss_inferno",(.95,.24,.04),1.9)]:
+ reset()
+ shell=mat(name,c,.45)
+ part("Core",(0,0,.65*size),(.55*size,.48*size,.55*size),shell,'cube')
+ part("Visor",(0,-.48*size,.8*size),(.38*size,.12*size,.15*size),dark,'cube')
+ for x in [-1,1]:
+  part("Armor",(x*.65*size,0,.65*size),(.23*size,.35*size,.4*size),shell,'cube')
+  part("Emitter",(x*.65*size,-.32*size,.65*size),(.12*size,.18*size,.12*size),gold)
+ save(name)
+for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.65))]:
+ reset()
+ shell=mat(name,c,.5)
+ part("Hull",(0,0,.45),(.8,1,.28),shell,'cube')
+ part("Cabin",(0,.1,.9),(.45,.5,.3),dark,'cube')
+ for x in [-.8,.8]:
+  part("Drive",(x,0,.3),(.22,.85,.25),dark,'cube')
+ if name=="tank": part("Cannon",(0,-.85,.9),(.13,.75,.13),shell,'cube')
+ if name=="mech":
+  for x in [-.7,.7]: part("Leg",(x,0,.2),(.2,.3,.6),shell,'cube')
+ save(name)
+for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)),("cactus",(.2,.58,.25)),("ice_spire",(.2,.8,.95)),("lava_vent",(.9,.22,.04))]:
+ reset()
+ shell=mat(name,c)
+ part("Base",(0,0,.12),(.75,.75,.12),dark,'cube')
+ if name=="tree":
+  part("Trunk",(0,0,.65),(.16,.16,.65),dark,'cube')
+  part("Crown",(0,0,1.4),(.7,.65,.75),shell)
+ else:
+  for i in range(3):
+   obj=part("Detail "+str(i),((i-1)*.38,0,.4+i*.22),(.26,.35,.4+i*.2),shell,'cube' if name in ["ruin","ice_spire"] else 'sphere')
+   obj.rotation_euler.z=i*.3
+ save(name)
+
 # Preview rendering is a separate optional invocation.
 if "--preview" in __import__("sys").argv:
  preview=os.path.join(out,"previews")
