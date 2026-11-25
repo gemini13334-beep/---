@@ -38,6 +38,44 @@ var result_label: Label
 var max_hp := 100.0
 var mode := 0
 var biome := 0
+var scenery: Array[MeshInstance3D] = []
+var sound: AudioStreamPlayer
+var sounds: Dictionary = {}
+
+func tone(freq: float, duration: float) -> AudioStreamWAV:
+	var data := PackedByteArray()
+	var count := int(22050*duration)
+	data.resize(count*2)
+	for i in range(count):
+		var t := float(i)/22050.0
+		var envelope := pow(1.0-float(i)/count,2.0)
+		var sample := int(sin(TAU*freq*t)*envelope*6500)
+		data.encode_s16(i*2,sample)
+	var wav := AudioStreamWAV.new()
+	wav.format = AudioStreamWAV.FORMAT_16_BITS
+	wav.mix_rate = 22050
+	wav.data = data
+	return wav
+
+func play_fx(key: String) -> void:
+	if sound != null and sounds.has(key):
+		sound.stream = sounds[key]
+		sound.play()
+
+func rebuild_scenery() -> void:
+	for prop in scenery:
+		prop.queue_free()
+	scenery.clear()
+	for i in range(24):
+		var angle := TAU*float(i)/24.0
+		var radius := 20.5 if i%2 == 0 else 17.5
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3(1.1,1.4,1.1)
+		var prop := model(mesh,Color(GROUND_COLORS[biome]).lightened(0.25),Vector3(cos(angle)*radius,0.5,sin(angle)*radius))
+		attach_art(prop,BIOMES[biome].to_lower())
+		prop.rotation.y = angle
+		scenery.append(prop)
+
 var ground: MeshInstance3D
 var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
@@ -48,6 +86,7 @@ func cycle_biome() -> void:
 	biome_button.text = "MAP • "+BIOMES[biome]
 	var mat := ground.material_override as StandardMaterial3D
 	mat.albedo_color = Color(GROUND_COLORS[biome])
+	rebuild_scenery()
 
 var best_sprint := 0
 var runs := 0
@@ -98,6 +137,7 @@ func update_events(dt: float) -> void:
 		if hero.position.distance_to(vehicle.position) < 1.4:
 			vehicle.queue_free()
 			vehicle_time = 10.0
+			play_fx("boost")
 			pulse(hero.position,3.0,Color("#ffc45c"))
 	if vehicle_time > 0:
 		vehicle_time = maxf(0,vehicle_time-dt)
@@ -221,6 +261,7 @@ func pulse(pos: Vector3, radius: float, color: Color) -> void:
 	tween.tween_callback(effect.queue_free)
 
 func hit_enemy(enemy: MeshInstance3D) -> void:
+	play_fx("hit")
 	var health := int(enemy.get_meta("health",1))-1
 	enemy.set_meta("health",health)
 	pulse(enemy.position,0.8,Color("#ffb85a"))
@@ -287,9 +328,14 @@ func model(mesh: Mesh, color: Color, pos: Vector3) -> MeshInstance3D:
 	return n
 
 func _ready() -> void:
+	sound = AudioStreamPlayer.new()
+	add_child(sound)
+	sound.volume_db = -12
+	sounds = {"hit":tone(180,0.09),"pickup":tone(880,0.12),"level":tone(520,0.35),"boost":tone(320,0.3)}
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
 	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
+	rebuild_scenery()
 	for i in range(-20,21,4):
 		var line := BoxMesh.new()
 		line.size = Vector3(0.035,0.02,44)
@@ -503,6 +549,11 @@ func _physics_process(dt: float) -> void:
 	var move := direction
 	if finger == -1:
 		move = Input.get_vector("ui_left","ui_right","ui_up","ui_down")
+	if move.length() > 0.05:
+		hero.rotation.y = lerp_angle(hero.rotation.y,atan2(move.x,move.y),minf(dt*12,1.0))
+	for child in hero.get_children():
+		if child is Node3D:
+			child.position.y = -0.5+sin(elapsed*10.0)*0.07*move.length()
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(4.0 if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
@@ -575,10 +626,12 @@ func _physics_process(dt: float) -> void:
 			gems.erase(gem)
 			gem.queue_free()
 			xp += 1
+			play_fx("pickup")
 			award(20)
 	if xp >= level*3:
 		xp -= level*3
 		level += 1
+		play_fx("level")
 		hero.scale = Vector3.ONE*(1.0+minf((level-1)*0.12,1.5))
 		choosing = true
 		upgrades.show()

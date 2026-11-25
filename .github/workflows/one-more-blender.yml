@@ -8,7 +8,7 @@ on:
 jobs:
   generate:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
       - name: Install Blender
@@ -32,10 +32,14 @@ jobs:
               assert magic==b"glTF" and version==2 and length==glb.stat().st_size,name
               print(name,glb.stat().st_size,blend.stat().st_size)
           PY
+      - name: Render model previews
+        continue-on-error: true
+        run: blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py -- --preview
       - uses: actions/upload-artifact@v4
         with:
           name: ONE-MORE-Verified-Blender-Assets
           path: |
             one-more/assets/models/*.glb
             one-more/assets/models/*.blend
+            one-more/assets/models/previews/*.png
           if-no-files-found: error

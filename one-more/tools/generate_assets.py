@@ -78,3 +78,25 @@ for x in [-.7,.7]:
  for y in [-.65,.65]:
   part("Wheel",(x,y,.3),(.22,.32,.32),dark)
 save("buggy")
+
+# Preview rendering is a separate optional invocation.
+if "--preview" in __import__("sys").argv:
+ preview=os.path.join(out,"previews")
+ os.makedirs(preview,exist_ok=True)
+ for name in ["hero","cyborg","inferno","ghost","titan","cryo","buggy","forest","city","desert","ice","volcano"]:
+  bpy.ops.wm.open_mainfile(filepath=os.path.join(out,name+".blend"))
+  scene=bpy.context.scene
+  bpy.ops.object.camera_add(location=(4,-6,3.8))
+  cam=bpy.context.object
+  cam.rotation_euler=(Vector((0,0,.65))-cam.location).to_track_quat('-Z','Y').to_euler()
+  cam.data.type='ORTHO';cam.data.ortho_scale=4.2
+  scene.camera=cam
+  for loc,energy in [((3,-4,6),900),((-3,2,4),650)]:
+   bpy.ops.object.light_add(type='AREA',location=loc)
+   lamp=bpy.context.object;lamp.data.energy=energy;lamp.data.shape='DISK';lamp.data.size=4
+   lamp.rotation_euler=(Vector((0,0,.5))-lamp.location).to_track_quat('-Z','Y').to_euler()
+  scene.render.engine='CYCLES';scene.cycles.samples=12
+  scene.render.resolution_x=512;scene.render.resolution_y=512;scene.render.resolution_percentage=100
+  scene.render.image_settings.file_format='PNG'
+  scene.render.filepath=os.path.join(preview,name+".png")
+  bpy.ops.render.render(write_still=True)
