@@ -490,14 +490,32 @@ func gain_hunter_xp(amount: int) -> void:
 		stat_points += 3
 	hunter_xp = mini(hunter_xp,hunter_level*100-1)
 
+const SYSTEM_RANK_COLORS = ["#9daebf","#71d8ad","#65baff","#a995ff","#f2bb65","#ff7777","#f7e4ff"]
+var awakening_xp_bar: ProgressBar
+func system_heading(label: Label) -> void:
+	label.add_theme_color_override("font_color",Color("#8edbff"))
+	label.add_theme_color_override("font_shadow_color",Color("#153f6a"))
+	label.add_theme_constant_override("shadow_offset_x",1)
+	label.add_theme_constant_override("shadow_offset_y",2)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+
 func build_awakening(layer: CanvasLayer) -> void:
 	awakening_panel = VBoxContainer.new()
 	layer.add_child(awakening_panel)
-	awakening_panel.position = Vector2(90,180)
+	awakening_panel.position = Vector2(90,150)
 	awakening_panel.add_theme_constant_override("separation",12)
 	awakening_status = Label.new()
 	awakening_status.add_theme_font_size_override("font_size",28)
 	awakening_panel.add_child(awakening_status)
+	system_heading(awakening_status)
+	awakening_xp_bar = ProgressBar.new()
+	awakening_xp_bar.custom_minimum_size = Vector2(540,20)
+	awakening_xp_bar.show_percentage = false
+	var xp_fill := StyleBoxFlat.new()
+	xp_fill.bg_color = Color("#58baff")
+	xp_fill.set_corner_radius_all(5)
+	awakening_xp_bar.add_theme_stylebox_override("fill",xp_fill)
+	awakening_panel.add_child(awakening_xp_bar)
 	for i in range(5):
 		stat_buttons.append(menu_button(awakening_panel,"",spend_stat.bind(i)))
 	menu_button(awakening_panel,"DIMENSIONAL GATES",show_gates)
@@ -508,6 +526,10 @@ func build_awakening(layer: CanvasLayer) -> void:
 	awakening_panel.hide()
 
 func refresh_awakening() -> void:
+	awakening_xp_bar.max_value = hunter_level*100
+	awakening_xp_bar.value = hunter_xp
+	var rank_index := GATE_RANKS.find(hunter_rank())
+	awakening_status.add_theme_color_override("font_color",Color(SYSTEM_RANK_COLORS[maxi(0,rank_index)]))
 	awakening_status.text = "AWAKENING  /  RANK %s\nLEVEL %d  /  XP %d/%d\nAVAILABLE POINTS: %d" % [hunter_rank(),hunter_level,hunter_xp,hunter_level*100,stat_points]
 	for i in range(5):
 		stat_buttons[i].text = "%s  %d   +" % [STAT_NAMES[i],hunter_stats[i]]
@@ -546,6 +568,7 @@ func build_quests(layer: CanvasLayer) -> void:
 	var heading := Label.new()
 	heading.text = "SYSTEM QUESTS"
 	heading.add_theme_font_size_override("font_size",36)
+	system_heading(heading)
 	quest_panel.add_child(heading)
 	for i in range(3):
 		var btn := menu_button(quest_panel,"",claim_quest.bind(i))
@@ -594,6 +617,7 @@ func build_gates(layer: CanvasLayer) -> void:
 	var heading := Label.new()
 	heading.text = "DIMENSIONAL GATES"
 	heading.add_theme_font_size_override("font_size",32)
+	system_heading(heading)
 	gate_panel.add_child(heading)
 	for i in range(7):
 		var btn := menu_button(gate_panel,"",enter_gate.bind(i))
@@ -609,6 +633,8 @@ func show_gates() -> void:
 	for i in range(7):
 		gate_buttons[i].text = "RANK %s  /  LEVEL %d\nCLEARS %d  /  +%d XP" % [GATE_RANKS[i],GATE_LEVELS[i],gate_wins[i],150*(i+1)]
 		gate_buttons[i].disabled = hunter_level < int(GATE_LEVELS[i])
+		gate_buttons[i].add_theme_color_override("font_color",Color(SYSTEM_RANK_COLORS[i]))
+		gate_buttons[i].text += "  /  LOCKED" if gate_buttons[i].disabled else "  /  ENTER"
 
 func enter_gate(index: int) -> void:
 	if index < 0 or index >= 7 or hunter_level < int(GATE_LEVELS[index]):
