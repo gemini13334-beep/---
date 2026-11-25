@@ -1,2 +1,2 @@
-# 0.6.0
-0.5.0 headless validation succeeded. Added six hero color palettes and procedural model variants, model switching on run start, arena boundary props, styled buttons, health and XP bars. Blender output and Android APK still need confirmation. Visuals are procedural prototypes, not final art.
+# 0.7.0
+0.6.0 headless validation succeeded. Added 60-second score attack with separate record, temporary buggy pickup with movement and attack boost, energy rain events, persistent runs and kills, three achievement thresholds. Buggy is a placeholder mesh and does not replace hero model. Android build still pending.

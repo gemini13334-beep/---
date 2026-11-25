@@ -36,6 +36,62 @@ var collection_buttons: Array[Button] = []
 var menu: VBoxContainer
 var result_label: Label
 var max_hp := 100.0
+var mode := 0
+var best_sprint := 0
+var runs := 0
+var total_kills := 0
+var vehicle: MeshInstance3D
+var vehicle_time := 0.0
+var next_event := 15.0
+var event_label: Label
+var achievements: Label
+
+func sprint() -> void:
+	start()
+	mode = 1
+
+func finish_run() -> void:
+	running = false
+	choosing = false
+	upgrades.hide()
+	if mode == 1:
+		best_sprint = maxi(best_sprint,score)
+	else:
+		best = maxi(best,score)
+	credits += int(score/100.0)
+	runs += 1
+	total_kills += kills
+	save_profile()
+	show_menu()
+
+func spawn_vehicle() -> void:
+	if is_instance_valid(vehicle):
+		vehicle.queue_free()
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(1.7,0.65,2.4)
+	vehicle = model(mesh,Color("#ffc45c"),Vector3(clampf(hero.position.x+5,-19,19),0.5,clampf(hero.position.z+3,-19,19)))
+	event_label.text = "BOOST BUGGY • Collect the gold vehicle"
+
+func update_events(dt: float) -> void:
+	if elapsed >= next_event:
+		next_event += 20.0
+		if randf() < 0.55:
+			spawn_vehicle()
+		else:
+			for i in range(12):
+				drop_gem(Vector3(clampf(hero.position.x+randf_range(-6,6),-20,20),0.3,clampf(hero.position.z+randf_range(-6,6),-20,20)))
+			event_label.text = "ENERGY RAIN"
+	if is_instance_valid(vehicle) and not vehicle.is_queued_for_deletion():
+		if hero.position.distance_to(vehicle.position) < 1.4:
+			vehicle.queue_free()
+			vehicle_time = 10.0
+			pulse(hero.position,3.0,Color("#ffc45c"))
+	if vehicle_time > 0:
+		vehicle_time = maxf(0,vehicle_time-dt)
+		event_label.text = "BUGGY BOOST • %.1fs" % vehicle_time
+		if vehicle_time <= 0:
+			event_label.text = ""
+
 var hp_bar: ProgressBar
 var xp_bar: ProgressBar
 var hero_visual: Node3D
@@ -91,6 +147,9 @@ func save_profile() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("records","best",best)
 	cfg.set_value("records","credits",credits)
+	cfg.set_value("records","sprint",best_sprint)
+	cfg.set_value("records","runs",runs)
+	cfg.set_value("records","kills",total_kills)
 	cfg.set_value("collection","owned",owned)
 	cfg.set_value("collection","selected",selected)
 	cfg.save("user://records.cfg")
@@ -101,7 +160,8 @@ func refresh_collection() -> void:
 		var status := "SELECTED" if selected == i else ("SELECT" if owned.has(i) else "%d CR" % int(h[1]))
 		collection_buttons[i].text = "%s  •  %s\n%s" % [h[0],h[2],status]
 		collection_buttons[i].disabled = not owned.has(i) and credits < int(h[1])
-	result_label.text = "BEST %d  |  CREDITS %d" % [best,credits]
+	result_label.text = "BEST %d  |  CR %d\n60s BEST %d" % [best,credits,best_sprint]
+	achievements.text = "BADGES: %d / 3" % (int(runs >= 1)+int(total_kills >= 100)+int(best >= 10000))
 
 func select_hero(index: int) -> void:
 	if not owned.has(index):
@@ -289,6 +349,15 @@ func _ready() -> void:
 	result_label.add_theme_font_size_override("font_size",26)
 	menu.add_child(result_label)
 	menu_button(menu,"PLAY • ENDLESS",start)
+	menu_button(menu,"SCORE ATTACK • 60s",sprint)
+	achievements = Label.new()
+	achievements.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	achievements.add_theme_font_size_override("font_size",24)
+	menu.add_child(achievements)
+	event_label = Label.new()
+	layer.add_child(event_label)
+	event_label.position = Vector2(24,245)
+	event_label.add_theme_font_size_override("font_size",24)
 	menu_button(menu,"HERO COLLECTION",show_collection)
 	collection = VBoxContainer.new()
 	layer.add_child(collection)
@@ -320,6 +389,9 @@ func _ready() -> void:
 	if cfg.load("user://records.cfg") == OK:
 		best = int(cfg.get_value("records","best",0))
 		credits = maxi(0,int(cfg.get_value("records","credits",0)))
+		best_sprint = int(cfg.get_value("records","sprint",0))
+		runs = int(cfg.get_value("records","runs",0))
+		total_kills = int(cfg.get_value("records","kills",0))
 		var saved: Variant = cfg.get_value("collection","owned",[0])
 		if saved is Array:
 			for id in saved:
@@ -332,6 +404,12 @@ func _ready() -> void:
 	update_hud()
 
 func start() -> void:
+	mode = 0
+	vehicle_time = 0
+	next_event = 15
+	event_label.text = ""
+	if is_instance_valid(vehicle):
+		vehicle.queue_free()
 	for e in enemies:
 		e.queue_free()
 	enemies.clear()
@@ -400,13 +478,18 @@ func _physics_process(dt: float) -> void:
 	if not running or choosing:
 		return
 	elapsed += dt
+	update_events(dt)
+	if mode == 1 and elapsed >= 60:
+		finish_run()
+		update_hud()
+		return
 	combo_time -= dt
 	if combo_time <= 0:
 		combo = 0
 	var move := direction
 	if finger == -1:
 		move = Input.get_vector("ui_left","ui_right","ui_up","ui_down")
-	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus)
+	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(4.0 if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
 	camera.position = hero.position + Vector3(0,19,15)
@@ -452,7 +535,7 @@ func _physics_process(dt: float) -> void:
 			nearest = e
 	attack_timer -= dt
 	if nearest != null and attack_timer <= 0:
-		attack_timer = maxf(0.15,0.7-power*0.08)
+		attack_timer = maxf(0.15,0.7-power*0.08-(0.3 if vehicle_time > 0 else 0.0))
 		var impact := nearest.position
 		hit_enemy(nearest)
 		if blast > 0:
@@ -486,13 +569,7 @@ func _physics_process(dt: float) -> void:
 		choosing = true
 		upgrades.show()
 	if hp <= 0:
-		running = false
-		choosing = false
-		upgrades.hide()
-		best = maxi(best,score)
-		credits += int(score/100.0)
-		save_profile()
-		show_menu()
+		finish_run()
 	update_hud()
 
 func update_hud() -> void:
