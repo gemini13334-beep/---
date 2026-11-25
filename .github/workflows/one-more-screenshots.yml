@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/one-more-screenshots.yml'
       - 'one-more/tests/capture.gd'
+      - 'one-more/tools/generate_assets.py'
 jobs:
   capture:
     runs-on: ubuntu-latest

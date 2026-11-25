@@ -6,6 +6,22 @@ def mat(name,c,metal=0):
  m=bpy.data.materials.new(name);m.diffuse_color=(*c,1);m.use_nodes=True
  p=m.node_tree.nodes.get("Principled BSDF");p.inputs["Base Color"].default_value=(*c,1);p.inputs["Metallic"].default_value=metal;p.inputs["Roughness"].default_value=.36
  return m
+def glow(name,c):
+ m=mat(name,c,.15)
+ p=m.node_tree.nodes.get("Principled BSDF")
+ p.inputs["Emission Color"].default_value=(*c,1)
+ p.inputs["Emission Strength"].default_value=1.8
+ return m
+def hero_details(name,shell):
+ light=glow(name+" energy",(.12,.85,1.0) if name!="inferno" else (1,.22,.025))
+ part("Chest reactor",(0,-.47,.43),(.16,.075,.16),light)
+ part("Backpack",(0,.43,.65),(.32,.19,.35),dark,'cube')
+ for x in [-1,1]:
+  part("Knee armor",(x*.25,-.22,.25),(.14,.11,.14),shell,'cube')
+  part("Shoulder stripe",(x*.58,-.16,.71),(.10,.10,.045),light,'cube')
+ part("Weapon receiver",(.72,-.25,.42),(.16,.30,.15),dark,'cube')
+ part("Weapon barrel",(.72,-.58,.42),(.07,.22,.07),shell,'cube')
+ part("Muzzle",(.72,-.79,.42),(.09,.04,.09),light,'cube')
 def reset():
  bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
 def part(name,loc,scale,m,kind='sphere'):
@@ -26,6 +42,7 @@ part("Visor",(0,-.43,.83),(.43,.13,.24),dark)
 for x in [-.19,.19]: part("Eye",(x,-.55,.86),(.08,.035,.075),gold)
 for x in [-.65,.65]: part("Arm",(x,0,.56),(.19,.22,.33),dark)
 for x in [-.25,.25]: part("Boot",(x,-.08,.12),(.23,.32,.13),dark,'cube')
+hero_details("hero",mint)
 save("hero")
 for name,color,shape in [
  ("cyborg",(.25,.45,.8),"cube"),
@@ -52,11 +69,14 @@ for name,color,shape in [
   part("Crest",(0,0,1.2),(.18,.35,.2),shell)
  if name=="cyborg":
   part("Antenna",(.35,0,1.35),(.05,.05,.25),gold)
+ hero_details(name,shell)
  save(name)
 reset()
 part("Core",(0,0,.48),(.46,.43,.45),red,'cube')
 part("Visor",(0,-.43,.55),(.32,.08,.12),dark,'cube')
 for x in [-.48,.48]: part("Claw",(x,0,.25),(.15,.23,.25),gold)
+part("Sensor",(0,-.51,.55),(.19,.035,.055),glow("Enemy sensor",(1,.12,.04)))
+part("Rear armor",(0,.40,.48),(.34,.12,.32),dark,'cube')
 save("enemy")
 reset()
 part("Crate",(0,0,.45),(.48,.48,.45),dark,'cube')
@@ -91,6 +111,10 @@ for name,c,size in [
  for x in [-1,1]:
   part("Armor",(x*.65*size,0,.65*size),(.23*size,.35*size,.4*size),shell,'cube')
   part("Emitter",(x*.65*size,-.32*size,.65*size),(.12*size,.18*size,.12*size),gold)
+ sensor=glow(name+" sensor",(1,.12,.04) if name!="boss_crystal" else (.1,.8,1))
+ part("Sensor",(0,-.60*size,.8*size),(.24*size,.04*size,.055*size),sensor,'cube')
+ for x in [-1,1]:
+  part("Armor trim",(x*.65*size,-.35*size,.88*size),(.13*size,.07*size,.045*size),sensor,'cube')
  save(name)
 for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.65))]:
  reset()
