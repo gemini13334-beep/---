@@ -1057,6 +1057,9 @@ func load_profile() -> void:
 			selected = 0
 
 func start() -> void:
+	visual_stride = 0.0
+	visual_lean = Vector2.ZERO
+	visual_recoil = 0.0
 	gate_panel.hide()
 	gate_cleared = false
 	mode = 0
@@ -1144,6 +1147,9 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventScreenDrag and event.index == finger:
 		direction = ((event.position-origin)/90.0).limit_length()
 
+var visual_stride := 0.0
+var visual_lean := Vector2.ZERO
+var visual_recoil := 0.0
 func _physics_process(dt: float) -> void:
 	if not running or choosing:
 		return
@@ -1162,10 +1168,16 @@ func _physics_process(dt: float) -> void:
 		move = Input.get_vector("ui_left","ui_right","ui_up","ui_down")
 	if move.length() > 0.05:
 		hero.rotation.y = lerp_angle(hero.rotation.y,atan2(move.x,move.y),minf(dt*12,1.0))
-	var bob := -0.5+sin(elapsed*10.0)*0.07*move.length()
+	var motion := move.length()
+	visual_stride = lerpf(visual_stride,motion,1.0-exp(-12.0*dt))
+	visual_lean = visual_lean.lerp(move*0.09,1.0-exp(-10.0*dt))
+	visual_recoil = move_toward(visual_recoil,0.0,dt*0.8)
+	var bob := -0.5+sin(elapsed*12.0)*0.065*visual_stride
 	for child in hero.get_children():
 		if child is Node3D:
 			child.position.y = bob
+			child.rotation.x = visual_lean.y+visual_recoil
+			child.rotation.z = -visual_lean.x+sin(elapsed*6.0)*0.035*visual_stride
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
@@ -1212,6 +1224,8 @@ func _physics_process(dt: float) -> void:
 	for e in enemies:
 		var offset: Vector3 = hero.position-e.position
 		var d := offset.length()
+		if d > 0.05:
+			e.rotation.y = lerp_angle(e.rotation.y,atan2(offset.x,offset.z),1.0-exp(-9.0*dt))
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
 		if e.get_meta("boss",false):
 			update_boss_attack(e)
@@ -1223,6 +1237,7 @@ func _physics_process(dt: float) -> void:
 	attack_timer -= dt
 	if nearest != null and attack_timer <= 0:
 		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
+		visual_recoil = 0.13
 		var impact := nearest.position
 		shot_tracer(hero.position+Vector3.UP*0.45,impact+Vector3.UP*0.2)
 		hit_enemy(nearest)
