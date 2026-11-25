@@ -884,14 +884,20 @@ func _ready() -> void:
 	light.rotation_degrees = Vector3(-60,-30,0)
 	light.shadow_enabled = true
 	light.light_color = Color("#fff1d2")
-	light.light_energy = 1.15
+	light.light_energy = 1.35
+	var rim := DirectionalLight3D.new()
+	add_child(rim)
+	rim.rotation_degrees = Vector3(-35,145,0)
+	rim.light_color = Color("#80bfff")
+	rim.light_energy = 0.42
+	rim.shadow_enabled = false
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
 	env.environment.background_mode = Environment.BG_COLOR
 	env.environment.background_color = Color("#13242c")
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.environment.ambient_light_color = Color("#b5d3df")
-	env.environment.ambient_light_energy = 0.65
+	env.environment.ambient_light_energy = 0.48
 	add_child(env)
 	camera = Camera3D.new()
 	add_child(camera)

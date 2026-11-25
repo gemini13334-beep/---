@@ -4,7 +4,7 @@ out=os.path.abspath(os.path.join(os.path.dirname(__file__),"../assets/models"))
 os.makedirs(out,exist_ok=True)
 def mat(name,c,metal=0):
  m=bpy.data.materials.new(name);m.diffuse_color=(*c,1);m.use_nodes=True
- p=m.node_tree.nodes.get("Principled BSDF");p.inputs["Base Color"].default_value=(*c,1);p.inputs["Metallic"].default_value=metal;p.inputs["Roughness"].default_value=.36
+ p=m.node_tree.nodes.get("Principled BSDF");p.inputs["Base Color"].default_value=(*c,1);p.inputs["Metallic"].default_value=metal;p.inputs["Roughness"].default_value=max(.24,.76-metal*.8)
  return m
 def glow(name,c):
  m=mat(name,c,.15)
@@ -30,7 +30,10 @@ def part(name,loc,scale,m,kind='sphere'):
  o=bpy.context.object;o.name=name;o.scale=scale;o.data.materials.append(m)
  bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
  if kind=='cube':
-  mod=o.modifiers.new("Rounded armor","BEVEL");mod.width=.08;mod.segments=2
+  mod=o.modifiers.new("Rounded armor","BEVEL");mod.width=.045;mod.segments=3
+  normal=o.modifiers.new("Weighted armor normals","WEIGHTED_NORMAL");normal.keep_sharp=True
+ else:
+  for face in o.data.polygons: face.use_smooth=True
  return o
 def save(name):
  bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out,name+".blend"))
