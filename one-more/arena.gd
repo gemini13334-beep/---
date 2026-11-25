@@ -324,6 +324,73 @@ func select_hero(index: int) -> void:
 	save_profile()
 	refresh_collection()
 
+var settings_panel: VBoxContainer
+var world_light: DirectionalLight3D
+var fps_button: Button
+var quality_button: Button
+var audio_button: Button
+var fps_limit := 60
+var high_quality := false
+var audio_enabled := true
+
+func build_settings(layer: CanvasLayer) -> void:
+	settings_panel = VBoxContainer.new()
+	layer.add_child(settings_panel)
+	settings_panel.position = Vector2(90,320)
+	settings_panel.add_theme_constant_override("separation",18)
+	var heading := Label.new()
+	heading.text = "SETTINGS"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	heading.add_theme_font_size_override("font_size",40)
+	settings_panel.add_child(heading)
+	fps_button = menu_button(settings_panel,"",toggle_fps)
+	quality_button = menu_button(settings_panel,"",toggle_quality)
+	audio_button = menu_button(settings_panel,"",toggle_audio)
+	menu_button(settings_panel,"BACK",show_menu)
+	settings_panel.hide()
+
+func show_settings() -> void:
+	menu.hide()
+	collection.hide()
+	settings_panel.show()
+
+func apply_settings() -> void:
+	Engine.max_fps = fps_limit
+	world_light.shadow_enabled = high_quality
+	sound.volume_db = -12.0 if audio_enabled else -80.0
+	fps_button.text = "FRAME LIMIT  /  %d FPS" % fps_limit
+	quality_button.text = "SHADOWS  /  "+("ON" if high_quality else "OFF")
+	audio_button.text = "SOUND  /  "+("ON" if audio_enabled else "OFF")
+
+func load_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") == OK:
+		fps_limit = 30 if int(cfg.get_value("video","fps",60)) == 30 else 60
+		high_quality = bool(cfg.get_value("video","shadows",false))
+		audio_enabled = bool(cfg.get_value("audio","enabled",true))
+	apply_settings()
+
+func save_settings() -> void:
+	apply_settings()
+	var cfg := ConfigFile.new()
+	cfg.set_value("video","fps",fps_limit)
+	cfg.set_value("video","shadows",high_quality)
+	cfg.set_value("audio","enabled",audio_enabled)
+	if cfg.save("user://settings.cfg") != OK:
+		push_warning("Settings save failed")
+
+func toggle_fps() -> void:
+	fps_limit = 30 if fps_limit == 60 else 60
+	save_settings()
+
+func toggle_quality() -> void:
+	high_quality = not high_quality
+	save_settings()
+
+func toggle_audio() -> void:
+	audio_enabled = not audio_enabled
+	save_settings()
+
 func show_collection() -> void:
 	menu.hide()
 	menu_scrim.show()
@@ -331,6 +398,7 @@ func show_collection() -> void:
 	refresh_collection()
 
 func show_menu() -> void:
+	settings_panel.hide()
 	collection.hide()
 	menu_scrim.show()
 	menu.show()
@@ -530,6 +598,7 @@ func _ready() -> void:
 	hero = model(sphere,Color("#62f5c5"),Vector3(0,0.5,0))
 	apply_hero_art()
 	var light := DirectionalLight3D.new()
+	world_light = light
 	add_child(light)
 	light.rotation_degrees = Vector3(-60,-30,0)
 	light.shadow_enabled = true
@@ -610,6 +679,8 @@ func _ready() -> void:
 	event_label.position = Vector2(24,245)
 	event_label.add_theme_font_size_override("font_size",24)
 	menu_button(menu,"HERO COLLECTION",show_collection)
+	menu_button(menu,"SETTINGS",show_settings)
+	build_settings(layer)
 	collection = VBoxContainer.new()
 	layer.add_child(collection)
 	collection.position = Vector2(90,150)
@@ -651,6 +722,7 @@ func _ready() -> void:
 		btn.pressed.connect(choose_upgrade.bind(i))
 	upgrades.hide()
 	load_profile()
+	load_settings()
 	refresh_collection()
 	update_hud()
 
