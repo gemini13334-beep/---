@@ -816,6 +816,7 @@ func shot_tracer(from: Vector3, to: Vector3) -> void:
 	impact_sparks(from,Color("#ffe6aa"),3)
 
 var active_bursts := 0
+var spark_fade: Gradient
 func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
 	if active_bursts >= 16:
 		return
@@ -833,10 +834,11 @@ func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
 	sparks.initial_velocity_max = 5.0
 	sparks.scale_amount_min = 0.5
 	sparks.scale_amount_max = 1.3
-	var fade := Gradient.new()
-	fade.set_color(0,Color.WHITE)
-	fade.set_color(1,Color(1,1,1,0))
-	sparks.color_ramp = fade
+	if spark_fade == null:
+		spark_fade = Gradient.new()
+		spark_fade.set_color(0,Color.WHITE)
+		spark_fade.set_color(1,Color(1,1,1,0))
+	sparks.color_ramp = spark_fade
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(0.065,0.065,0.19)
 	var mat := StandardMaterial3D.new()
@@ -881,27 +883,42 @@ func hit_enemy(enemy: MeshInstance3D) -> void:
 		gate_cleared = true
 
 
+var art_cache: Dictionary = {}
 func attach_art(host: MeshInstance3D, asset: String) -> void:
-	var path := "res://assets/models/" + asset + ".glb"
-	if ResourceLoader.exists(path):
-		var packed := load(path) as PackedScene
-		if packed != null:
-			var art := packed.instantiate() as Node3D
-			if art != null:
-				host.add_child(art)
-				host.mesh = null
-				art.position.y = -0.5
+	if not art_cache.has(asset):
+		var path := "res://assets/models/" + asset + ".glb"
+		art_cache[asset] = load(path) as PackedScene if ResourceLoader.exists(path) else null
+	var packed := art_cache[asset] as PackedScene
+	if packed == null:
+		return
+	var art := packed.instantiate() as Node3D
+	if art != null:
+		host.add_child(art)
+		host.mesh = null
+		art.position.y = -0.5
 
 func award(points: int) -> void:
 	combo = mini(combo + 1, 20)
 	combo_time = 3.0
 	score += int(points * (1 + int(combo / 5.0)) * (1.0+score_bonus*0.1))
 
+var gem_mesh: SphereMesh
+var gem_material: StandardMaterial3D
 func drop_gem(pos: Vector3) -> void:
-	var mesh := SphereMesh.new()
-	mesh.radius = 0.18
-	mesh.height = 0.36
-	var gem := model(mesh, Color("#ffd65a"), Vector3(pos.x,0.3,pos.z))
+	if gem_mesh == null:
+		gem_mesh = SphereMesh.new()
+		gem_mesh.radius = 0.18
+		gem_mesh.height = 0.36
+		gem_mesh.radial_segments = 12
+		gem_mesh.rings = 6
+		gem_material = StandardMaterial3D.new()
+		gem_material.albedo_color = Color("#ffd65a")
+	var gem := MeshInstance3D.new()
+	gem.mesh = gem_mesh
+	gem.material_override = gem_material
+	gem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(gem)
+	gem.position = Vector3(pos.x,0.3,pos.z)
 	gems.append(gem)
 
 func choose_upgrade(index: int) -> void:
