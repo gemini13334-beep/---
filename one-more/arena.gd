@@ -208,16 +208,35 @@ var xp_bar: ProgressBar
 var hero_visual: Node3D
 const PALETTE = ["#62f5c5","#8caee9","#ff7043","#b998ff","#e2b45d","#72e5ff"]
 
+var hud_panel: Panel
+var menu_scrim: ColorRect
+
+func ui_panel(layer: CanvasLayer, pos: Vector2, dimensions: Vector2) -> Panel:
+	var panel := Panel.new()
+	panel.position = pos
+	panel.size = dimensions
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color("#14232ee8")
+	style.border_color = Color("#416475")
+	style.set_border_width_all(1)
+	style.set_corner_radius_all(20)
+	panel.add_theme_stylebox_override("panel",style)
+	layer.add_child(panel)
+	return panel
+
 func style_button(btn: Button) -> void:
 	for state in ["normal","hover","pressed","disabled"]:
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color("#203743") if state == "normal" else Color("#365b68")
+		style.bg_color = Color("#233d4b") if state == "normal" else Color("#365b68")
 		if state == "disabled":
 			style.bg_color = Color("#273038")
 		style.border_color = Color("#65d9c0")
-		style.set_border_width_all(2)
+		style.set_border_width_all(1)
+		style.border_width_bottom = 4
 		style.set_corner_radius_all(14)
 		btn.add_theme_stylebox_override(state,style)
+	btn.add_theme_color_override("font_color",Color("#edf8f5"))
 
 func apply_hero_art() -> void:
 	for child in hero.get_children():
@@ -304,11 +323,13 @@ func select_hero(index: int) -> void:
 
 func show_collection() -> void:
 	menu.hide()
+	menu_scrim.show()
 	collection.show()
 	refresh_collection()
 
 func show_menu() -> void:
 	collection.hide()
+	menu_scrim.show()
 	menu.show()
 	refresh_collection()
 
@@ -528,10 +549,12 @@ func _ready() -> void:
 	camera.current = true
 	var layer := CanvasLayer.new()
 	add_child(layer)
+	hud_panel = ui_panel(layer,Vector2(12,12),Vector2(696,236))
 	hud = Label.new()
 	layer.add_child(hud)
 	hud.position = Vector2(24,24)
-	hud.add_theme_font_size_override("font_size",28)
+	hud.add_theme_font_size_override("font_size",26)
+	hud.add_theme_color_override("font_color",Color("#eef8f5"))
 	hp_bar = make_bar(layer,190,Color("#65e5a5"))
 	xp_bar = make_bar(layer,218,Color("#f9c95b"))
 	retry = Button.new()
@@ -542,20 +565,37 @@ func _ready() -> void:
 	retry.text = "PLAY • ONE MORE"
 	retry.pressed.connect(start)
 	retry.hide()
+	menu_scrim = ColorRect.new()
+	menu_scrim.color = Color("#08141dc9")
+	menu_scrim.size = Vector2(720,1280)
+	menu_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(menu_scrim)
 	menu = VBoxContainer.new()
 	layer.add_child(menu)
-	menu.position = Vector2(90,400)
+	menu.position = Vector2(90,260)
 	menu.add_theme_constant_override("separation",18)
 	var title := Label.new()
 	title.text = "ONE MORE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.add_theme_font_size_override("font_size",64)
 	menu.add_child(title)
+	title.add_theme_color_override("font_color",Color("#8df4d5"))
+	var subtitle := Label.new()
+	subtitle.text = "SURVIVE  /  EVOLVE  /  REPEAT"
+	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	subtitle.add_theme_font_size_override("font_size",22)
+	subtitle.add_theme_color_override("font_color",Color("#a8becb"))
+	menu.add_child(subtitle)
 	result_label = Label.new()
 	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	result_label.add_theme_font_size_override("font_size",26)
 	menu.add_child(result_label)
-	menu_button(menu,"PLAY • ENDLESS",start)
+	var play := menu_button(menu,"PLAY  /  ENDLESS",start)
+	var primary := StyleBoxFlat.new()
+	primary.bg_color = Color("#8df4d5")
+	primary.set_corner_radius_all(14)
+	play.add_theme_stylebox_override("normal",primary)
+	play.add_theme_color_override("font_color",Color("#102b29"))
 	menu_button(menu,"SCORE ATTACK • 60s",sprint)
 	biome_button = menu_button(menu,"MAP • FOREST",cycle_biome)
 	achievements = Label.new()
@@ -678,6 +718,7 @@ func start() -> void:
 	finger = -1
 	direction = Vector2.ZERO
 	running = true
+	menu_scrim.hide()
 	retry.hide()
 	menu.hide()
 	collection.hide()
