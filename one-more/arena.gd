@@ -103,6 +103,8 @@ func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamW
 	return wav
 
 var fx_last: Dictionary = {}
+var fx_voices: Array[AudioStreamPlayer] = []
+var fx_cursor := 0
 func play_fx(key: String) -> void:
 	if sound == null or not audio_enabled or not sounds.has(key):
 		return
@@ -110,8 +112,11 @@ func play_fx(key: String) -> void:
 	if now-int(fx_last.get(key,-1000)) < 45:
 		return
 	fx_last[key] = now
-	sound.stream = sounds[key]
-	sound.play()
+	var voice := fx_voices[fx_cursor]
+	fx_cursor = (fx_cursor+1)%fx_voices.size()
+	voice.stream = sounds[key]
+	voice.pitch_scale = randf_range(0.94,1.06) if key == "hit" else 1.0
+	voice.play()
 
 func rebuild_scenery() -> void:
 	for prop in scenery:
@@ -395,7 +400,10 @@ func show_settings() -> void:
 func apply_settings() -> void:
 	Engine.max_fps = fps_limit
 	world_light.shadow_enabled = high_quality
-	sound.volume_db = -12.0 if audio_enabled else -80.0
+	for voice in fx_voices:
+		voice.volume_db = -12.0 if audio_enabled else -80.0
+		if not audio_enabled:
+			voice.stop()
 	fps_button.text = "FRAME LIMIT  /  %d FPS" % fps_limit
 	quality_button.text = "SHADOWS  /  "+("ON" if high_quality else "OFF")
 	audio_button.text = "SOUND  /  "+("ON" if audio_enabled else "OFF")
@@ -611,17 +619,30 @@ func menu_button(parent: Control, label: String, action: Callable) -> Button:
 	return btn
 
 
+var active_pulses := 0
 func pulse(pos: Vector3, radius: float, color: Color) -> void:
-	var mesh := SphereMesh.new()
-	var effect := model(mesh,color,pos)
+	if active_pulses >= 32:
+		return
+	active_pulses += 1
+	var mesh := TorusMesh.new()
+	mesh.inner_radius = 0.78
+	mesh.outer_radius = 1.0
+	mesh.rings = 24
+	mesh.ring_segments = 8
+	var effect := model(mesh,color,Vector3(pos.x,0.06,pos.z))
 	var material := effect.material_override as StandardMaterial3D
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color.a = 0.28
+	material.albedo_color.a = 0.85
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	effect.scale = Vector3.ONE*0.2
-	var tween := create_tween()
-	tween.tween_property(effect,"scale",Vector3.ONE*radius*2,0.22)
-	tween.tween_callback(effect.queue_free)
+	effect.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	effect.scale = Vector3(0.15,0.12,0.15)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(effect,"scale",Vector3(radius,0.12,radius),0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
+	tween.tween_property(material,"albedo_color:a",0.0,0.28)
+	tween.chain().tween_callback(func(): 
+		effect.queue_free()
+		active_pulses -= 1
+	)
 
 func update_boss_attack(enemy: MeshInstance3D) -> void:
 	var kind := int(enemy.get_meta("kind",0))
@@ -661,12 +682,13 @@ func shot_tracer(from: Vector3, to: Vector3) -> void:
 		return
 	var beam := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.055,0.055,length)
+	mesh.size = Vector3(0.085,0.085,length)
 	beam.mesh = mesh
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = Color("#ffe39b")
 	beam.material_override = mat
+	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(beam)
 	beam.position = (from+to)*0.5
 	beam.look_at(to,Vector3.UP)
@@ -786,6 +808,12 @@ func _ready() -> void:
 	sound = AudioStreamPlayer.new()
 	add_child(sound)
 	sound.volume_db = -12
+	fx_voices.append(sound)
+	for i in range(7):
+		var voice := AudioStreamPlayer.new()
+		add_child(voice)
+		voice.volume_db = -12
+		fx_voices.append(voice)
 	sounds = {"hit":tone(180,0.09,"hit"),"pickup":tone(880,0.12,"pickup"),"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost")}
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
