@@ -5,6 +5,9 @@ on:
     paths:
       - 'one-more/**'
       - '.github/workflows/one-more-android.yml'
+concurrency:
+  group: one-more-android-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest

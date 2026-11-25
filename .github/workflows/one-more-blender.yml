@@ -6,6 +6,9 @@ on:
       - 'one-more/tools/generate_assets.py'
       - 'one-more/tools/install_blender.sh'
       - '.github/workflows/one-more-blender.yml'
+concurrency:
+  group: one-more-blender-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   generate:
     runs-on: ubuntu-latest

@@ -5,6 +5,9 @@ on:
     paths:
       - 'one-more/**'
       - '.github/workflows/one-more-validate.yml'
+concurrency:
+  group: one-more-validate-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   smoke:
     runs-on: ubuntu-latest

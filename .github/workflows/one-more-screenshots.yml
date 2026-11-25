@@ -6,6 +6,9 @@ on:
       - '.github/workflows/one-more-screenshots.yml'
       - 'one-more/tests/capture.gd'
       - 'one-more/tools/generate_assets.py'
+concurrency:
+  group: one-more-screenshots-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   capture:
     runs-on: ubuntu-latest
