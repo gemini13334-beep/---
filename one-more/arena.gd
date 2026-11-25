@@ -133,6 +133,16 @@ func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamW
 var fx_last: Dictionary = {}
 var fx_voices: Array[AudioStreamPlayer] = []
 var fx_cursor := 0
+func fx_volume(key: String) -> float:
+	var channel := "notifications"
+	match key:
+		"shot": channel = "weapons"
+		"hit","destroy","boss": channel = "enemies"
+		"boost": channel = "vehicles"
+	var gain := float(advanced["master"])*float(advanced["effects"])*float(advanced[channel])
+	var base := -20.0 if key == "shot" else (-9.0 if key == "boss" else -15.0)
+	return base+linear_to_db(maxf(0.0001,gain)) if gain > 0.0 else -80.0
+
 func play_fx(key: String) -> void:
 	if sound == null or not audio_enabled or not sounds.has(key):
 		return
@@ -149,8 +159,8 @@ func play_fx(key: String) -> void:
 	else:
 		voice = fx_voices[fx_cursor]
 		fx_cursor = (fx_cursor+1)%6
-	voice.volume_db = -20.0 if key == "shot" else (-9.0 if key == "boss" else -15.0)
-	voice.volume_db += linear_to_db(maxf(0.0001,float(advanced["master"])*float(advanced["effects"])))
+	voice.set_meta("fx_key",key)
+	voice.volume_db = fx_volume(key)
 	voice.stream = sounds[key]
 	voice.pitch_scale = randf_range(0.94,1.06) if key == "hit" else 1.0
 	voice.play()
@@ -441,7 +451,7 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
-var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0}
+var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
 var advanced_sliders: Dictionary = {}
 var settings_tabs: TabContainer
 var preset_button: Button
@@ -521,6 +531,11 @@ func build_settings(layer: CanvasLayer) -> void:
 	setting_slider(audio,"master","MASTER VOLUME",0.0,1.0,0.05)
 	setting_slider(audio,"music","MUSIC VOLUME",0.0,1.0,0.05)
 	setting_slider(audio,"effects","EFFECTS VOLUME",0.0,1.0,0.05)
+	setting_slider(audio,"weapons","WEAPONS",0.0,1.0,0.05)
+	setting_slider(audio,"enemies","ENEMY IMPACTS",0.0,1.0,0.05)
+	setting_slider(audio,"notifications","SYSTEM NOTIFICATIONS",0.0,1.0,0.05)
+	setting_slider(audio,"vehicles","VEHICLE BOOST",0.0,1.0,0.05)
+	audio_button.custom_minimum_size.y = 56
 	menu_button(settings_panel,"BACK",close_settings)
 	settings_panel.hide()
 
@@ -542,9 +557,9 @@ func apply_settings() -> void:
 	if is_instance_valid(ambient_player):
 		ambient_player.volume_db = -26.0+linear_to_db(maxf(0.0001,float(advanced["master"])*float(advanced["music"])))
 	if is_instance_valid(ambient_player):
-		if audio_enabled and not ambient_player.playing:
+		if audio_enabled and float(advanced["master"])*float(advanced["music"]) > 0.0 and not ambient_player.playing:
 			ambient_player.play()
-		elif not audio_enabled:
+		elif not audio_enabled or float(advanced["master"])*float(advanced["music"]) <= 0.0:
 			ambient_player.stop()
 	if not audio_enabled:
 		for voice in fx_voices:
@@ -552,7 +567,7 @@ func apply_settings() -> void:
 	Engine.max_fps = fps_limit
 	world_light.shadow_enabled = high_quality
 	for voice in fx_voices:
-		voice.volume_db = -12.0 if audio_enabled else -80.0
+		voice.volume_db = fx_volume(str(voice.get_meta("fx_key","pickup"))) if audio_enabled else -80.0
 		if not audio_enabled:
 			voice.stop()
 	fps_button.text = "FRAME LIMIT  /  %d FPS" % fps_limit
