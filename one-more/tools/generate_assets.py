@@ -134,6 +134,29 @@ for name,c,size in [
  part("Sensor",(0,-.60*size,.8*size),(.24*size,.04*size,.055*size),sensor,'cube')
  for x in [-1,1]:
   part("Armor trim",(x*.65*size,-.35*size,.88*size),(.13*size,.07*size,.045*size),sensor,'cube')
+ trim=mat(name+" armor trim",(.22,.26,.31),.8)
+ for x in [-1,1]:
+  part("Joint housing",(x*.48*size,0,.25*size),(.19*size,.24*size,.19*size),dark)
+  part("Armor cap",(x*.65*size,0,1.02*size),(.20*size,.29*size,.07*size),trim,'cube')
+ if name=="enemy_fast":
+  for x in [-1,1]:
+   fin=part("Speed fin",(x*.48*size,.32*size,.85*size),(.08*size,.34*size,.16*size),shell,'cube')
+   fin.rotation_euler.z=x*.28
+ elif name=="enemy_armored":
+  part("Front shield",(0,-.48*size,.40*size),(.44*size,.12*size,.25*size),trim,'cube')
+ elif name=="boss_overlord":
+  for x in [-1,1]:
+   part("Command horn",(x*.38*size,.04*size,1.32*size),(.11*size,.13*size,.29*size),gold)
+   part("Heavy gauntlet",(x*.83*size,-.12*size,.43*size),(.22*size,.31*size,.24*size),trim,'cube')
+ elif name=="boss_crystal":
+  for i in range(5):
+   a=i*math.tau/5
+   crystal=part("Crystal crown",(math.cos(a)*.37*size,math.sin(a)*.37*size,1.18*size),(.10*size,.10*size,.28*size),sensor,'cube')
+   crystal.rotation_euler.y=.25*math.cos(a)
+ elif name=="boss_inferno":
+  for x in [-1,1]:
+   for i in range(3):
+    part("Thermal vent",(x*.44*size,(i-1)*.19*size,1.18*size),(.08*size,.06*size,.18*size),sensor,'cube')
  save(name)
 for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.65))]:
  reset()
