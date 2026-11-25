@@ -1,0 +1,30 @@
+name: ONE MORE screenshots
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/one-more-screenshots.yml'
+      - 'one-more/tests/capture.gd'
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libgl1-mesa-dri
+          curl -fL --retry 3 https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable/Godot_v4.4.1-stable_linux.x86_64.zip -o /tmp/godot.zip
+          unzip -q /tmp/godot.zip -d /tmp/godot
+      - run: bash one-more/tools/install_blender.sh
+      - run: blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py
+      - run: |
+          G=/tmp/godot/Godot_v4.4.1-stable_linux.x86_64
+          "$G" --headless --path one-more --editor --import
+          mkdir -p "$RUNNER_TEMP/screenshots"
+          LIBGL_ALWAYS_SOFTWARE=1 xvfb-run -a -s "-screen 0 1280x1600x24" "$G" --path one-more --resolution 720x1280 --script res://tests/capture.gd -- "$RUNNER_TEMP/screenshots"
+          test -s "$RUNNER_TEMP/screenshots/menu.png"
+          test -s "$RUNNER_TEMP/screenshots/gameplay.png"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ONE-MORE-actual-screenshots
+          path: ${{ runner.temp }}/screenshots/*.png
