@@ -441,9 +441,20 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
-var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0}
+var advanced := {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0}
 var advanced_sliders: Dictionary = {}
 var settings_tabs: TabContainer
+var preset_button: Button
+var preset_index := 1
+const PRESET_NAMES = ["LOW","MEDIUM","HIGH","ULTRA"]
+func cycle_preset() -> void:
+	preset_index = (preset_index+1)%4
+	high_quality = preset_index >= 2
+	var values := {"render_scale":[0.65,0.8,1.0,1.0],"msaa":[0.0,0.0,1.0,2.0],"particles":[0.25,0.5,0.8,1.0]}
+	for key in values:
+		var slider := advanced_sliders[key] as HSlider
+		slider.value = float(values[key][preset_index])
+	save_settings()
 
 func setting_slider(parent: Control, key: String, caption: String, low: float, high: float, step: float) -> void:
 	var label := Label.new()
@@ -483,7 +494,7 @@ func build_settings(layer: CanvasLayer) -> void:
 	heading.add_theme_font_size_override("font_size",40)
 	settings_panel.add_child(heading)
 	settings_tabs = TabContainer.new()
-	settings_tabs.custom_minimum_size = Vector2(540,650)
+	settings_tabs.custom_minimum_size = Vector2(540,760)
 	settings_tabs.add_theme_font_size_override("font_size",22)
 	settings_panel.add_child(settings_tabs)
 	var controls := settings_page("CONTROLS")
@@ -492,10 +503,16 @@ func build_settings(layer: CanvasLayer) -> void:
 	setting_slider(controls,"camera_speed","CAMERA RESPONSE",2.0,20.0,0.5)
 	setting_slider(controls,"zoom","CAMERA DISTANCE",18.0,28.0,0.5)
 	var graphics := settings_page("VIDEO")
+	preset_button = menu_button(graphics,"",cycle_preset)
+	preset_button.custom_minimum_size.y = 56
 	fps_button = menu_button(graphics,"",toggle_fps)
 	quality_button = menu_button(graphics,"",toggle_quality)
 	setting_slider(graphics,"particles","EFFECT DENSITY",0.25,1.0,0.05)
 	setting_slider(graphics,"brightness","LIGHT INTENSITY",0.65,1.35,0.05)
+	setting_slider(graphics,"render_scale","3D RENDER SCALE",0.5,1.0,0.05)
+	setting_slider(graphics,"msaa","MSAA (0 OFF / 1 2X / 2 4X)",0.0,2.0,1.0)
+	fps_button.custom_minimum_size.y = 56
+	quality_button.custom_minimum_size.y = 56
 	var audio := settings_page("AUDIO")
 	audio_button = menu_button(audio,"",toggle_audio)
 	setting_slider(audio,"master","MASTER VOLUME",0.0,1.0,0.05)
@@ -514,6 +531,9 @@ func show_settings() -> void:
 	settings_panel.show()
 
 func apply_settings() -> void:
+	get_viewport().scaling_3d_scale = float(advanced["render_scale"])
+	get_viewport().msaa_3d = int(advanced["msaa"]) as Viewport.MSAA
+	preset_button.text = "APPLY PRESET / "+PRESET_NAMES[preset_index]
 	camera.size = float(advanced["zoom"])
 	world_light.light_energy = 1.35*float(advanced["brightness"])
 	if is_instance_valid(ambient_player):
@@ -542,6 +562,7 @@ func load_settings() -> void:
 		var saved_fps := int(cfg.get_value("video","fps",60))
 		fps_limit = saved_fps if FPS_OPTIONS.has(saved_fps) else 60
 		high_quality = bool(cfg.get_value("video","shadows",false))
+		preset_index = clampi(int(cfg.get_value("video","preset",1)),0,3)
 		audio_enabled = bool(cfg.get_value("audio","enabled",true))
 		for key in advanced:
 			var slider := advanced_sliders[key] as HSlider
@@ -554,6 +575,7 @@ func save_settings() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("video","fps",fps_limit)
 	cfg.set_value("video","shadows",high_quality)
+	cfg.set_value("video","preset",preset_index)
 	cfg.set_value("audio","enabled",audio_enabled)
 	for key in advanced:
 		cfg.set_value("advanced",key,advanced[key])
