@@ -696,14 +696,53 @@ func shot_tracer(from: Vector3, to: Vector3) -> void:
 	tween.tween_property(beam,"scale",Vector3(0.1,0.1,1.0),0.12)
 	tween.tween_callback(beam.queue_free)
 
+var active_bursts := 0
+func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
+	if active_bursts >= 16:
+		return
+	active_bursts += 1
+	var sparks := CPUParticles3D.new()
+	sparks.emitting = false
+	sparks.one_shot = true
+	sparks.amount = count
+	sparks.lifetime = 0.32
+	sparks.explosiveness = 1.0
+	sparks.direction = Vector3.UP
+	sparks.spread = 85.0
+	sparks.gravity = Vector3(0,-8,0)
+	sparks.initial_velocity_min = 2.0
+	sparks.initial_velocity_max = 5.0
+	sparks.scale_amount_min = 0.5
+	sparks.scale_amount_max = 1.3
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.065,0.065,0.19)
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.albedo_color = tint
+	mesh.material = mat
+	sparks.mesh = mesh
+	sparks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(sparks)
+	sparks.position = pos
+	sparks.finished.connect(func():
+		active_bursts -= 1
+		sparks.queue_free()
+	)
+	sparks.emitting = true
+
 func hit_enemy(enemy: MeshInstance3D) -> void:
+	if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
+		return
 	play_fx("hit")
 	var health := int(enemy.get_meta("health",1))-damage
 	enemy.set_meta("health",health)
 	pulse(enemy.position,0.8,Color("#ffb85a"))
 	if health > 0:
+		impact_sparks(enemy.position,Color("#ffc879"),4)
 		return
 	var boss := bool(enemy.get_meta("boss",false))
+	impact_sparks(enemy.position,Color("#bc8cff") if boss else Color("#ff9460"),24 if boss else 9)
+	pulse(enemy.position,3.2 if boss else 1.2,Color("#bc8cff") if boss else Color("#ff9460"))
 	drop_gem(enemy.position)
 	if boss:
 		for i in range(8):
