@@ -195,9 +195,25 @@ func update_ground_material() -> void:
 	mat.set_shader_parameter("forest",1.0 if biome == 0 else 0.0)
 	ground.material_override = mat
 
+var biome_rim: DirectionalLight3D
+var biome_environment: Environment
+const BIOME_KEY_LIGHT = ["#fff1d2","#dbeaff","#ffe0a6","#d9f3ff","#ffb58b"]
+const BIOME_RIM_LIGHT = ["#80bfff","#83baff","#c2aaff","#75dfff","#ff6c48"]
+const BIOME_AMBIENT = ["#b5d3df","#aabbd4","#e3c9aa","#b3dff5","#c9a1aa"]
+const BIOME_SKY = ["#13242c","#172331","#3c3028","#203748","#321c28"]
+
+func apply_biome_lighting() -> void:
+	if not is_instance_valid(biome_environment):
+		return
+	world_light.light_color = Color(BIOME_KEY_LIGHT[biome])
+	biome_rim.light_color = Color(BIOME_RIM_LIGHT[biome])
+	biome_environment.ambient_light_color = Color(BIOME_AMBIENT[biome])
+	biome_environment.background_color = Color(BIOME_SKY[biome])
+
 func cycle_biome() -> void:
 	biome = (biome+1)%BIOMES.size()
 	biome_button.text = "MAP • "+BIOMES[biome]
+	apply_biome_lighting()
 	update_ground_material()
 	rebuild_scenery()
 
@@ -984,6 +1000,7 @@ func _ready() -> void:
 	light.light_color = Color("#fff1d2")
 	light.light_energy = 1.35
 	var rim := DirectionalLight3D.new()
+	biome_rim = rim
 	add_child(rim)
 	rim.rotation_degrees = Vector3(-35,145,0)
 	rim.light_color = Color("#80bfff")
@@ -991,12 +1008,14 @@ func _ready() -> void:
 	rim.shadow_enabled = false
 	var env := WorldEnvironment.new()
 	env.environment = Environment.new()
+	biome_environment = env.environment
 	env.environment.background_mode = Environment.BG_COLOR
 	env.environment.background_color = Color("#13242c")
 	env.environment.ambient_light_source = Environment.AMBIENT_SOURCE_COLOR
 	env.environment.ambient_light_color = Color("#b5d3df")
 	env.environment.ambient_light_energy = 0.48
 	add_child(env)
+	apply_biome_lighting()
 	camera = Camera3D.new()
 	add_child(camera)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
