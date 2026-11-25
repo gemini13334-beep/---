@@ -178,6 +178,9 @@ func sprint() -> void:
 	mode = 1
 
 func finish_run() -> void:
+	if not running:
+		return
+	gain_hunter_xp(kills*5+int(score/200.0))
 	running = false
 	choosing = false
 	upgrades.hide()
@@ -305,7 +308,11 @@ func save_profile() -> void:
 	cfg.set_value("records","kills",total_kills)
 	cfg.set_value("collection","owned",owned)
 	cfg.set_value("collection","selected",selected)
-	cfg.set_value("meta","version",1)
+	cfg.set_value("awakening","level",hunter_level)
+	cfg.set_value("awakening","xp",hunter_xp)
+	cfg.set_value("awakening","points",stat_points)
+	cfg.set_value("awakening","stats",hunter_stats)
+	cfg.set_value("meta","version",2)
 	if cfg.save(PROFILE_TEMP) != OK:
 		push_warning("Profile temporary write failed")
 		return
@@ -411,6 +418,64 @@ func toggle_audio() -> void:
 	audio_enabled = not audio_enabled
 	save_settings()
 
+var hunter_level := 1
+var hunter_xp := 0
+var stat_points := 0
+var hunter_stats: Array[int] = [0,0,0,0,0]
+const STAT_NAMES = ["STRENGTH","VITALITY","AGILITY","PERCEPTION","DEFENSE"]
+var awakening_panel: VBoxContainer
+var awakening_status: Label
+var stat_buttons: Array[Button] = []
+
+func hunter_rank() -> String:
+	if hunter_level >= 100: return "SS"
+	if hunter_level >= 75: return "S"
+	if hunter_level >= 50: return "A"
+	if hunter_level >= 35: return "B"
+	if hunter_level >= 20: return "C"
+	if hunter_level >= 10: return "D"
+	return "E"
+
+func gain_hunter_xp(amount: int) -> void:
+	hunter_xp += maxi(0,amount)
+	while hunter_level < 1000 and hunter_xp >= hunter_level*100:
+		hunter_xp -= hunter_level*100
+		hunter_level += 1
+		stat_points += 3
+	hunter_xp = mini(hunter_xp,hunter_level*100-1)
+
+func build_awakening(layer: CanvasLayer) -> void:
+	awakening_panel = VBoxContainer.new()
+	layer.add_child(awakening_panel)
+	awakening_panel.position = Vector2(90,180)
+	awakening_panel.add_theme_constant_override("separation",12)
+	awakening_status = Label.new()
+	awakening_status.add_theme_font_size_override("font_size",28)
+	awakening_panel.add_child(awakening_status)
+	for i in range(5):
+		stat_buttons.append(menu_button(awakening_panel,"",spend_stat.bind(i)))
+	menu_button(awakening_panel,"BACK",show_menu)
+	awakening_panel.hide()
+
+func refresh_awakening() -> void:
+	awakening_status.text = "AWAKENING  /  RANK %s\nLEVEL %d  /  XP %d/%d\nAVAILABLE POINTS: %d" % [hunter_rank(),hunter_level,hunter_xp,hunter_level*100,stat_points]
+	for i in range(5):
+		stat_buttons[i].text = "%s  %d   +" % [STAT_NAMES[i],hunter_stats[i]]
+		stat_buttons[i].disabled = stat_points <= 0
+
+func spend_stat(index: int) -> void:
+	if index < 0 or index >= 5 or stat_points <= 0:
+		return
+	hunter_stats[index] += 1
+	stat_points -= 1
+	save_profile()
+	refresh_awakening()
+
+func show_awakening() -> void:
+	menu.hide()
+	awakening_panel.show()
+	refresh_awakening()
+
 func show_collection() -> void:
 	menu.hide()
 	menu_scrim.show()
@@ -418,6 +483,7 @@ func show_collection() -> void:
 	refresh_collection()
 
 func show_menu() -> void:
+	awakening_panel.hide()
 	settings_panel.hide()
 	collection.hide()
 	menu_scrim.show()
@@ -705,6 +771,8 @@ func _ready() -> void:
 	event_label.position = Vector2(24,245)
 	event_label.add_theme_font_size_override("font_size",24)
 	menu_button(menu,"HERO COLLECTION",show_collection)
+	menu_button(menu,"AWAKENING",show_awakening)
+	build_awakening(layer)
 	menu_button(menu,"SETTINGS",show_settings)
 	build_settings(layer)
 	collection = VBoxContainer.new()
@@ -757,6 +825,13 @@ func load_profile() -> void:
 	selected = 0
 	var cfg := ConfigFile.new()
 	if cfg.load(PROFILE_PATH) == OK or cfg.load(PROFILE_BACKUP) == OK:
+		hunter_level = clampi(int(cfg.get_value("awakening","level",1)),1,1000)
+		hunter_xp = clampi(int(cfg.get_value("awakening","xp",0)),0,hunter_level*100-1)
+		stat_points = clampi(int(cfg.get_value("awakening","points",0)),0,3000)
+		var saved_stats: Variant = cfg.get_value("awakening","stats",[])
+		if saved_stats is Array and saved_stats.size() == 5:
+			for i in range(5):
+				hunter_stats[i] = clampi(int(saved_stats[i]),0,3000)
 		best = maxi(0,int(cfg.get_value("records","best",0)))
 		credits = maxi(0,int(cfg.get_value("records","credits",0)))
 		best_sprint = maxi(0,int(cfg.get_value("records","sprint",0)))
@@ -824,6 +899,13 @@ func start() -> void:
 	speed_bonus = float(stats[4])
 	magnet = float(stats[5])
 	power = int(stats[6])
+	# Permanent stats apply to both current modes.
+	max_hp += hunter_stats[1]*3.0
+	hp = max_hp
+	damage += int(hunter_stats[0]/5.0)
+	speed_bonus += minf(2.0,hunter_stats[2]*0.025)
+	magnet += minf(3.0,hunter_stats[3]*0.04)
+	armor += minf(0.35,hunter_stats[4]*0.005)
 	if selected == 2:
 		blast = 1
 	level = 1
