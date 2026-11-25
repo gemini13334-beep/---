@@ -267,10 +267,14 @@ func ui_panel(layer: CanvasLayer, pos: Vector2, dimensions: Vector2) -> Panel:
 	panel.size = dimensions
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#14232ee8")
+	style.bg_color = Color("#101d29f2")
+	style.shadow_color = Color(0,0,0,0.38)
+	style.shadow_size = 8
+	style.shadow_offset = Vector2(0,4)
 	style.border_color = Color("#416475")
 	style.set_border_width_all(1)
-	style.set_corner_radius_all(20)
+	style.border_width_top = 3
+	style.set_corner_radius_all(16)
 	panel.add_theme_stylebox_override("panel",style)
 	layer.add_child(panel)
 	return panel
@@ -278,12 +282,16 @@ func ui_panel(layer: CanvasLayer, pos: Vector2, dimensions: Vector2) -> Panel:
 func style_button(btn: Button) -> void:
 	for state in ["normal","hover","pressed","disabled"]:
 		var style := StyleBoxFlat.new()
-		style.bg_color = Color("#233d4b") if state == "normal" else Color("#365b68")
+		style.bg_color = Color("#203442") if state == "normal" else Color("#365b68")
+		if state == "pressed":
+			style.bg_color = Color("#142a34")
 		if state == "disabled":
 			style.bg_color = Color("#273038")
-		style.border_color = Color("#65d9c0")
+		style.border_color = Color("#476e7a") if state == "normal" else Color("#65d9c0")
+		if state == "disabled":
+			style.border_color = Color("#38434c")
 		style.set_border_width_all(1)
-		style.border_width_bottom = 4
+		style.border_width_bottom = 2 if state == "pressed" else 4
 		style.set_corner_radius_all(14)
 		btn.add_theme_stylebox_override(state,style)
 	btn.add_theme_color_override("font_color",Color("#edf8f5"))
@@ -304,10 +312,14 @@ func make_bar(layer: CanvasLayer, y: float, color: Color) -> ProgressBar:
 	bar.size = Vector2(672,18)
 	bar.show_percentage = false
 	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color("#182b36")
+	bg.bg_color = Color("#09151f")
+	bg.border_color = Color("#36505f")
+	bg.set_border_width_all(1)
 	bg.set_corner_radius_all(8)
 	var fill := StyleBoxFlat.new()
 	fill.bg_color = color
+	fill.border_color = color.lightened(0.3)
+	fill.border_width_top = 2
 	fill.set_corner_radius_all(8)
 	bar.add_theme_stylebox_override("background",bg)
 	bar.add_theme_stylebox_override("fill",fill)
@@ -918,7 +930,8 @@ func _ready() -> void:
 	hud = Label.new()
 	layer.add_child(hud)
 	hud.position = Vector2(24,24)
-	hud.add_theme_font_size_override("font_size",26)
+	hud.add_theme_font_size_override("font_size",24)
+	hud.add_theme_constant_override("line_spacing",5)
 	hud.add_theme_color_override("font_color",Color("#eef8f5"))
 	hp_bar = make_bar(layer,190,Color("#65e5a5"))
 	xp_bar = make_bar(layer,218,Color("#f9c95b"))
@@ -1294,6 +1307,7 @@ func _process(dt: float) -> void:
 func update_hud() -> void:
 	hp_bar.max_value = max_hp
 	hp_bar.value = hp
+	hp_bar.modulate = Color("#ff8b79") if hp < max_hp*0.25 else Color.WHITE
 	xp_bar.max_value = level*3
 	xp_bar.value = xp
-	hud.text = "ONE MORE\nSCORE %d  |  BEST %d\nHP %d  |  LV %d  |  %ds\nXP %d/%d  |  COMBO %d\nKILLS %d  |  CREDITS %d" % [score,best,maxi(0,int(hp)),level,int(elapsed),xp,level*3,combo,kills,credits]
+	hud.text = "ONE MORE   /   LIVE\nSCORE %d  ·  BEST %d\nHP %d  ·  LV %d  ·  %ds\nXP %d/%d  ·  COMBO ×%d\nKILLS %d  ·  CREDITS %d" % [score,best,maxi(0,int(hp)),level,int(elapsed),xp,level*3,combo,kills,credits]
