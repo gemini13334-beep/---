@@ -758,11 +758,15 @@ func update_boss_attack(enemy: MeshInstance3D) -> void:
 			enemy.set_meta("warning_ring",ring)
 		ring.visible = int(elapsed*8.0)%2 == 0
 
+var active_tracers := 0
 func shot_tracer(from: Vector3, to: Vector3) -> void:
 	var length := from.distance_to(to)
 	if length < 0.05:
 		return
 	play_fx("shot")
+	if active_tracers >= 24:
+		return
+	active_tracers += 1
 	var beam := MeshInstance3D.new()
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(0.085,0.085,length)
@@ -775,9 +779,25 @@ func shot_tracer(from: Vector3, to: Vector3) -> void:
 	add_child(beam)
 	beam.position = (from+to)*0.5
 	beam.look_at(to,Vector3.UP)
-	var tween := create_tween()
-	tween.tween_property(beam,"scale",Vector3(0.1,0.1,1.0),0.12)
-	tween.tween_callback(beam.queue_free)
+	var halo := MeshInstance3D.new()
+	var halo_mesh := BoxMesh.new()
+	halo_mesh.size = Vector3(0.19,0.19,length)
+	halo.mesh = halo_mesh
+	var halo_mat := StandardMaterial3D.new()
+	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo_mat.albedo_color = Color(1.0,0.52,0.12,0.28)
+	halo.material_override = halo_mat
+	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.add_child(halo)
+	var tween := create_tween().set_parallel(true)
+	tween.tween_property(beam,"scale",Vector3(0.1,0.1,1.0),0.14)
+	tween.tween_property(halo_mat,"albedo_color:a",0.0,0.14)
+	tween.chain().tween_callback(func():
+		beam.queue_free()
+		active_tracers -= 1
+	)
+	impact_sparks(from,Color("#ffe6aa"),3)
 
 var active_bursts := 0
 func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
@@ -797,11 +817,17 @@ func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
 	sparks.initial_velocity_max = 5.0
 	sparks.scale_amount_min = 0.5
 	sparks.scale_amount_max = 1.3
+	var fade := Gradient.new()
+	fade.set_color(0,Color.WHITE)
+	fade.set_color(1,Color(1,1,1,0))
+	sparks.color_ramp = fade
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(0.065,0.065,0.19)
 	var mat := StandardMaterial3D.new()
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.albedo_color = tint
+	mat.vertex_color_use_as_albedo = true
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh.material = mat
 	sparks.mesh = mesh
 	sparks.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
