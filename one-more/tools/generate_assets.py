@@ -116,6 +116,14 @@ part("Cabin",(0,.1,.85),(.45,.5,.3),dark,'cube')
 for x in [-.7,.7]:
  for y in [-.65,.65]:
   part("Wheel",(x,y,.3),(.22,.32,.32),dark)
+buggy_light=glow("Buggy headlights",(.65,.85,1))
+for x in [-.48,.48]:
+ part("Headlight",(x,-1.02,.52),(.12,.06,.10),buggy_light,'cube')
+ part("Suspension",(x,0,.33),(.10,.65,.10),dark,'cube')
+ for y in [-.65,.65]:
+  part("Wheel hub",(x*1.85,y,.3),(.06,.17,.17),gold)
+part("Front bumper",(0,-1.04,.34),(.68,.09,.09),dark,'cube')
+part("Rear engine",(0,.75,.83),(.36,.22,.15),dark,'cube')
 save("buggy")
 
 
@@ -168,6 +176,21 @@ for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.
  if name=="tank": part("Cannon",(0,-.85,.9),(.13,.75,.13),shell,'cube')
  if name=="mech":
   for x in [-.7,.7]: part("Leg",(x,0,.2),(.2,.3,.6),shell,'cube')
+ lamp=glow(name+" drive lights",(.12,.85,1) if name=="hovercraft" else (1,.56,.14))
+ for x in [-1,1]:
+  part("Headlight",(x*.57,-1.02,.51),(.12,.06,.08),lamp,'cube')
+  part("Side armor",(x*.78,0,.59),(.09,.66,.12),shell,'cube')
+  part("Rear exhaust",(x*.48,.94,.55),(.12,.09,.12),lamp)
+ if name=="tank":
+  for x in [-1,1]:
+   for i in range(5):
+    part("Track hub",(x*.99,(i-2)*.31,.30),(.055,.13,.13),shell)
+ elif name=="hovercraft":
+  for x in [-1,1]:
+   part("Lift emitter",(x*.8,0,.15),(.16,.66,.06),lamp,'cube')
+ elif name=="mech":
+  for x in [-1,1]:
+   part("Leg joint",(x*.7,-.28,.45),(.16,.10,.16),lamp)
  save(name)
 for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)),("cactus",(.2,.58,.25)),("ice_spire",(.2,.8,.95)),("lava_vent",(.9,.22,.04))]:
  reset()
