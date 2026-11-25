@@ -13,7 +13,23 @@ def glow(name,c):
  p.inputs["Emission Strength"].default_value=1.8
  return m
 def hero_details(name,shell):
- light=glow(name+" energy",(.12,.85,1.0) if name!="inferno" else (1,.22,.025))
+ accents={"hero":(.12,1,.65),"cyborg":(.15,.55,1),"inferno":(1,.22,.025),"ghost":(.72,.24,1),"titan":(1,.65,.12),"cryo":(.3,.9,1)}
+ light=glow(name+" energy",accents.get(name,(.12,.85,1)))
+ trim=mat(name+" brushed trim",(.24,.30,.36),.8)
+ part("Reactor housing",(0,-.46,.43),(.23,.095,.23),dark)
+ part("Visor brow",(0,-.43,1.02),(.36,.095,.045),trim,'cube')
+ for x in [-1,1]:
+  part("Side armor",(x*.48,-.22,.61),(.12,.20,.25),shell,'cube')
+  part("Boot toe",(x*.25,-.28,.13),(.19,.13,.09),trim,'cube')
+  part("Backpack vent",(x*.16,.61,.72),(.055,.035,.16),trim,'cube')
+  part("Backpack indicator",(x*.16,.65,.72),(.028,.018,.10),light,'cube')
+ if name=="titan":
+  for x in [-1,1]: part("Heavy pauldron",(x*.67,.02,.85),(.28,.28,.13),trim,'cube')
+ elif name=="ghost":
+  for x in [-1,1]: part("Spectral stabilizer",(x*.43,.36,.95),(.08,.24,.25),light)
+ elif name=="cryo":
+  for x in [-1,1]: part("Coolant cylinder",(x*.24,.45,.82),(.10,.12,.30),trim)
+
  part("Chest reactor",(0,-.47,.43),(.16,.075,.16),light)
  part("Backpack",(0,.43,.65),(.32,.19,.35),dark,'cube')
  for x in [-1,1]:
