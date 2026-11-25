@@ -75,25 +75,43 @@ var scenery: Array[MeshInstance3D] = []
 var sound: AudioStreamPlayer
 var sounds: Dictionary = {}
 
-func tone(freq: float, duration: float) -> AudioStreamWAV:
+func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamWAV:
 	var data := PackedByteArray()
 	var count := int(22050*duration)
 	data.resize(count*2)
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 1927
 	for i in range(count):
 		var t := float(i)/22050.0
-		var envelope := pow(1.0-float(i)/count,2.0)
-		var sample := int(sin(TAU*freq*t)*envelope*6500)
-		data.encode_s16(i*2,sample)
+		var p := float(i)/count
+		var envelope := minf(1.0,t*400.0)*pow(1.0-p,2.0)
+		var wave := sin(TAU*freq*t)
+		match kind:
+			"hit":
+				wave = 0.55*sin(TAU*freq*t*(1.0-0.4*p))+0.45*rng.randf_range(-1.0,1.0)
+			"pickup":
+				wave = 0.7*sin(TAU*freq*t*(1.0+0.5*p))+0.3*sin(TAU*freq*2.0*t)
+			"level":
+				wave = (sin(TAU*freq*t)+sin(TAU*freq*1.25*t)+sin(TAU*freq*1.5*t))/3.0
+			"boost":
+				wave = 0.7*sin(TAU*freq*t*(1.0+p))+0.3*sin(TAU*freq*3.0*t)
+		data.encode_s16(i*2,int(clampf(wave*envelope,-1.0,1.0)*12000))
 	var wav := AudioStreamWAV.new()
 	wav.format = AudioStreamWAV.FORMAT_16_BITS
 	wav.mix_rate = 22050
 	wav.data = data
 	return wav
 
+var fx_last: Dictionary = {}
 func play_fx(key: String) -> void:
-	if sound != null and sounds.has(key):
-		sound.stream = sounds[key]
-		sound.play()
+	if sound == null or not audio_enabled or not sounds.has(key):
+		return
+	var now := Time.get_ticks_msec()
+	if now-int(fx_last.get(key,-1000)) < 45:
+		return
+	fx_last[key] = now
+	sound.stream = sounds[key]
+	sound.play()
 
 func rebuild_scenery() -> void:
 	for prop in scenery:
@@ -590,7 +608,7 @@ func _ready() -> void:
 	sound = AudioStreamPlayer.new()
 	add_child(sound)
 	sound.volume_db = -12
-	sounds = {"hit":tone(180,0.09),"pickup":tone(880,0.12),"level":tone(520,0.35),"boost":tone(320,0.3)}
+	sounds = {"hit":tone(180,0.09,"hit"),"pickup":tone(880,0.12,"pickup"),"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost")}
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
 	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
