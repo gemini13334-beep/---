@@ -17,6 +17,16 @@ func run_tests() -> void:
 	var scene = load("res://main.tscn").instantiate()
 	root.add_child(scene)
 	scene.set_physics_process(false)
+	scene.reset_settings()
+	check(scene.fps_limit == 60 and scene.advanced["sensitivity"] == 1.0,"Settings defaults")
+	scene.advanced_sliders["sensitivity"].value = 1.5
+	scene.advanced_sliders["weapons"].value = 0.0
+	scene.save_settings()
+	scene.advanced_sliders["sensitivity"].value = 0.5
+	scene.load_settings()
+	check(is_equal_approx(float(scene.advanced["sensitivity"]),1.5),"Sensitivity persistence")
+	check(scene.fx_volume("shot") <= -79.0,"Weapon channel mute")
+	scene.reset_settings()
 	scene.start()
 	check(scene.running and scene.hp == scene.max_hp and scene.level == 1,"Start initializes run")
 	check(scene.crates.size() == 22,"Arena populated")
