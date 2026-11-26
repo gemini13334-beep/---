@@ -31,3 +31,5 @@ Original hero, enemy, boss, vehicle and crate models replace the previous roster
 The Russian combat HUD draws live pickups, score, combo, health, experience, current quest progress and acquired upgrade ranks. Its minimap marks local actors and shared Bluetooth replicas. The range control shows the auto-fire radius used by the simulation. Opening settings from a run preserves it, and the co-op menu leaves the partner in combat.
 
 Vega starts new profiles. Existing profiles retain their selected hero. The four operators have Blender rigs and exported action clips. Mechanical opponents telegraph attacks and react to shots using their moving joints. The capture workflow checks the imported rigs and records motion from the game.
+
+The combat HUD uses illustrated skill and equipment cards, with an overhead arena render reused as the minimap background. Counters respond to pickups, changes in health, and leveling. Players can inspect a skill or a piece of equipment during combat.

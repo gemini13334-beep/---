@@ -185,6 +185,7 @@ func rebuild_scenery() -> void:
 	if forest_understory != null:
 		forest_understory.visible = biome == 0
 	for prop in scenery:
+		prop.hide()
 		prop.queue_free()
 	scenery.clear()
 	for i in range(24):
@@ -212,6 +213,34 @@ func rebuild_scenery() -> void:
 			prop.rotation.y = angle
 			scenery.append(prop)
 		place_forest_landmarks()
+	for prop in scenery:
+		mark_on_map(prop)
+	map_dirty = true
+
+func mark_on_map(node: Node) -> void:
+	if node is GeometryInstance3D:
+		node.set_layer_mask_value(2,true)
+	for child in node.get_children():
+		mark_on_map(child)
+
+func build_minimap_camera() -> void:
+	map_viewport = SubViewport.new()
+	map_viewport.size = Vector2i(192,192)
+	map_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	map_viewport.gui_disable_input = true
+	add_child(map_viewport)
+	var map_camera := Camera3D.new()
+	map_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
+	map_camera.size = 46.0
+	map_camera.cull_mask = 2
+	map_viewport.add_child(map_camera)
+	map_camera.look_at_from_position(Vector3(0,32,0),Vector3.ZERO,Vector3.FORWARD)
+	map_camera.current = true
+
+func refresh_minimap() -> void:
+	if map_dirty:
+		map_dirty = false
+		map_viewport.render_target_update_mode = SubViewport.UPDATE_ONCE
 
 func place_forest_landmarks() -> void:
 	var layout := [
@@ -248,6 +277,8 @@ func place_forest_landmarks() -> void:
 		scenery.append(prop)
 
 var ground: MeshInstance3D
+var map_viewport: SubViewport
+var map_dirty := true
 var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
 const BIOME_NAMES = ["ЛЕС","ГОРОД","ПУСТЫНЯ","ЛЕДНИК","ВУЛКАН"]
@@ -1500,9 +1531,12 @@ func _ready() -> void:
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
 	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.1,0))
+	mark_on_map(ground)
 	update_ground_material()
 	build_forest_understory()
+	mark_on_map(forest_understory)
 	rebuild_scenery()
+	build_minimap_camera()
 	var sphere := SphereMesh.new()
 	hero = model(sphere,Color("#62f5c5"),Vector3(0,0.5,0))
 	hero_shadow = add_contact_shadow(hero,1.9)
@@ -1685,6 +1719,7 @@ func start(populate := true) -> void:
 	hud_in_settings = false
 	run_pickups = 0
 	hud_panel.reset_run()
+	refresh_minimap()
 	gate_panel.hide()
 	gate_cleared = false
 	mode = 0
@@ -1773,21 +1808,30 @@ func start(populate := true) -> void:
 
 var stick_base: Panel
 var stick_knob: Panel
-func stick_circle(parent: Node, tint: Color) -> Panel:
+var stick_guide: CombatHUD.StickGuide
+func stick_circle(parent: Node, tint: Color, edge: Color, knob: bool) -> Panel:
 	var panel := Panel.new()
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = tint
-	style.border_color = Color("#c58c53")
+	style.border_color = edge
 	style.set_border_width_all(2)
+	style.shadow_color = Color("#071119c5")
+	style.shadow_size = 4
+	if knob:
+		style.border_color = edge.lightened(0.20)
+		style.border_width_top = 3
 	style.set_corner_radius_all(256)
 	panel.add_theme_stylebox_override("panel",style)
 	parent.add_child(panel)
 	return panel
 
 func build_touch_stick(layer: CanvasLayer) -> void:
-	stick_base = stick_circle(layer,Color(0.04,0.07,0.10,0.78))
-	stick_knob = stick_circle(stick_base,Color(0.45,0.49,0.54,0.89))
+	stick_base = stick_circle(layer,Color("#101723df"),Color("#919aa9"),false)
+	stick_guide = CombatHUD.StickGuide.new()
+	stick_guide.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	stick_base.add_child(stick_guide)
+	stick_knob = stick_circle(stick_base,Color("#516476ed"),Color("#9faec0"),true)
 	stick_base.hide()
 
 func refresh_touch_stick() -> void:
@@ -1798,6 +1842,7 @@ func refresh_touch_stick() -> void:
 		return
 	var radius := float(advanced["stick_size"])
 	stick_base.size = Vector2.ONE*radius*2.0
+	stick_guide.size = stick_base.size
 	var center := origin if finger != -1 else Vector2(130,979)
 	stick_base.position = center-Vector2.ONE*radius
 	stick_base.modulate.a = float(advanced["stick_opacity"])

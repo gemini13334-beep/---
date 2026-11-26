@@ -368,7 +368,7 @@ func send_world() -> void:
 		"type":"state","players":[player_row(arena.hero,arena.hp,arena.max_hp),player_row(partner,partner_hp,partner_max_hp)],
 		"actors":actors,"shots":shot_events,"round":[arena.elapsed,arena.score,arena.level,arena.xp,arena.combo,arena.kills,arena.choosing],
 		"shot_actors":shot_actors,"hits":hit_events,
-		"hud":[arena.run_pickups,arena.damage,arena.reach,upgrade_levels],"bosses":bosses,
+		"hud":[arena.run_pickups,arena.damage,arena.reach,upgrade_levels,arena.magnet],"bosses":bosses,
 	}):
 		shot_events.clear()
 		shot_actors.clear()
@@ -423,12 +423,15 @@ func apply_boss_health(bosses: Variant) -> void:
 		actor.set_meta("health",clampi(int(number(values[0])),0,int(actor.get_meta("max_health"))))
 
 func apply_hud(data: Variant) -> void:
-	if not data is Array or data.size() != 4 or not data[3] is Array or data[3].size() != arena.ABILITIES.size()+arena.COMBINATIONS.size():
+	if not data is Array or data.size() < 4 or not data[3] is Array or data[3].size() != arena.ABILITIES.size()+arena.COMBINATIONS.size():
 		return
 	arena.run_pickups = clampi(int(number(data[0])),0,1000000)
 	arena.damage = clampi(int(number(data[1])),1,1000000)
 	arena.reach = clampf(number(data[2]),0,1000)
+	if data.size() >= 5:
+		arena.magnet = clampf(number(data[4]),0,1000)
 	# Guest contact damage is calculated by the host without the host's personal armor.
+	arena.armor = 0.0
 	arena.ranks.clear()
 	var rank_ids: Array = range(arena.ABILITIES.size())+arena.COMBINATIONS.keys()
 	for i in rank_ids.size():

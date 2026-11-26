@@ -29,3 +29,7 @@ Generated for ONE MORE with OpenAI ImageGen in the November 2026 art pass. The i
 ONE MORE uses original geometry and generated materials. The six mechanical heroes export a `ShotOrigin` marker attached to a weapon pivot. Vega, Fox, Amber and North have an armature, a textured skinned mesh, a `Muzzle` bone and five keyframed clips for idle, running, firing, impact and falling. The models face Blender −Y and stand on Z=0.
 
 `assets/portraits/` contains ten original HUD portraits rendered directly from the Blender models. Regenerate them after model export with `blender -b -P one-more/tools/generate_assets.py -- --portraits`. Character paint, steel patina and wear textures are generated and packed into the model files. The original six hero IDs remain valid in profiles and cooperative messages.
+
+## Illustrated combat HUD
+
+OpenAI ImageGen created an original atlas for the combat kit and 16 abilities. The game uses 112 × 112 WebP tiles in `assets/hud/`, ordered by the original ability IDs. Four tiles also illustrate equipment stats while a new run has available slots. The input atlas SHA-256 is `2fa5824657dabf87e539ca4d5416c5f71cc82cc4c12ce509e1c9caf4d73ddbdc`.

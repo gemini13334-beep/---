@@ -130,9 +130,10 @@ func run_tests() -> void:
 	check(host.choosing and "ВЕДУЩИЙ" in guest.coop.partner_status(),"Team waits while the host selects an upgrade")
 	host.choose_upgrade(0)
 	host.run_pickups = 13
+	host.magnet = 5.0
 	exchange(host,guest,3)
 	guest.update_hud()
-	check(guest.run_pickups == 13 and guest.ranks == host.ranks and "13" in guest.hud_panel.counters[1].text,"Guest HUD mirrors team pickups and acquired upgrade ranks")
+	check(guest.run_pickups == 13 and guest.magnet == 5.0 and guest.ranks == host.ranks and "13" in guest.hud_panel.counters[1].text,"Guest HUD mirrors team pickups and acquired upgrade ranks")
 	var record: int = guest.best
 	host.score = 876
 	host.finish_run()

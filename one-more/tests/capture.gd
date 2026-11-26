@@ -108,6 +108,37 @@ func record_vega_motion() -> void:
 	arena.finish_run()
 
 
+func record_hud_motion() -> void:
+	if not motion_folder("motion-hud"):
+		return
+	arena.select_hero(arena.DEFAULT_HERO)
+	arena.start(false)
+	arena.spawn_timer = 30.0
+	for frame in 33:
+		if frame == 2:
+			var point: Vector2 = arena.hud_panel.zoom_button.get_global_rect().get_center()
+			click(point)
+		elif frame == 7:
+			arena.finger = 0
+			arena.direction = Vector2(0.25,-0.12)
+			arena.drop_gem(arena.hero.position)
+		elif frame == 12:
+			arena.clear_touch()
+			arena.damage_hero(30,arena.hero.position+Vector3.RIGHT)
+		elif frame == 17:
+			for gem in 2:
+				arena.drop_gem(arena.hero.position)
+		elif frame == 21:
+			arena.choose_upgrade(0)
+		elif frame == 25:
+			click(Vector2(42,36))
+		elif frame == 31:
+			arena.toggle_hud_pause()
+		advance(4)
+		arena.update_hud()
+		await shot("motion-hud/%03d" % frame)
+	arena.finish_run()
+
 func record_boss_motion(boss: MeshInstance3D) -> void:
 	if not motion_folder("motion-boss"):
 		return
@@ -165,11 +196,15 @@ func capture() -> void:
 	var zoom_position: Vector2 = arena.hud_panel.zoom_button.get_global_rect().get_center()
 	click(zoom_position)
 	check_animation(arena.hud_panel.radar.zoom and not arena.hud_panel.tasks.visible,"HUD buttons did not receive graphical input")
+	for blend_frame in 5:
+		await process_frame
 	await shot("hud-minimap",arena.hud_panel)
 	click(zoom_position)
 	click(Vector2(52,168))
 	click(Vector2(42,36))
 	check_animation(arena.hud_paused,"The graphical pause button did not pause the run")
+	for fade_frame in 4:
+		await process_frame
 	await shot("hud-pause",arena.hud_panel)
 	arena.toggle_hud_pause()
 	arena.finger = 0
@@ -184,6 +219,7 @@ func capture() -> void:
 	arena.finish_run()
 	await record_combat_motion()
 	await record_vega_motion()
+	await record_hud_motion()
 	arena.show_collection()
 	await shot("collection",arena.collection)
 	for hero_id in arena.HEROES.size():
