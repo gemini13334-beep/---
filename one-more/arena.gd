@@ -1443,7 +1443,7 @@ func _input(event: InputEvent) -> void:
 			finger = -1
 			direction = Vector2.ZERO
 	elif event is InputEventScreenDrag and event.index == finger:
-		var raw := ((event.position-origin)/float(advanced["stick_size"])*float(advanced["sensitivity"])).limit_length()
+		var raw: Vector2 = ((event.position-origin)/float(advanced["stick_size"])*float(advanced["sensitivity"])).limit_length()
 		var dead := float(advanced["deadzone"])
 		direction = raw.normalized()*maxf(0.0,(raw.length()-dead)/(1.0-dead))
 	refresh_touch_stick()
