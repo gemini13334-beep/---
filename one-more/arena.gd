@@ -58,7 +58,7 @@ func roll_offers() -> void:
 		offers.append(id)
 	for i in range(3):
 		var a: Array = ABILITIES[offers[i]]
-		offer_buttons[i].text = "%s  /  %s  •  RANK %d\n%s" % [["COMMON","RARE","EPIC"][a[2]],a[0],int(ranks.get(a[0],0))+1,a[1]]
+		offer_buttons[i].text = "%s  /  %s  •  RANK %d\n%s" % [["COMMON","RARE","EPIC"][a[2]],a[0],int(ranks.get(offers[i],0))+1,a[1]]
 		offer_buttons[i].modulate = [Color.WHITE,Color("#85d9ff"),Color("#e2b2ff")][a[2]]
 
 var selected := 0
@@ -251,6 +251,7 @@ func finish_run() -> void:
 	gain_hunter_xp(kills*5+int(score/200.0))
 	running = false
 	choosing = false
+	clear_touch()
 	upgrades.hide()
 	if mode == 1:
 		best_sprint = maxi(best_sprint,score)
@@ -387,6 +388,13 @@ const HEROES = [
 const PROFILE_PATH = "user://records.cfg"
 const PROFILE_BACKUP = "user://records.backup.cfg"
 const PROFILE_TEMP = "user://records.tmp.cfg"
+const PROFILE_BACKUP_TEMP = "user://records.backup.tmp.cfg"
+
+func read_profile(path: String) -> ConfigFile:
+	var cfg := ConfigFile.new()
+	if cfg.load(path) == OK and cfg.has_section_key("records","best"):
+		return cfg
+	return null
 
 func save_profile() -> void:
 	var cfg := ConfigFile.new()
@@ -408,9 +416,9 @@ func save_profile() -> void:
 	if cfg.save(PROFILE_TEMP) != OK:
 		push_warning("Profile temporary write failed")
 		return
-	var current := ConfigFile.new()
-	if current.load(PROFILE_PATH) == OK:
-		if current.save(PROFILE_BACKUP) != OK:
+	var current := read_profile(PROFILE_PATH)
+	if current != null:
+		if current.save(PROFILE_BACKUP_TEMP) != OK or DirAccess.rename_absolute(PROFILE_BACKUP_TEMP,PROFILE_BACKUP) != OK:
 			push_warning("Profile backup failed")
 			return
 	var err := DirAccess.rename_absolute(PROFILE_TEMP,PROFILE_PATH)
@@ -870,17 +878,19 @@ func update_boss_attack(enemy: MeshInstance3D) -> void:
 	var radius := 3.0+kind
 	var deadline := float(enemy.get_meta("next_pulse",99999.0))
 	if elapsed >= deadline:
-		var warning = enemy.get_meta("warning_ring",null)
-		if is_instance_valid(warning):
-			warning.queue_free()
 		if enemy.has_meta("warning_ring"):
+			var warning := enemy.get_meta("warning_ring") as MeshInstance3D
+			if is_instance_valid(warning):
+				warning.queue_free()
 			enemy.remove_meta("warning_ring")
 		pulse(enemy.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
 		if hero.position.distance_to(enemy.position) < radius:
 			hp -= (12.0+kind*4.0)*(1.0-armor)
 		enemy.set_meta("next_pulse",elapsed+4.0)
 	elif deadline-elapsed <= 1.2:
-		var ring = enemy.get_meta("warning_ring",null)
+		var ring: MeshInstance3D
+		if enemy.has_meta("warning_ring"):
+			ring = enemy.get_meta("warning_ring") as MeshInstance3D
 		if not is_instance_valid(ring):
 			var mesh := TorusMesh.new()
 			mesh.inner_radius = radius-0.09
@@ -895,7 +905,8 @@ func update_boss_attack(enemy: MeshInstance3D) -> void:
 			ring.scale = Vector3.ONE/enemy.scale.x
 			ring.position.y = -0.42
 			enemy.set_meta("warning_ring",ring)
-		ring.visible = int(elapsed*8.0)%2 == 0
+		var intensity := 0.55+0.45*sin(elapsed*22.0)
+		ring.material_override.albedo_color = Color("#df7042").lerp(Color("#ffdc87"),intensity)
 
 var active_tracers := 0
 func shot_tracer(from: Vector3, to: Vector3) -> void:
@@ -917,7 +928,8 @@ func shot_tracer(from: Vector3, to: Vector3) -> void:
 	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(beam)
 	beam.position = (from+to)*0.5
-	beam.look_at(to,Vector3.UP)
+	var up := Vector3.RIGHT if absf((to-from).dot(Vector3.UP))/length > 0.99 else Vector3.UP
+	beam.look_at(to,up)
 	var halo := MeshInstance3D.new()
 	var halo_mesh := BoxMesh.new()
 	halo_mesh.size = Vector3(0.19,0.19,length)
@@ -1049,7 +1061,7 @@ func drop_gem(pos: Vector3) -> void:
 func choose_upgrade(index: int) -> void:
 	if not choosing:
 		return
-	if index >= offers.size():
+	if index < 0 or index >= offers.size():
 		return
 	var id := offers[index]
 	ranks[id] = int(ranks.get(id,0))+1
@@ -1097,8 +1109,7 @@ func choose_upgrade(index: int) -> void:
 		event_label.text = "SYNERGY • GRAVITY DASH"
 	choosing = false
 	upgrades.hide()
-	finger = -1
-	direction = Vector2.ZERO
+	clear_touch()
 
 
 func model(mesh: Mesh, color: Color, pos: Vector3) -> MeshInstance3D:
@@ -1282,40 +1293,44 @@ func _ready() -> void:
 	refresh_collection()
 	update_hud()
 
+func profile_int(value: Variant, fallback: int = 0) -> int:
+	if value is int or (value is float and is_finite(value)):
+		return int(value)
+	return fallback
+
+func load_profile_array(target: Array[int], values: Variant, limit: int) -> void:
+	target.fill(0)
+	if values is Array and values.size() == target.size():
+		for i in target.size():
+			target[i] = clampi(profile_int(values[i]),0,limit)
+
 func load_profile() -> void:
+	var cfg := read_profile(PROFILE_PATH)
+	if cfg == null:
+		cfg = read_profile(PROFILE_BACKUP)
+	if cfg == null:
+		cfg = ConfigFile.new()
+	load_profile_array(gate_wins,cfg.get_value("gates","wins",[]),9223372036854775807)
+	load_profile_array(quest_progress,cfg.get_value("quests","progress",[]),1000000000)
+	load_profile_array(quest_tiers,cfg.get_value("quests","tiers",[]),1000)
+	load_profile_array(hunter_stats,cfg.get_value("awakening","stats",[]),3000)
+	hunter_level = clampi(profile_int(cfg.get_value("awakening","level",1),1),1,1000)
+	hunter_xp = clampi(profile_int(cfg.get_value("awakening","xp",0)),0,hunter_level*100-1)
+	stat_points = clampi(profile_int(cfg.get_value("awakening","points",0)),0,3000)
+	best = maxi(0,profile_int(cfg.get_value("records","best",0)))
+	credits = maxi(0,profile_int(cfg.get_value("records","credits",0)))
+	best_sprint = maxi(0,profile_int(cfg.get_value("records","sprint",0)))
+	runs = maxi(0,profile_int(cfg.get_value("records","runs",0)))
+	total_kills = maxi(0,profile_int(cfg.get_value("records","kills",0)))
 	owned = [0]
-	selected = 0
-	var cfg := ConfigFile.new()
-	if cfg.load(PROFILE_PATH) == OK or cfg.load(PROFILE_BACKUP) == OK:
-		var gw: Variant = cfg.get_value("gates","wins",[])
-		if gw is Array and gw.size() == 7:
-			for i in range(7):
-				gate_wins[i] = maxi(0,int(gw[i]))
-		var qp: Variant = cfg.get_value("quests","progress",[0,0,0])
-		var qt: Variant = cfg.get_value("quests","tiers",[0,0,0])
-		for i in range(3):
-			quest_progress[i] = clampi(int(qp[i]),0,1000000000) if qp is Array and qp.size() == 3 else 0
-			quest_tiers[i] = clampi(int(qt[i]),0,1000) if qt is Array and qt.size() == 3 else 0
-		hunter_level = clampi(int(cfg.get_value("awakening","level",1)),1,1000)
-		hunter_xp = clampi(int(cfg.get_value("awakening","xp",0)),0,hunter_level*100-1)
-		stat_points = clampi(int(cfg.get_value("awakening","points",0)),0,3000)
-		var saved_stats: Variant = cfg.get_value("awakening","stats",[])
-		if saved_stats is Array and saved_stats.size() == 5:
-			for i in range(5):
-				hunter_stats[i] = clampi(int(saved_stats[i]),0,3000)
-		best = maxi(0,int(cfg.get_value("records","best",0)))
-		credits = maxi(0,int(cfg.get_value("records","credits",0)))
-		best_sprint = maxi(0,int(cfg.get_value("records","sprint",0)))
-		runs = maxi(0,int(cfg.get_value("records","runs",0)))
-		total_kills = maxi(0,int(cfg.get_value("records","kills",0)))
-		var saved: Variant = cfg.get_value("collection","owned",[0])
-		if saved is Array:
-			for id in saved:
-				if id is int and id >= 0 and id < HEROES.size() and not owned.has(id):
-					owned.append(id)
-		selected = int(cfg.get_value("collection","selected",0))
-		if not owned.has(selected):
-			selected = 0
+	var saved: Variant = cfg.get_value("collection","owned",[])
+	if saved is Array:
+		for id in saved:
+			if id is int and id > 0 and id < HEROES.size() and not owned.has(id):
+				owned.append(id)
+	selected = profile_int(cfg.get_value("collection","selected",0))
+	if not owned.has(selected):
+		selected = 0
 
 func start() -> void:
 	visual_stride = 0.0
@@ -1364,6 +1379,7 @@ func start() -> void:
 	choosing = false
 	upgrades.hide()
 	hero.position = Vector3(0,0.5,0)
+	hero.rotation = Vector3.ZERO
 	camera.position = hero.position + Vector3(0,19,15)
 	hero.scale = Vector3.ONE
 	elapsed = 0
@@ -1387,8 +1403,7 @@ func start() -> void:
 	level = 1
 	spawn_timer = 0
 	attack_timer = 0
-	finger = -1
-	direction = Vector2.ZERO
+	clear_touch()
 	running = true
 	menu_scrim.hide()
 	retry.hide()
@@ -1427,11 +1442,18 @@ func refresh_touch_stick() -> void:
 	stick_knob.size = Vector2.ONE*radius*0.7
 	stick_knob.position = Vector2.ONE*radius-stick_knob.size*0.5+direction*radius*0.65
 
+func clear_touch() -> void:
+	finger = -1
+	direction = Vector2.ZERO
+	refresh_touch_stick()
+
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
+		clear_touch()
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and not event.pressed and event.index == finger:
-		finger = -1
-		direction = Vector2.ZERO
-		refresh_touch_stick()
+		clear_touch()
 		return
 	if not running or choosing:
 		return
@@ -1439,9 +1461,6 @@ func _input(event: InputEvent) -> void:
 		if event.pressed and finger == -1:
 			finger = event.index
 			origin = event.position
-		elif not event.pressed and event.index == finger:
-			finger = -1
-			direction = Vector2.ZERO
 	elif event is InputEventScreenDrag and event.index == finger:
 		var raw: Vector2 = ((event.position-origin)/float(advanced["stick_size"])*float(advanced["sensitivity"])).limit_length()
 		var dead := float(advanced["deadzone"])
@@ -1452,7 +1471,6 @@ var visual_stride := 0.0
 var visual_lean := Vector2.ZERO
 var visual_recoil := 0.0
 func _physics_process(dt: float) -> void:
-	refresh_touch_stick()
 	if not running or choosing:
 		return
 	elapsed += dt
@@ -1574,6 +1592,7 @@ func _physics_process(dt: float) -> void:
 		play_fx("level")
 		hero.scale = Vector3.ONE*(1.0+minf((level-1)*0.12,1.5))
 		choosing = true
+		clear_touch()
 		roll_offers()
 		upgrades.show()
 	if hp <= 0 or (mode == 2 and (gate_cleared or elapsed >= 120.0)):
