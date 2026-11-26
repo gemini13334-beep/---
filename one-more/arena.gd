@@ -42,6 +42,8 @@ var score_bonus := 0
 var ranks: Dictionary = {}
 var offers: Array[int] = []
 var offer_buttons: Array[Button] = []
+var offer_art: Array[TextureRect] = []
+var offer_motion: Tween
 const ABILITIES = [
 	["ФОРСАЖ","Быстрее стрельба",0],["РЫВОК","Быстрее движение",0],
 	["МАГНИТ","Подбор и лечение",0],["НОВА","Урон по области",1],
@@ -71,8 +73,9 @@ func roll_offers() -> void:
 		offers.append(id)
 	for i in range(3):
 		var a: Array = ABILITIES[offers[i]]
-		offer_buttons[i].text = "%s  /  %s  ·  РАНГ %d\n%s" % [["ОБЫЧНОЕ","РЕДКОЕ","ЭПИЧЕСКОЕ"][a[2]],a[0],int(ranks.get(offers[i],0))+1,a[1]]
+		offer_buttons[i].text = "%s  ·  РАНГ %d\n%s\n%s" % [a[0],int(ranks.get(offers[i],0))+1,a[1],["ОБЫЧНОЕ","РЕДКОЕ","ЭПИЧЕСКОЕ"][a[2]]]
 		offer_buttons[i].modulate = [Color.WHITE,Color("#85d9ff"),Color("#e2b2ff")][a[2]]
+		offer_art[i].texture = hud_panel.art_texture(offers[i])
 
 const DEFAULT_HERO := 6
 var selected := DEFAULT_HERO
@@ -1650,21 +1653,33 @@ func _ready() -> void:
 	coop.configure(self,layer)
 	upgrades = VBoxContainer.new()
 	layer.add_child(upgrades)
-	upgrades.position = Vector2(90,430)
+	upgrades.position = Vector2(90,477)
 	upgrades.size = Vector2(540,320)
 	upgrades.add_theme_constant_override("separation",16)
 	var heading := Label.new()
 	heading.text = "ВЫБЕРИТЕ УСИЛЕНИЕ"
+	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size",28)
+	heading.add_theme_color_override("font_outline_color",Color("#0b131e"))
+	heading.add_theme_constant_override("outline_size",7)
 	upgrades.add_child(heading)
 	for i in range(3):
 		var btn := Button.new()
 		btn.text = "УСИЛЕНИЕ"
 		offer_buttons.append(btn)
 		btn.custom_minimum_size = Vector2(540,110)
-		btn.add_theme_font_size_override("font_size",24)
+		btn.add_theme_font_size_override("font_size",20)
+		btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		upgrades.add_child(btn)
 		style_button(btn)
+		for state in ["normal","hover","pressed","disabled"]:
+			var box := btn.get_theme_stylebox(state).duplicate() as StyleBoxFlat
+			box.content_margin_left = 123
+			box.content_margin_right = 17
+			btn.add_theme_stylebox_override(state,box)
+		var border := hud_panel.plate(btn,Rect2(10,10,93,90),Color("#d2a66c"),8)
+		var artwork := hud_panel.picture(border,Rect2(5,5,83,80))
+		offer_art.append(artwork)
 		btn.pressed.connect(choose_upgrade.bind(i))
 	upgrades.hide()
 	load_profile()
@@ -2033,6 +2048,11 @@ func _physics_process(dt: float) -> void:
 		clear_touch()
 		roll_offers()
 		upgrades.show()
+		if offer_motion != null:
+			offer_motion.kill()
+		upgrades.modulate.a = 0.06
+		offer_motion = create_tween()
+		offer_motion.tween_property(upgrades,"modulate:a",1.0,0.24).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
 	if coop.live:
 		hero.visible = hp > 0
 		if hp <= 0 and coop.partner_hp <= 0:

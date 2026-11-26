@@ -322,7 +322,7 @@ func configure(owner_arena) -> void:
 	health_text = display(bottom,Rect2(228,95,454,22),"",16,TEXT,true)
 	xp_text = display(bottom,Rect2(228,119,454,23),"",16,BLUE,true)
 	bottom_xp = meter(bottom,Rect2(228,145,454,5),BLUE)
-	badge = display(self,Rect2(248,244,225,39),"",23,GOLD,true)
+	badge = display(self,Rect2(241,244,236,39),"",20,GOLD,true)
 	badge.hide()
 	build_pause()
 
@@ -576,7 +576,7 @@ func animate_events() -> void:
 	if last_level >= 0 and arena.level > last_level:
 		if level_pop != null:
 			level_pop.kill()
-		badge.text = "НОВЫЙ УРОВЕНЬ · %d" % arena.level
+		badge.text = "НОВЫЙ УРОВЕНЬ %d" % arena.level
 		badge.position.y = 262.0
 		badge.modulate.a = 1.0
 		badge.show()

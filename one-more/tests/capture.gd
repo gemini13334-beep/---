@@ -214,6 +214,12 @@ func capture() -> void:
 	await shot("forest-ruins",arena.hud_panel)
 	arena.xp = arena.level * 3
 	advance(1)
+	for fade_frame in 5:
+		await process_frame
+	check_animation(not arena.upgrades.get_global_rect().intersects(arena.hud_panel.radar_frame.get_global_rect()),
+		"The upgrade picker overlaps the minimap")
+	check_animation(arena.offer_art.all(func(card: TextureRect) -> bool: return card.texture != null),
+		"The upgrade picker lacks illustrated offers")
 	await shot("upgrade",arena.upgrades)
 	arena.choose_upgrade(0)
 	arena.finish_run()
