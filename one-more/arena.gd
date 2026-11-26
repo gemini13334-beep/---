@@ -76,6 +76,7 @@ var sound: AudioStreamPlayer
 var sounds: Dictionary = {}
 
 var ambient_player: AudioStreamPlayer
+var forest_understory: MultiMeshInstance3D
 func ambient_loop() -> AudioStreamWAV:
 	var rate := 16000
 	var count := rate*8
@@ -166,6 +167,8 @@ func play_fx(key: String) -> void:
 	voice.play()
 
 func rebuild_scenery() -> void:
+	if forest_understory != null:
+		forest_understory.visible = biome == 0
 	for prop in scenery:
 		prop.queue_free()
 	scenery.clear()
@@ -193,18 +196,71 @@ func rebuild_scenery() -> void:
 			prop.scale = Vector3.ONE*rng.randf_range(0.65,1.5)
 			prop.rotation.y = angle
 			scenery.append(prop)
+		for point in [Vector2(-4.45,-6.0),Vector2(4.8,5.9),Vector2(4.9,-9.0),Vector2(-7.5,4.2)]:
+			var rock_mesh := SphereMesh.new()
+			rock_mesh.radius = 0.55
+			rock_mesh.height = 0.4
+			var outcrop := model(rock_mesh,Color("#28473d"),Vector3(point.x,0.35,point.y))
+			if attach_art(outcrop,"forest") == null:
+				outcrop.position.y = 0.14
+			outcrop.rotation.y = rng.randf_range(0,TAU)
+			outcrop.scale = Vector3(0.9,0.7,0.9)
+			scenery.append(outcrop)
 
 var ground: MeshInstance3D
 var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
-const GROUND_COLORS = ["#294a37","#34404c","#82613d","#426c80","#4d292c"]
+const GROUND_COLORS = ["#142d2d","#26323f","#674633","#2b4b68","#342732"]
+const GROUND_ACCENTS = ["#344739","#505f70","#ad7b48","#537a91","#68403b"]
+const GROUND_MARKINGS = ["#62583d","#7b9aa2","#a87744","#88b2c2","#eb784a"]
 
 func update_ground_material() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/terrain.gdshader")
 	mat.set_shader_parameter("base_color",Color(GROUND_COLORS[biome]))
-	mat.set_shader_parameter("forest",1.0 if biome == 0 else 0.0)
+	mat.set_shader_parameter("second_color",Color(GROUND_ACCENTS[biome]))
+	mat.set_shader_parameter("path_color",Color(GROUND_MARKINGS[biome]))
+	mat.set_shader_parameter("biome",biome)
 	ground.material_override = mat
+
+func build_forest_understory() -> void:
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 20191
+	var mesh_builder := SurfaceTool.new()
+	mesh_builder.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for index in 9:
+		var angle := TAU*float(index)/9.0
+		var side := Vector3(cos(angle),0,sin(angle))
+		var width := side.cross(Vector3.UP)*rng.randf_range(0.025,0.055)
+		var root := side*0.05
+		var bend := side*rng.randf_range(0.12,0.24)+Vector3.UP*0.18
+		var tip := side*rng.randf_range(0.24,0.39)+Vector3.UP*rng.randf_range(0.22,0.36)
+		for vertex in [root,bend+width,bend-width,bend+width,tip,bend-width]:
+			mesh_builder.add_vertex(vertex)
+	mesh_builder.generate_normals()
+	var fronds := StandardMaterial3D.new()
+	fronds.cull_mode = BaseMaterial3D.CULL_DISABLED
+	fronds.vertex_color_use_as_albedo = true
+	fronds.roughness = 0.92
+	mesh_builder.set_material(fronds)
+	var clusters := MultiMesh.new()
+	clusters.mesh = mesh_builder.commit()
+	clusters.transform_format = MultiMesh.TRANSFORM_3D
+	clusters.use_colors = true
+	clusters.instance_count = 225
+	for index in clusters.instance_count:
+		var z := rng.randf_range(-20.5,20.5)
+		var x := rng.randf_range(-20.5,20.5)
+		var trail_x := sin(z*0.21)*2.4-z*0.28
+		if absf(x-trail_x) < 2.2:
+			x = trail_x+(1.0 if x > trail_x else -1.0)*rng.randf_range(2.2,3.4)
+		var basis := Basis(Vector3.UP,rng.randf_range(0,TAU)).scaled(Vector3.ONE*rng.randf_range(0.55,1.65))
+		clusters.set_instance_transform(index,Transform3D(basis,Vector3(x,0,z)))
+		clusters.set_instance_color(index,Color("#297853").lerp(Color("#7cae5d"),rng.randf()))
+	forest_understory = MultiMeshInstance3D.new()
+	forest_understory.multimesh = clusters
+	forest_understory.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(forest_understory)
 
 var biome_rim: DirectionalLight3D
 var biome_environment: Environment
@@ -240,6 +296,7 @@ const VEHICLE_FIRE = [0.3,0.15,0.45,0.35]
 var next_event := 15.0
 var event_label: Label
 var achievements: Label
+const COMBAT_CAMERA_OFFSET := Vector3(0,17,16)
 
 func sprint() -> void:
 	start()
@@ -306,10 +363,16 @@ func update_events(dt: float) -> void:
 var hp_bar: ProgressBar
 var xp_bar: ProgressBar
 var hero_visual: Node3D
+var hero_shadow: MeshInstance3D
 const PALETTE = ["#62f5c5","#8caee9","#ff7043","#b998ff","#e2b45d","#72e5ff"]
 
 var hud_panel: Panel
+var hud_stats: Label
+var health_label: Label
+var energy_label: Label
 var menu_scrim: ColorRect
+var showcase_scrim: TextureRect
+var hero_stage: Node3D
 
 func ui_panel(layer: CanvasLayer, pos: Vector2, dimensions: Vector2) -> Panel:
 	var panel := Panel.new()
@@ -347,19 +410,18 @@ func style_button(btn: Button) -> void:
 	btn.add_theme_color_override("font_color",Color("#edf8f5"))
 
 func apply_hero_art() -> void:
-	for child in hero.get_children():
-		hero.remove_child(child)
-		child.queue_free()
+	if is_instance_valid(hero_visual):
+		hero.remove_child(hero_visual)
+		hero_visual.queue_free()
 	hero.mesh = SphereMesh.new()
 	var mat := hero.material_override as StandardMaterial3D
 	mat.albedo_color = Color(PALETTE[selected])
-	attach_art(hero,["hero","cyborg","inferno","ghost","titan","cryo"][selected])
+	hero_visual = attach_art(hero,["hero","cyborg","inferno","ghost","titan","cryo"][selected])
 
-func make_bar(layer: CanvasLayer, y: float, color: Color) -> ProgressBar:
+func make_bar(parent: Control, position: Vector2, color: Color) -> ProgressBar:
 	var bar := ProgressBar.new()
-	layer.add_child(bar)
-	bar.position = Vector2(24,y)
-	bar.size = Vector2(672,18)
+	parent.add_child(bar)
+	bar.position = position
 	bar.show_percentage = false
 	var bg := StyleBoxFlat.new()
 	bg.bg_color = Color("#09151f")
@@ -374,6 +436,7 @@ func make_bar(layer: CanvasLayer, y: float, color: Color) -> ProgressBar:
 	bar.add_theme_stylebox_override("background",bg)
 	bar.add_theme_stylebox_override("fill",fill)
 	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	bar.size = Vector2(316,12)
 	return bar
 
 const HEROES = [
@@ -447,6 +510,8 @@ func select_hero(index: int) -> void:
 		owned.append(index)
 	selected = index
 	save_profile()
+	if not running:
+		apply_hero_art()
 	refresh_collection()
 
 var settings_panel: VBoxContainer
@@ -459,20 +524,35 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
-const DEFAULT_ADVANCED = {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":23.0,"master":1.0,"music":0.7,"effects":1.0,"particles":1.0,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
+const DEFAULT_ADVANCED = {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":20.5,"master":1.0,"music":0.7,"effects":1.0,"particles":0.65,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
 var advanced: Dictionary = DEFAULT_ADVANCED.duplicate()
 var advanced_sliders: Dictionary = {}
 var settings_tabs: TabContainer
 var preset_button: Button
 var preset_index := 1
 const PRESET_NAMES = ["LOW","MEDIUM","HIGH","ULTRA"]
+const PRESET_VALUES = {
+	"render_scale": [0.65,1.0,1.0,1.0],
+	"msaa": [0.0,0.0,1.0,2.0],
+	"particles": [0.25,0.65,0.85,1.0],
+}
+
+func graphics_preset_name() -> String:
+	for index in PRESET_NAMES.size():
+		if high_quality != (index >= 2):
+			continue
+		if is_equal_approx(advanced["render_scale"],PRESET_VALUES["render_scale"][index]) and \
+			is_equal_approx(advanced["msaa"],PRESET_VALUES["msaa"][index]) and \
+			is_equal_approx(advanced["particles"],PRESET_VALUES["particles"][index]):
+			return PRESET_NAMES[index]
+	return "CUSTOM"
+
 func cycle_preset() -> void:
-	preset_index = (preset_index+1)%4
+	preset_index = (preset_index+1)%PRESET_NAMES.size()
 	high_quality = preset_index >= 2
-	var values := {"render_scale":[0.65,0.8,1.0,1.0],"msaa":[0.0,0.0,1.0,2.0],"particles":[0.25,0.5,0.8,1.0]}
-	for key in values:
+	for key in PRESET_VALUES:
 		var slider := advanced_sliders[key] as HSlider
-		slider.value = float(values[key][preset_index])
+		slider.value = float(PRESET_VALUES[key][preset_index])
 	save_settings()
 
 func setting_slider(parent: Control, key: String, caption: String, low: float, high: float, step: float) -> void:
@@ -485,7 +565,7 @@ func setting_slider(parent: Control, key: String, caption: String, low: float, h
 	slider.max_value = high
 	slider.step = step
 	slider.value = float(advanced[key])
-	slider.custom_minimum_size = Vector2(500,36)
+	slider.custom_minimum_size.y = 36
 	parent.add_child(slider)
 	advanced_sliders[key] = slider
 	slider.value_changed.connect(func(value: float):
@@ -518,7 +598,30 @@ func build_settings(layer: CanvasLayer) -> void:
 	settings_panel.add_child(heading)
 	settings_tabs = TabContainer.new()
 	settings_tabs.custom_minimum_size = Vector2(540,720)
+	settings_tabs.tab_alignment = TabBar.ALIGNMENT_CENTER
 	settings_tabs.add_theme_font_size_override("font_size",22)
+	var settings_style := StyleBoxFlat.new()
+	settings_style.bg_color = Color("#10232dfc")
+	settings_style.border_color = Color("#335665")
+	settings_style.set_border_width_all(1)
+	settings_style.set_corner_radius_all(14)
+	settings_style.content_margin_left = 18
+	settings_style.content_margin_right = 18
+	settings_style.content_margin_top = 14
+	settings_style.content_margin_bottom = 14
+	settings_tabs.add_theme_stylebox_override("panel",settings_style)
+	for state in ["tab_selected","tab_unselected","tab_hovered"]:
+		var tab_style := StyleBoxFlat.new()
+		tab_style.bg_color = Color("#244a51") if state == "tab_selected" else Color("#172d37")
+		tab_style.border_color = Color("#7bd9be") if state == "tab_selected" else Color("#335665")
+		tab_style.border_width_bottom = 2
+		tab_style.corner_radius_top_left = 8
+		tab_style.corner_radius_top_right = 8
+		tab_style.content_margin_left = 16
+		tab_style.content_margin_right = 16
+		tab_style.content_margin_top = 8
+		tab_style.content_margin_bottom = 8
+		settings_tabs.add_theme_stylebox_override(state,tab_style)
 	settings_panel.add_child(settings_tabs)
 	var controls := settings_page("CONTROLS")
 	setting_slider(controls,"sensitivity","TOUCH SENSITIVITY",0.25,2.5,0.05)
@@ -530,15 +633,15 @@ func build_settings(layer: CanvasLayer) -> void:
 	setting_slider(controls,"vibration","HAPTICS (0 OFF / 1 ON)",0.0,1.0,1.0)
 	var graphics := settings_page("VIDEO")
 	preset_button = menu_button(graphics,"",cycle_preset)
-	preset_button.custom_minimum_size.y = 56
+	preset_button.custom_minimum_size = Vector2(0,56)
 	fps_button = menu_button(graphics,"",toggle_fps)
 	quality_button = menu_button(graphics,"",toggle_quality)
 	setting_slider(graphics,"particles","EFFECT DENSITY",0.25,1.0,0.05)
 	setting_slider(graphics,"brightness","LIGHT INTENSITY",0.65,1.35,0.05)
 	setting_slider(graphics,"render_scale","3D RENDER SCALE",0.5,1.0,0.05)
 	setting_slider(graphics,"msaa","MSAA (0 OFF / 1 2X / 2 4X)",0.0,2.0,1.0)
-	fps_button.custom_minimum_size.y = 56
-	quality_button.custom_minimum_size.y = 56
+	fps_button.custom_minimum_size = Vector2(0,56)
+	quality_button.custom_minimum_size = Vector2(0,56)
 	var audio := settings_page("AUDIO")
 	audio_button = menu_button(audio,"",toggle_audio)
 	setting_slider(audio,"master","MASTER VOLUME",0.0,1.0,0.05)
@@ -548,7 +651,7 @@ func build_settings(layer: CanvasLayer) -> void:
 	setting_slider(audio,"enemies","ENEMY IMPACTS",0.0,1.0,0.05)
 	setting_slider(audio,"notifications","SYSTEM NOTIFICATIONS",0.0,1.0,0.05)
 	setting_slider(audio,"vehicles","VEHICLE BOOST",0.0,1.0,0.05)
-	audio_button.custom_minimum_size.y = 56
+	audio_button.custom_minimum_size = Vector2(0,56)
 	var reset := menu_button(settings_panel,"RESTORE DEFAULTS",reset_settings)
 	reset.custom_minimum_size.y = 56
 	menu_button(settings_panel,"BACK",close_settings)
@@ -571,6 +674,8 @@ func close_settings() -> void:
 
 func show_settings() -> void:
 	menu.hide()
+	showcase_scrim.hide()
+	menu_scrim.show()
 	collection.hide()
 	settings_panel.show()
 
@@ -580,9 +685,10 @@ func apply_settings() -> void:
 		1: get_viewport().msaa_3d = Viewport.MSAA_2X
 		2: get_viewport().msaa_3d = Viewport.MSAA_4X
 		_: get_viewport().msaa_3d = Viewport.MSAA_DISABLED
-	preset_button.text = "APPLY PRESET / "+PRESET_NAMES[preset_index]
-	camera.size = float(advanced["zoom"])
-	world_light.light_energy = 1.35*float(advanced["brightness"])
+	preset_button.text = "QUALITY  /  "+graphics_preset_name()
+	if running:
+		camera.size = float(advanced["zoom"])
+	world_light.light_energy = 1.18*float(advanced["brightness"])
 	if is_instance_valid(ambient_player):
 		ambient_player.volume_db = -26.0+linear_to_db(maxf(0.0001,float(advanced["master"])*float(advanced["music"])))
 	if is_instance_valid(ambient_player):
@@ -724,6 +830,8 @@ func show_awakening() -> void:
 	gate_panel.hide()
 	quest_panel.hide()
 	menu.hide()
+	showcase_scrim.hide()
+	menu_scrim.show()
 	awakening_panel.show()
 	refresh_awakening()
 
@@ -823,6 +931,7 @@ func enter_gate(index: int) -> void:
 
 func show_collection() -> void:
 	menu.hide()
+	showcase_scrim.hide()
 	menu_scrim.show()
 	collection.show()
 	refresh_collection()
@@ -833,7 +942,25 @@ func show_menu() -> void:
 	awakening_panel.hide()
 	settings_panel.hide()
 	collection.hide()
-	menu_scrim.show()
+	menu_scrim.hide()
+	showcase_scrim.show()
+	hud_panel.hide()
+	event_label.hide()
+	hero_stage.show()
+	hero_shadow.hide()
+	for actor in enemies + crates + gems:
+		actor.hide()
+	if is_instance_valid(vehicle):
+		vehicle.hide()
+	hero.position = Vector3(0,0.67,0)
+	hero.scale = Vector3.ONE
+	hero.rotation.y = -0.24
+	if is_instance_valid(hero_visual):
+		hero_visual.rotation = Vector3.ZERO
+	var target := Vector3(0,-0.98,0.90)
+	camera.position = target + Vector3(0,4.2,7.6)
+	camera.look_at(target)
+	camera.size = 7.25
 	menu.show()
 	refresh_collection()
 
@@ -1021,18 +1148,49 @@ func hit_enemy(enemy: MeshInstance3D) -> void:
 
 
 var art_cache: Dictionary = {}
-func attach_art(host: MeshInstance3D, asset: String) -> void:
+var contact_shadow_mesh: PlaneMesh
+var contact_shadow_material: StandardMaterial3D
+
+func add_contact_shadow(host: Node3D, size: float) -> MeshInstance3D:
+	if contact_shadow_mesh == null:
+		contact_shadow_mesh = PlaneMesh.new()
+		contact_shadow_mesh.size = Vector2.ONE
+		var gradient := Gradient.new()
+		gradient.offsets = PackedFloat32Array([0.0,0.45,1.0])
+		gradient.colors = PackedColorArray([Color(0,0,0,0.58),Color(0,0,0,0.30),Color(0,0,0,0)])
+		var texture := GradientTexture2D.new()
+		texture.gradient = gradient
+		texture.fill = GradientTexture2D.FILL_RADIAL
+		texture.fill_from = Vector2(0.5,0.5)
+		texture.fill_to = Vector2(1.0,0.5)
+		texture.width = 32
+		texture.height = 32
+		contact_shadow_material = StandardMaterial3D.new()
+		contact_shadow_material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		contact_shadow_material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+		contact_shadow_material.albedo_texture = texture
+	var shadow := MeshInstance3D.new()
+	shadow.mesh = contact_shadow_mesh
+	shadow.material_override = contact_shadow_material
+	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	shadow.scale = Vector3(size,1,size)
+	host.add_child(shadow)
+	shadow.position.y = (0.012-host.position.y)/host.scale.y
+	return shadow
+
+func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
 	if not art_cache.has(asset):
 		var path := "res://assets/models/" + asset + ".glb"
 		art_cache[asset] = load(path) as PackedScene if ResourceLoader.exists(path) else null
 	var packed := art_cache[asset] as PackedScene
 	if packed == null:
-		return
+		return null
 	var art := packed.instantiate() as Node3D
 	if art != null:
 		host.add_child(art)
 		host.mesh = null
 		art.position.y = -0.5
+	return art
 
 func award(points: int) -> void:
 	combo = mini(combo + 1, 20)
@@ -1046,10 +1204,13 @@ func drop_gem(pos: Vector3) -> void:
 		gem_mesh = SphereMesh.new()
 		gem_mesh.radius = 0.18
 		gem_mesh.height = 0.36
-		gem_mesh.radial_segments = 12
-		gem_mesh.rings = 6
+		gem_mesh.radial_segments = 4
+		gem_mesh.rings = 1
 		gem_material = StandardMaterial3D.new()
 		gem_material.albedo_color = Color("#ffd65a")
+		gem_material.emission_enabled = true
+		gem_material.emission = Color("#d48626")
+		gem_material.emission_energy_multiplier = 0.45
 	var gem := MeshInstance3D.new()
 	gem.mesh = gem_mesh
 	gem.material_override = gem_material
@@ -1122,6 +1283,36 @@ func model(mesh: Mesh, color: Color, pos: Vector3) -> MeshInstance3D:
 	n.position = pos
 	return n
 
+func build_hero_stage() -> void:
+	var pedestal := CylinderMesh.new()
+	pedestal.top_radius = 1.22
+	pedestal.bottom_radius = 1.42
+	pedestal.height = 0.22
+	hero_stage = model(pedestal,Color("#243f47"),Vector3(0,0.01,0))
+	var rim_mesh := TorusMesh.new()
+	rim_mesh.inner_radius = 1.14
+	rim_mesh.outer_radius = 1.2
+	rim_mesh.rings = 48
+	rim_mesh.ring_segments = 6
+	var rim := MeshInstance3D.new()
+	rim.mesh = rim_mesh
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.albedo_color = Color("#61ddbf")
+	rim.material_override = material
+	rim.scale.y = 0.45
+	rim.position.y = 0.12
+	hero_stage.add_child(rim)
+
+func hud_label(position: Vector2, font_size: int, color: Color) -> Label:
+	var label := Label.new()
+	label.position = position
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.add_theme_font_size_override("font_size",font_size)
+	label.add_theme_color_override("font_color",color)
+	hud_panel.add_child(label)
+	return label
+
 func _ready() -> void:
 	sound = AudioStreamPlayer.new()
 	add_child(sound)
@@ -1139,12 +1330,14 @@ func _ready() -> void:
 	ambient_player.stream = ambient_loop()
 	var floor_mesh := BoxMesh.new()
 	floor_mesh.size = Vector3(44, 0.2, 44)
-	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.2,0))
+	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.1,0))
 	update_ground_material()
+	build_forest_understory()
 	rebuild_scenery()
 	var sphere := SphereMesh.new()
 	hero = model(sphere,Color("#62f5c5"),Vector3(0,0.5,0))
-	apply_hero_art()
+	hero_shadow = add_contact_shadow(hero,1.9)
+	build_hero_stage()
 	var light := DirectionalLight3D.new()
 	world_light = light
 	add_child(light)
@@ -1172,28 +1365,22 @@ func _ready() -> void:
 	camera = Camera3D.new()
 	add_child(camera)
 	camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	camera.size = 23
-	camera.position = Vector3(0,19,15)
+	camera.position = COMBAT_CAMERA_OFFSET
 	camera.look_at(Vector3.ZERO)
 	camera.current = true
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	build_touch_stick(layer)
-	hud_panel = ui_panel(layer,Vector2(12,12),Vector2(696,236))
-	fps_label = Label.new()
-	fps_label.position = Vector2(560,24)
-	fps_label.add_theme_font_size_override("font_size",20)
-	fps_label.add_theme_color_override("font_color",Color("#8df4d5"))
-	fps_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(fps_label)
-	hud = Label.new()
-	layer.add_child(hud)
-	hud.position = Vector2(24,24)
-	hud.add_theme_font_size_override("font_size",24)
-	hud.add_theme_constant_override("line_spacing",5)
-	hud.add_theme_color_override("font_color",Color("#eef8f5"))
-	hp_bar = make_bar(layer,190,Color("#65e5a5"))
-	xp_bar = make_bar(layer,218,Color("#f9c95b"))
+	hud_panel = ui_panel(layer,Vector2(16,16),Vector2(688,140))
+	hud = hud_label(Vector2(18,10),29,Color("#f0fff9"))
+	fps_label = hud_label(Vector2(552,17),18,Color("#93b1bb"))
+	fps_label.size.x = 118
+	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	hud_stats = hud_label(Vector2(18,51),22,Color("#aacecb"))
+	health_label = hud_label(Vector2(18,86),20,Color("#9ef4c8"))
+	energy_label = hud_label(Vector2(354,86),20,Color("#ffe0a1"))
+	hp_bar = make_bar(hud_panel,Vector2(18,113),Color("#65e5a5"))
+	xp_bar = make_bar(hud_panel,Vector2(354,113),Color("#f9c95b"))
 	retry = Button.new()
 	layer.add_child(retry)
 	retry.position = Vector2(110,550)
@@ -1207,25 +1394,37 @@ func _ready() -> void:
 	menu_scrim.size = Vector2(720,1280)
 	menu_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(menu_scrim)
+	showcase_scrim = TextureRect.new()
+	var gradient := Gradient.new()
+	gradient.offsets = PackedFloat32Array([0.0,0.18,0.29,0.39,1.0])
+	gradient.colors = PackedColorArray([Color("#08151be8"),Color("#08151b10"),Color("#08151b02"),Color("#0b1922ec"),Color("#07121afe")])
+	var backdrop := GradientTexture2D.new()
+	backdrop.gradient = gradient
+	backdrop.fill_to = Vector2.DOWN
+	backdrop.width = 4
+	backdrop.height = 256
+	showcase_scrim.texture = backdrop
+	showcase_scrim.size = Vector2(720,1280)
+	showcase_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(showcase_scrim)
 	menu = VBoxContainer.new()
 	layer.add_child(menu)
-	menu.position = Vector2(90,260)
-	menu.add_theme_constant_override("separation",18)
+	menu.position = Vector2(90,42)
+	menu.add_theme_constant_override("separation",12)
 	var title := Label.new()
 	title.text = "ONE MORE"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size",64)
+	title.add_theme_font_size_override("font_size",76)
 	menu.add_child(title)
 	title.add_theme_color_override("font_color",Color("#8df4d5"))
-	var subtitle := Label.new()
-	subtitle.text = "SURVIVE  /  EVOLVE  /  REPEAT"
-	subtitle.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	subtitle.add_theme_font_size_override("font_size",22)
-	subtitle.add_theme_color_override("font_color",Color("#a8becb"))
-	menu.add_child(subtitle)
+	var hero_space := Control.new()
+	hero_space.custom_minimum_size.y = 254
+	hero_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	menu.add_child(hero_space)
 	result_label = Label.new()
 	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	result_label.add_theme_font_size_override("font_size",26)
+	result_label.add_theme_font_size_override("font_size",22)
+	result_label.add_theme_color_override("font_color",Color("#bdd4d5"))
 	menu.add_child(result_label)
 	var play := menu_button(menu,"PLAY  /  ENDLESS",start)
 	var primary := StyleBoxFlat.new()
@@ -1241,8 +1440,10 @@ func _ready() -> void:
 	menu.add_child(achievements)
 	event_label = Label.new()
 	layer.add_child(event_label)
-	event_label.position = Vector2(24,245)
+	event_label.position = Vector2(24,166)
 	event_label.add_theme_font_size_override("font_size",24)
+	event_label.add_theme_color_override("font_outline_color",Color("#102029"))
+	event_label.add_theme_constant_override("outline_size",6)
 	menu_button(menu,"HERO COLLECTION",show_collection)
 	menu_button(menu,"AWAKENING",show_awakening)
 	build_awakening(layer)
@@ -1289,8 +1490,9 @@ func _ready() -> void:
 		btn.pressed.connect(choose_upgrade.bind(i))
 	upgrades.hide()
 	load_profile()
+	apply_hero_art()
 	load_settings()
-	refresh_collection()
+	show_menu()
 	update_hud()
 
 func profile_int(value: Variant, fallback: int = 0) -> int:
@@ -1360,6 +1562,7 @@ func start() -> void:
 		var mesh := BoxMesh.new()
 		var crate := model(mesh,Color("#d49b43"),p)
 		attach_art(crate,"crate")
+		add_contact_shadow(crate,1.65)
 		crates.append(crate)
 	xp = 0
 	boss_spawned = false
@@ -1380,8 +1583,11 @@ func start() -> void:
 	upgrades.hide()
 	hero.position = Vector3(0,0.5,0)
 	hero.rotation = Vector3.ZERO
-	camera.position = hero.position + Vector3(0,19,15)
+	camera.position = hero.position + COMBAT_CAMERA_OFFSET
+	camera.look_at(hero.position)
+	camera.size = float(advanced["zoom"])
 	hero.scale = Vector3.ONE
+	hero_shadow.position.y = -0.488
 	elapsed = 0
 	score = 0
 	apply_hero_art()
@@ -1406,6 +1612,12 @@ func start() -> void:
 	clear_touch()
 	running = true
 	menu_scrim.hide()
+	showcase_scrim.hide()
+	hero_stage.hide()
+	hero_shadow.show()
+	hud_panel.show()
+	event_label.show()
+	update_hud()
 	retry.hide()
 	menu.hide()
 	collection.hide()
@@ -1493,15 +1705,14 @@ func _physics_process(dt: float) -> void:
 	visual_lean = visual_lean.lerp(move*0.09,1.0-exp(-10.0*dt))
 	visual_recoil = move_toward(visual_recoil,0.0,dt*0.8)
 	var bob := -0.5+sin(elapsed*12.0)*0.065*visual_stride
-	for child in hero.get_children():
-		if child is Node3D:
-			child.position.y = bob
-			child.rotation.x = visual_lean.y+visual_recoil
-			child.rotation.z = -visual_lean.x+sin(elapsed*6.0)*0.035*visual_stride
+	if is_instance_valid(hero_visual):
+		hero_visual.position.y = bob
+		hero_visual.rotation.x = visual_lean.y+visual_recoil
+		hero_visual.rotation.z = -visual_lean.x+sin(elapsed*6.0)*0.035*visual_stride
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
-	camera.position = camera.position.lerp(hero.position + Vector3(0,19,15),1.0-exp(-float(advanced["camera_speed"])*dt))
+	camera.position = camera.position.lerp(hero.position + COMBAT_CAMERA_OFFSET,1.0-exp(-float(advanced["camera_speed"])*dt))
 	spawn_timer -= dt
 	if spawn_timer <= 0 and enemies.size() < 100:
 		spawn_timer = maxf(0.25,1.1-elapsed/150.0)
@@ -1525,6 +1736,7 @@ func _physics_process(dt: float) -> void:
 			attach_art(enemy,"enemy")
 		if mode == 2:
 			enemy.set_meta("health",int(enemy.get_meta("health",1))+gate_rank)
+		add_contact_shadow(enemy,1.72)
 		enemies.append(enemy)
 	if elapsed >= 45 and not boss_spawned:
 		boss_spawned = true
@@ -1538,6 +1750,7 @@ func _physics_process(dt: float) -> void:
 		boss.set_meta("boss",true)
 		boss.set_meta("health",24+boss_kind*6+(gate_rank*12 if mode == 2 else 0))
 		boss.set_meta("speed",1.5)
+		add_contact_shadow(boss,3.35)
 		enemies.append(boss)
 	var nearest: MeshInstance3D = null
 	var distance := 4.0+level*0.3+reach
@@ -1559,7 +1772,10 @@ func _physics_process(dt: float) -> void:
 		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
 		visual_recoil = 0.13
 		var impact := nearest.position
-		shot_tracer(hero.position+Vector3.UP*0.45,impact+Vector3.UP*0.2)
+		var muzzle := hero.position+Vector3.UP*0.45
+		if is_instance_valid(hero_visual):
+			muzzle = hero_visual.to_global(Vector3(0.72,0.42,0.79))
+		shot_tracer(muzzle,impact+Vector3.UP*0.2)
 		hit_enemy(nearest)
 		if blast > 0:
 			pulse(impact,1.5+blast*0.4,Color("#64cfff"))
@@ -1591,6 +1807,7 @@ func _physics_process(dt: float) -> void:
 		level += 1
 		play_fx("level")
 		hero.scale = Vector3.ONE*(1.0+minf((level-1)*0.12,1.5))
+		hero_shadow.position.y = (0.012-hero.position.y)/hero.scale.y
 		choosing = true
 		clear_touch()
 		roll_offers()
@@ -1603,6 +1820,8 @@ var fps_elapsed := 0.0
 var fps_label: Label
 
 func _process(dt: float) -> void:
+	if not running and is_instance_valid(hero_visual):
+		hero_visual.position.y = -0.5+sin(Time.get_ticks_msec()*0.002)*0.025
 	hud_elapsed += dt
 	fps_elapsed += dt
 	if hud_elapsed >= 0.1:
@@ -1618,4 +1837,8 @@ func update_hud() -> void:
 	hp_bar.modulate = Color("#ff8b79") if hp < max_hp*0.25 else Color.WHITE
 	xp_bar.max_value = level*3
 	xp_bar.value = xp
-	hud.text = "ONE MORE   /   LIVE\nSCORE %d  ·  BEST %d\nHP %d  ·  LV %d  ·  %ds\nXP %d/%d  ·  COMBO ×%d\nKILLS %d  ·  CREDITS %d" % [score,best,maxi(0,int(hp)),level,int(elapsed),xp,level*3,combo,kills,credits]
+	var clock := maxi(0,60-int(elapsed)) if mode == 1 else int(elapsed)
+	hud.text = "SCORE  %d" % score
+	hud_stats.text = "%02d:%02d   ·   LV %d   ·   %d KILLS   ·   ×%d COMBO" % [int(clock/60.0),clock%60,level,kills,combo]
+	health_label.text = "HP  %d / %d" % [maxi(0,int(hp)),int(max_hp)]
+	energy_label.text = "XP  %d / %d" % [xp,level*3]

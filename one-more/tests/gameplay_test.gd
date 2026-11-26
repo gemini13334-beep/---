@@ -19,6 +19,12 @@ func run_tests() -> void:
 	scene.set_physics_process(false)
 	scene.reset_settings()
 	check(scene.fps_limit == 60 and scene.advanced["sensitivity"] == 1.0,"Settings defaults")
+	check(scene.graphics_preset_name() == "MEDIUM","Default settings match the visible medium preset")
+	scene.cycle_preset()
+	check(scene.graphics_preset_name() == "HIGH" and root.msaa_3d == Viewport.MSAA_2X and scene.world_light.shadow_enabled,"High preset applies MSAA and shadows")
+	scene.advanced_sliders["particles"].value = 0.55
+	check(scene.graphics_preset_name() == "CUSTOM","Edited preset reports custom graphics")
+	scene.reset_settings()
 	scene.advanced_sliders["sensitivity"].value = 1.5
 	scene.advanced_sliders["weapons"].value = 0.0
 	scene.save_settings()
@@ -27,6 +33,9 @@ func run_tests() -> void:
 	check(is_equal_approx(float(scene.advanced["sensitivity"]),1.5),"Sensitivity persistence")
 	check(scene.fx_volume("shot") <= -79.0,"Weapon channel mute")
 	scene.reset_settings()
+	# Physics is advanced directly below, outside the real-time audio mixer.
+	scene.audio_enabled = false
+	scene.apply_settings()
 	scene.start()
 	check(scene.running and scene.hp == scene.max_hp and scene.level == 1,"Start initializes run")
 	check(scene.crates.size() == 22,"Arena populated")

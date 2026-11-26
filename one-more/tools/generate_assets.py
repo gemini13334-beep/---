@@ -42,33 +42,86 @@ def reset():
  bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
 def part(name,loc,scale,m,kind='sphere'):
  if kind=='sphere': bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=12,location=loc)
+ elif kind=='facet': bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2,location=loc)
+ elif kind=='crystal': bpy.ops.mesh.primitive_cone_add(vertices=5,radius1=1.0,radius2=.43,depth=2.0,location=loc)
  else: bpy.ops.mesh.primitive_cube_add(size=2,location=loc)
  o=bpy.context.object;o.name=name;o.scale=scale;o.data.materials.append(m)
  bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
  if kind=='cube':
   mod=o.modifiers.new("Rounded armor","BEVEL");mod.width=.045;mod.segments=3
   normal=o.modifiers.new("Weighted armor normals","WEIGHTED_NORMAL");normal.keep_sharp=True
- else:
+ elif kind=='sphere':
   for face in o.data.polygons: face.use_smooth=True
  return o
+
 def save(name):
  bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out,name+".blend"))
- bpy.ops.export_scene.gltf(filepath=os.path.join(out,name+".glb"),export_format='GLB')
-mint=mat("Mint shell",(.04,.75,.48),.25);dark=mat("Graphite",(.025,.045,.065),.5);gold=mat("Amber",(.95,.48,.06),.3);red=mat("Coral",(.85,.08,.09),.2)
+ # Keep parts editable in Blender and batch the static geometry by material in glTF.
+ depsgraph = bpy.context.evaluated_depsgraph_get()
+ sources = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+ export_meshes = []
+ export_objects = []
+ for source in sources:
+  mesh = bpy.data.meshes.new_from_object(source.evaluated_get(depsgraph), depsgraph=depsgraph)
+  export_meshes.append(mesh)
+  obj = bpy.data.objects.new(source.name + " export", mesh)
+  bpy.context.collection.objects.link(obj)
+  obj.matrix_world = source.matrix_world.copy()
+  export_objects.append(obj)
+ combined_mesh = bpy.data.meshes.new(name)
+ combined = bpy.data.objects.new(name, combined_mesh)
+ bpy.context.collection.objects.link(combined)
+ try:
+  bpy.ops.object.select_all(action='DESELECT')
+  for obj in export_objects:
+   obj.select_set(True)
+  combined.select_set(True)
+  bpy.context.view_layer.objects.active = combined
+  bpy.ops.object.join()
+  result = bpy.ops.export_scene.gltf(
+   filepath=os.path.join(out,name+".glb"), export_format='GLB', use_selection=True
+  )
+  if 'FINISHED' not in result:
+   raise RuntimeError(f"GLB export failed for {name}")
+ finally:
+  bpy.data.objects.remove(combined, do_unlink=True)
+  for mesh in [combined_mesh, *export_meshes]:
+   if mesh.users == 0:
+    bpy.data.meshes.remove(mesh)
+mint=mat("Jade shell",(.024,.47,.31),.26);dark=mat("Graphite",(.025,.045,.065),.5);gold=mat("Amber",(.95,.48,.06),.3);red=mat("Coral",(.85,.08,.09),.2)
 reset()
-part("Body",(0,0,.65),(.64,.48,.62),mint)
-part("Visor",(0,-.43,.83),(.43,.13,.24),dark)
-for x in [-.19,.19]: part("Eye",(x,-.55,.86),(.08,.035,.075),gold)
-for x in [-.65,.65]: part("Arm",(x,0,.56),(.19,.22,.33),dark)
-for x in [-.25,.25]: part("Boot",(x,-.08,.12),(.23,.32,.13),dark,'cube')
-hero_details("hero",mint)
+core=glow("Jade energy",(.085,.76,.49))
+gel=mat("Slime membrane",(.077,.59,.37),.08)
+optic=mat("Smoked green visor",(.009,.043,.043),.42)
+bezel=mat("Burnished titanium trim",(.21,.31,.29),.76)
+part("Gel dome",(0,.025,.98),(.57,.45,.35),gel)
+part("Dome collar",(0,.04,.76),(.61,.49,.12),mint)
+part("Wave guard",(0,-.016,.56),(.55,.43,.26),dark,'facet')
+part("Visor bezel",(0,-.355,.853),(.49,.16,.202),bezel)
+part("Visor lens",(0,-.438,.849),(.45,.129,.158),optic)
+for side in [-1,1]:
+ eye=part("Visor light",(side*.19,-.536,.865),(.102,.036,.031),core)
+ eye.rotation_euler.z=side*.16
+ part("Shoulder seal",(side*.56,-.006,.614),(.192,.235,.21),dark)
+ part("Armored shoulder",(side*.61,.034,.68),(.19,.23,.145),mint,'facet')
+ part("Forearm guiding rail",(side*.61,-.146,.475),(.106,.118,.149),bezel,'cube')
+ part("Boot",(side*.267,-.089,.128),(.223,.279,.132),dark,'cube')
+ part("Boot toe",(side*.267,-.293,.13),(.159,.123,.080),mint,'facet')
+ part("Pack cell",(side*.25,.379,.64),(.147,.135,.26),mint)
+ part("Pack indicator",(side*.25,.493,.64),(.06,.027,.158),core,'cube')
+part("Reactor bezel",(0,-.405,.484),(.184,.070,.155),bezel,'facet')
+part("Reactor light",(0,-.464,.484),(.109,.065,.094),core,'facet')
+part("Weapon receiver",(.725,-.279,.445),(.155,.30,.119),dark,'cube')
+part("Weapon rail",(.725,-.412,.545),(.075,.218,.038),bezel,'cube')
+part("Weapon barrel",(.725,-.59,.423),(.073,.216,.071),mint,'cube')
+part("Muzzle",(.725,-.795,.423),(.086,.036,.08),core,'cube')
 save("hero")
 for name,color,shape in [
  ("cyborg",(.25,.45,.8),"cube"),
  ("inferno",(.95,.18,.035),"sphere"),
  ("ghost",(.48,.25,.85),"sphere"),
  ("titan",(.65,.42,.12),"cube"),
- ("cryo",(.08,.7,.95),"cube")]:
+ ("cryo",(.08,.36,.55),"facet")]:
  reset()
  shell=mat(name+" shell",color,.35)
  part("Body",(0,0,.65),(.64,.48,.62),shell,shape)
@@ -83,7 +136,13 @@ for name,color,shape in [
  if name=="inferno":
   for x in [-.35,.35]: part("Heat fin",(x,.1,1.2),(.13,.15,.35),gold)
  if name=="cryo":
-  part("Cooling core",(0,.43,.65),(.32,.2,.4),gold,'cube')
+  frost=mat("Frosted ceramic",(.44,.65,.71),.42)
+  cyan=glow("Refrigerant",(.10,.52,.74))
+  part("Cryostat",(0,.39,.67),(.28,.22,.40),frost,'facet')
+  for side in [-1,1]:
+   shard=part("Shoulder ice shield",(side*.52,-.01,1.0),(.172,.186,.39),frost,'crystal')
+   shard.rotation_euler.y=side*.48
+   part("Coolant gauge",(side*.39,-.338,.68),(.085,.040,.107),cyan,'facet')
  if name=="ghost":
   part("Crest",(0,0,1.2),(.18,.35,.2),shell)
  if name=="cyborg":
@@ -91,24 +150,57 @@ for name,color,shape in [
  hero_details(name,shell)
  save(name)
 reset()
-part("Core",(0,0,.48),(.46,.43,.45),red,'cube')
-part("Visor",(0,-.43,.55),(.32,.08,.12),dark,'cube')
-for x in [-.48,.48]: part("Claw",(x,0,.25),(.15,.23,.25),gold)
-part("Sensor",(0,-.51,.55),(.19,.035,.055),glow("Enemy sensor",(1,.12,.04)))
-part("Rear armor",(0,.40,.48),(.34,.12,.32),dark,'cube')
+sensor=glow("Enemy sensor",(1,.13,.055))
+enemy_edge=mat("Iron oxide armor",(.32,.058,.048),.55)
+part("Chassis",(0,.03,.32),(.42,.57,.22),dark,'facet')
+part("Carapace",(0,.14,.55),(.44,.47,.29),red,'facet')
+part("Sensor housing",(0,-.33,.42),(.31,.31,.21),enemy_edge,'facet')
+part("Sensor slit",(0,-.57,.47),(.19,.057,.041),sensor,'cube')
+for side in [-1,1]:
+ for row in [-1,1]:
+  strut=part("Leg strut",(side*.43,row*.25,.21),(.105,.26,.105),enemy_edge,'cube')
+  strut.rotation_euler.z=side*row*.57
+  part("Foot plate",(side*.57,row*.37,.11),(.13,.17,.11),dark,'facet')
+ part("Luminous carapace vent",(side*.20,.29,.78),(.034,.11,.027),sensor,'cube')
 save("enemy")
 reset()
-part("Crate",(0,0,.45),(.48,.48,.45),dark,'cube')
-for x in [-.38,.38]: part("Armor",(x,0,.46),(.08,.5,.46),gold,'cube')
+crate_shell=mat("Crate ceramic alloy",(.073,.15,.17),.38)
+crate_trim=mat("Crate edge alloy",(.27,.38,.37),.68)
+crate_lock=glow("Crate charge indicator",(1,.48,.07))
+part("Recessed core",(0,0,.44),(.48,.45,.40),dark,'cube')
+part("Bolted base",(0,0,.10),(.56,.52,.10),crate_trim,'cube')
+part("Raised lid",(0,0,.84),(.48,.47,.095),crate_shell,'cube')
+for side in [-1,1]:
+ part("Side casing",(side*.46,0,.45),(.095,.40,.29),crate_shell,'cube')
+ part("Lid hinge",(side*.31,.46,.83),(.11,.082,.085),crate_trim,'cube')
+ for end in [-1,1]:
+  foot=part("Impact corner",(side*.47,end*.43,.46),(.13,.13,.33),gold,'cube')
+  foot.rotation_euler.z=side*end*.20
+ part("Live charge bar",(side*.12,0,.942),(.04,.24,.025),crate_lock,'cube')
+for end in [-1,1]:
+ part("Handle recess",(0,end*.456,.33),(.18,.038,.075),crate_trim,'cube')
+part("Latch housing",(0,-.48,.66),(.22,.09,.12),crate_trim,'cube')
+part("Latch indicator",(0,-.565,.66),(.095,.024,.043),crate_lock,'cube')
 save("crate")
 
 # Environment and vehicle assets
 for name,c in [("forest",(.18,.48,.22)),("city",(.35,.4,.48)),("desert",(.72,.45,.18)),("ice",(.3,.72,.88)),("volcano",(.35,.09,.05))]:
  reset()
  surface=mat(name+" surface",c)
- part("Base",(0,0,.12),(1.2,1.2,.12),dark,'cube')
- for i in range(3):
-  part("Formation "+str(i),((i-1)*.65,0,.55+i*.15),(.3,.38,.45+i*.15),surface,'cube' if name=="city" else 'sphere')
+ if name == "forest":
+  slate=mat("Wet slate",(.092,.15,.16),.16)
+  moss=mat("Slate moss",(.12,.30,.18))
+  growth=glow("Forest spores",(.16,.75,.38))
+  for x,y,height in [(-.64,.35,.38),(.15,.17,.83),(.73,-.38,.54)]:
+   rock=part("Slate outcrop",(x,y,height*.44),(.53,.49,height),slate,'facet')
+   rock.rotation_euler.y=x*.34
+   part("Moss bank",(x-.15,y-.24,height*.38),(.29,.3,height*.35),moss,'facet')
+   for i in range(3):
+    part("Glow lichen",(x+i*.085-.10,y-.33,height*.68+i*.035),(.043,.035,.065),growth,'facet')
+ else:
+  part("Base",(0,0,.12),(1.2,1.2,.12),dark,'cube')
+  for i in range(3):
+   part("Formation "+str(i),((i-1)*.65,0,.55+i*.15),(.3,.38,.45+i*.15),surface,'cube' if name=="city" else 'sphere')
  save(name)
 reset()
 part("Chassis",(0,0,.5),(.65,1,.25),gold,'cube')
@@ -133,10 +225,12 @@ for name,c,size in [
  ("boss_overlord",(.65,.08,.2),2.0),("boss_crystal",(.12,.65,.95),1.8),("boss_inferno",(.95,.24,.04),1.9)]:
  reset()
  shell=mat(name,c,.45)
- part("Core",(0,0,.65*size),(.55*size,.48*size,.55*size),shell,'cube')
+ core_shape='facet' if name in {"enemy_fast","enemy_armored","boss_crystal"} else 'cube'
+ part("Core",(0,0,.65*size),(.55*size,.48*size,.55*size),shell,core_shape)
  part("Visor",(0,-.48*size,.8*size),(.38*size,.12*size,.15*size),dark,'cube')
  for x in [-1,1]:
-  part("Armor",(x*.65*size,0,.65*size),(.23*size,.35*size,.4*size),shell,'cube')
+  armor=part("Armor",(x*.61*size,0,.63*size),(.28*size,.38*size,.37*size),shell,core_shape)
+  armor.rotation_euler.y=x*.36
   part("Emitter",(x*.65*size,-.32*size,.65*size),(.12*size,.18*size,.12*size),gold)
  sensor=glow(name+" sensor",(1,.12,.04) if name!="boss_crystal" else (.1,.8,1))
  part("Sensor",(0,-.60*size,.8*size),(.24*size,.04*size,.055*size),sensor,'cube')
@@ -151,7 +245,10 @@ for name,c,size in [
    fin=part("Speed fin",(x*.48*size,.32*size,.85*size),(.08*size,.34*size,.16*size),shell,'cube')
    fin.rotation_euler.z=x*.28
  elif name=="enemy_armored":
-  part("Front shield",(0,-.48*size,.40*size),(.44*size,.12*size,.25*size),trim,'cube')
+  for side in [-1,1]:
+   shield=part("Angled shield",(side*.24*size,-.48*size,.40*size),(.24*size,.14*size,.24*size),trim,'cube')
+   shield.rotation_euler.z=side*.36
+   part("Ground stabilizer",(side*.62*size,-.15*size,.15*size),(.21*size,.39*size,.14*size),dark,'facet')
  elif name=="boss_overlord":
   for x in [-1,1]:
    part("Command horn",(x*.38*size,.04*size,1.32*size),(.11*size,.13*size,.29*size),gold)
@@ -159,8 +256,9 @@ for name,c,size in [
  elif name=="boss_crystal":
   for i in range(5):
    a=i*math.tau/5
-   crystal=part("Crystal crown",(math.cos(a)*.37*size,math.sin(a)*.37*size,1.18*size),(.10*size,.10*size,.28*size),sensor,'cube')
-   crystal.rotation_euler.y=.25*math.cos(a)
+   crystal=part("Crystal crown",(math.cos(a)*.36*size,math.sin(a)*.36*size,1.18*size),(.14*size,.14*size,(.31+.056*i)*size),sensor,'crystal')
+   crystal.rotation_euler.y=.39*math.cos(a)
+   crystal.rotation_euler.x=-.39*math.sin(a)
  elif name=="boss_inferno":
   for x in [-1,1]:
    for i in range(3):
