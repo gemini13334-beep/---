@@ -1567,8 +1567,14 @@ func _ready() -> void:
 	achievements = menu.badges
 	event_label = Label.new()
 	layer.add_child(event_label)
-	event_label.position = Vector2(246,145)
-	event_label.add_theme_font_size_override("font_size",18)
+	event_label.position = Vector2(248,145)
+	event_label.size = Vector2(229,48)
+	event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	event_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	event_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	event_label.clip_text = true
+	event_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	event_label.add_theme_font_size_override("font_size",17)
 	event_label.add_theme_color_override("font_outline_color",Color("#102029"))
 	event_label.add_theme_constant_override("outline_size",6)
 	build_awakening(layer)
@@ -2048,6 +2054,7 @@ func toggle_hud_pause() -> void:
 		return
 	hud_paused = not hud_paused
 	hud_panel.set_paused(hud_paused)
+	event_label.visible = not hud_paused
 	clear_touch()
 	update_hud()
 

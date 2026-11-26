@@ -228,6 +228,13 @@ func capture() -> void:
 			advance(1)
 		else:
 			advance(365)
+		arena.update_hud()
+		if is_instance_valid(boss):
+			check_animation(arena.hud_panel.boss_frame.visible,"A spawned boss didn't update the health readout")
+		var notice: Rect2 = arena.event_label.get_global_rect()
+		var score_panel: Rect2 = arena.hud_panel.counters[0].get_parent().get_global_rect()
+		var task_panel: Rect2 = arena.hud_panel.tasks.get_global_rect()
+		check_animation(not notice.intersects(score_panel) and not notice.intersects(task_panel),"A run notification overlaps another HUD readout")
 		await shot(str(arena.BIOMES[map_id]).to_lower(),arena.hud_panel)
 		if map_id == 3:
 			await record_boss_motion(boss)

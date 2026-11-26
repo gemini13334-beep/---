@@ -1,6 +1,6 @@
 # Android support
 
-The Android preset uses the Godot 4.4.1 Gradle template with minSdk 34, targetSdk 35 and ARM64. The manual Android workflow stages editable Blender files outside the import tree. It retains bounded import and export, logs, and verifies the APK archive, Android and ARM64 metadata, manifest permissions, and signing certificate. The manual `publish_preview` input publishes the verified APK on a prerelease specific to the commit.
+The Android preset uses the Godot 4.4.1 Gradle template with minSdk 34, targetSdk 35 and ARM64. The manual Android workflow stages editable Blender files outside the import tree. It retains bounded import and export, logs, and verifies the APK archive, Android and ARM64 metadata, manifest permissions, and signing certificate. The manual `publish_preview` input publishes the verified APK on a prerelease specific to the commit. Godot requires ETC2/ASTC texture import for Android export.
 
 Bluetooth uses Godot's Android plugin v2 and a secure RFCOMM connection between two devices paired in system settings. The plugin requests BLUETOOTH_CONNECT and uses neither scanning nor location. Android allows launch of the solo game on devices without Bluetooth. The plugin exposes a separately built AAR for the Gradle APK export, which remains a manual workflow.
 
