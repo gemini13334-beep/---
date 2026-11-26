@@ -1,9 +1,6 @@
 name: ONE MORE Android APK
 on:
   workflow_dispatch:
-  push:
-    paths:
-      - '.github/workflows/one-more-android.yml'
 concurrency:
   group: one-more-android-${{ github.ref }}
   cancel-in-progress: true

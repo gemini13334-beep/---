@@ -27,4 +27,4 @@ Count: **19/20 substantive polish updates**. The numbered 20th commit (12694526)
 | 18 | 6678959c | Audio mixer |
 | 19 | 1bfd73a1 | Settings usability |
 
-Manual Android run 45696551115 is already queued for 12694526; do not dispatch another build. Validation run 45696142039 is pending. Freeze runtime changes while the manual build is pending. This ledger-only commit does not count as polish.
+Android run [45696551115](https://github.com/gemini13334-beep/---/actions/runs/45696551115) was cancelled during Godot import. The subsequent [45779859370](https://github.com/gemini13334-beep/---/actions/runs/45779859370) reached the 420-second import timeout before APK export. Godot stalled after scanning `.blend` and `.glb` files. Disabling native `.blend` import allowed a clean Godot 4.4.1 import of all 28 GLB scenes. The Android workflow uses `workflow_dispatch` and requires separate user authorization.
