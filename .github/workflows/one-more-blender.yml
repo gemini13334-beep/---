@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'one-more/tools/generate_assets.py'
+      - 'one-more/tools/*.py'
       - 'one-more/tools/install_blender.sh'
       - '.github/workflows/one-more-blender.yml'
 concurrency:
@@ -22,21 +22,35 @@ jobs:
         run: |
           blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py
           python3 - <<'PY'
+          import json
           from pathlib import Path
           import struct
           root=Path("one-more/assets/models")
-          for name in "hero cyborg inferno ghost titan cryo enemy crate forest city desert ice volcano buggy enemy_fast enemy_armored boss_overlord boss_crystal boss_inferno hovercraft tank mech tree rock ruin cactus ice_spire lava_vent".split():
+          heroes = "hero cyborg inferno ghost titan cryo".split()
+          equipment = "enemy enemy_fast enemy_armored boss_overlord boss_crystal boss_inferno buggy hovercraft tank mech crate".split()
+          scenery = "forest city desert ice volcano tree rock ruin cactus ice_spire lava_vent".split()
+          for name in heroes + equipment + scenery:
               glb=root/(name+".glb")
               blend=root/(name+".blend")
               assert blend.stat().st_size>0, name
               with glb.open("rb") as f:
                   magic,version,length=struct.unpack("<4sII",f.read(12))
+                  json_size,chunk=struct.unpack("<I4s",f.read(8))
+                  assert chunk == b"JSON", name
+                  document=json.loads(f.read(json_size))
               assert magic==b"glTF" and version==2 and length==glb.stat().st_size,name
+              assert any(mesh.get("primitives") for mesh in document["meshes"]), name
+              if name in heroes + equipment:
+                  assert document.get("textures"), name
+              if name in heroes:
+                  markers = [node for node in document["nodes"] if node.get("name") == "ShotOrigin"]
+                  assert len(markers) == 1 and "translation" in markers[0], name
               print(name,glb.stat().st_size,blend.stat().st_size)
           PY
       - name: Render model previews
-        continue-on-error: true
-        run: blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py -- --preview
+        run: |
+          blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py -- --preview
+          test "$(find one-more/assets/models/previews -name '*.png' -type f -size +0c | wc -l)" -eq 28
       - uses: actions/upload-artifact@v4
         with:
           name: ONE-MORE-Verified-Blender-Assets

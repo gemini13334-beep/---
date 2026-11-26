@@ -335,7 +335,7 @@ func tick_partner(dt: float) -> void:
 			nearest = enemy
 	if nearest != null:
 		partner_attack = maxf(0.15,0.7-arena.power*0.08)
-		arena.shot_tracer(peer.position+Vector3.UP*0.45,nearest.position+Vector3.UP*0.2)
+		arena.shot_tracer(arena.shot_origin(peer),nearest.position+Vector3.UP*0.2)
 		arena.hit_enemy(nearest)
 
 func damage_partner(position: Vector3, radius: float, amount: float) -> void:

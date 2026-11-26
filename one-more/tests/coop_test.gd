@@ -91,7 +91,10 @@ func run_tests() -> void:
 	exchange(host,guest,3)
 	check(host.coop.partner.position.x > old_position.x,"Guest input moves the authoritative partner")
 	check(absf(guest.hero.position.x-host.coop.partner.position.x) < 0.04,"Guest displays the synchronized partner position")
-	check(guest.coop.objects.size() == 23,"Spawned enemy appears in the guest scene")
+	check(not host.enemies.is_empty() and host.enemies.all(func(enemy: MeshInstance3D) -> bool:
+		var replica := guest.coop.objects.get(enemy.get_instance_id()) as MeshInstance3D
+		return replica != null and replica.get_meta("model_asset") == enemy.get_meta("model_asset")
+	),"Spawned enemy appears in the guest scene with the authoritative model")
 	var old_elapsed: float = guest.elapsed
 	guest._physics_process(0.5)
 	check(guest.elapsed == old_elapsed,"Guest cannot advance the shared simulation")

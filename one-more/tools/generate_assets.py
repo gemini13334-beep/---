@@ -1,5 +1,8 @@
-import bpy, math, os
+import bpy, math, os, sys
 from mathutils import Vector
+
+sys.path.insert(0, os.path.dirname(__file__))
+import combat_models
 out=os.path.abspath(os.path.join(os.path.dirname(__file__),"../assets/models"))
 os.makedirs(out,exist_ok=True)
 def mat(name,c,metal=0):
@@ -12,32 +15,6 @@ def glow(name,c):
  p.inputs["Emission Color"].default_value=(*c,1)
  p.inputs["Emission Strength"].default_value=1.8
  return m
-def hero_details(name,shell):
- accents={"hero":(.12,1,.65),"cyborg":(.15,.55,1),"inferno":(1,.22,.025),"ghost":(.72,.24,1),"titan":(1,.65,.12),"cryo":(.3,.9,1)}
- light=glow(name+" energy",accents.get(name,(.12,.85,1)))
- trim=mat(name+" brushed trim",(.24,.30,.36),.8)
- part("Reactor housing",(0,-.46,.43),(.23,.095,.23),dark)
- part("Visor brow",(0,-.43,1.02),(.36,.095,.045),trim,'cube')
- for x in [-1,1]:
-  part("Side armor",(x*.48,-.22,.61),(.12,.20,.25),shell,'cube')
-  part("Boot toe",(x*.25,-.28,.13),(.19,.13,.09),trim,'cube')
-  part("Backpack vent",(x*.16,.61,.72),(.055,.035,.16),trim,'cube')
-  part("Backpack indicator",(x*.16,.65,.72),(.028,.018,.10),light,'cube')
- if name=="titan":
-  for x in [-1,1]: part("Heavy pauldron",(x*.67,.02,.85),(.28,.28,.13),trim,'cube')
- elif name=="ghost":
-  for x in [-1,1]: part("Spectral stabilizer",(x*.43,.36,.95),(.08,.24,.25),light)
- elif name=="cryo":
-  for x in [-1,1]: part("Coolant cylinder",(x*.24,.45,.82),(.10,.12,.30),trim)
-
- part("Chest reactor",(0,-.47,.43),(.16,.075,.16),light)
- part("Backpack",(0,.43,.65),(.32,.19,.35),dark,'cube')
- for x in [-1,1]:
-  part("Knee armor",(x*.25,-.22,.25),(.14,.11,.14),shell,'cube')
-  part("Shoulder stripe",(x*.58,-.16,.71),(.10,.10,.045),light,'cube')
- part("Weapon receiver",(.72,-.25,.42),(.16,.30,.15),dark,'cube')
- part("Weapon barrel",(.72,-.58,.42),(.07,.22,.07),shell,'cube')
- part("Muzzle",(.72,-.79,.42),(.09,.04,.09),light,'cube')
 def reset():
  bpy.ops.object.select_all(action='SELECT');bpy.ops.object.delete(use_global=False)
 def part(name,loc,scale,m,kind='sphere'):
@@ -141,6 +118,9 @@ def save(name):
   combined.select_set(True)
   bpy.context.view_layer.objects.active = combined
   bpy.ops.object.join()
+  marker = bpy.context.scene.objects.get("ShotOrigin")
+  if marker is not None:
+   marker.select_set(True)
   result = bpy.ops.export_scene.gltf(
    filepath=os.path.join(out,name+".glb"), export_format='GLB', use_selection=True
   )
@@ -151,282 +131,174 @@ def save(name):
   for mesh in [combined_mesh, *export_meshes]:
    if mesh.users == 0:
     bpy.data.meshes.remove(mesh)
-mint=mat("Jade shell",(.024,.47,.31),.26);dark=mat("Graphite",(.025,.045,.065),.5);gold=mat("Amber",(.95,.48,.06),.3);red=mat("Coral",(.85,.08,.09),.2)
-reset()
-core=glow("Jade energy",(.085,.76,.49))
-gel=mat("Slime membrane",(.032,.32,.205),.12)
-optic=mat("Smoked green visor",(.009,.043,.043),.42)
-bezel=mat("Burnished titanium trim",(.21,.31,.29),.76)
-part("Gel dome",(0,.025,.98),(.57,.45,.35),gel)
-part("Dome collar",(0,.04,.76),(.61,.49,.12),mint)
-part("Wave guard",(0,-.016,.56),(.55,.43,.26),dark,'facet')
-part("Visor bezel",(0,-.355,.853),(.49,.16,.202),bezel)
-part("Visor lens",(0,-.438,.849),(.45,.129,.158),optic)
-for side in [-1,1]:
- eye=part("Visor light",(side*.19,-.536,.865),(.102,.036,.031),core)
- eye.rotation_euler.z=side*.16
- part("Shoulder seal",(side*.56,-.006,.614),(.192,.235,.21),dark)
- part("Armored shoulder",(side*.61,.034,.68),(.19,.23,.145),mint,'facet')
- for rib in range(3):
-  part("Shoulder plate seam",(side*.72,.015+rib*.084,.689),(.028,.020,.096),bezel,'cube')
- part("Forearm guiding rail",(side*.61,-.146,.475),(.106,.118,.149),bezel,'cube')
- part("Boot",(side*.267,-.089,.128),(.223,.279,.132),dark,'cube')
- part("Boot toe",(side*.267,-.293,.13),(.159,.123,.080),mint,'facet')
- part("Pack cell",(side*.25,.379,.64),(.147,.135,.26),mint)
- part("Pack indicator",(side*.25,.493,.64),(.06,.027,.158),core,'cube')
-part("Reactor bezel",(0,-.405,.484),(.184,.070,.155),bezel,'facet')
-part("Reactor light",(0,-.464,.484),(.109,.065,.094),core,'facet')
-part("Weapon receiver",(.725,-.279,.445),(.155,.30,.119),dark,'cube')
-part("Weapon rail",(.725,-.412,.545),(.075,.218,.038),bezel,'cube')
-part("Weapon barrel",(.725,-.59,.423),(.073,.216,.071),mint,'cube')
-part("Muzzle",(.725,-.795,.423),(.086,.036,.08),core,'cube')
-save("hero")
-for name,color,shape in [
- ("cyborg",(.25,.45,.8),"cube"),
- ("inferno",(.95,.18,.035),"sphere"),
- ("ghost",(.48,.25,.85),"sphere"),
- ("titan",(.65,.42,.12),"cube"),
- ("cryo",(.08,.36,.55),"facet")]:
- reset()
- shell=mat(name+" shell",color,.35)
- part("Body",(0,0,.65),(.64,.48,.62),shell,shape)
- part("Visor",(0,-.43,.83),(.43,.13,.24),dark)
- for x in [-.19,.19]: part("Eye",(x,-.55,.86),(.08,.035,.075),gold)
- for x in [-.65,.65]:
-  part("Shoulder",(x,0,.68),(.24,.25,.26),shell,shape)
-  part("Arm",(x,0,.38),(.16,.18,.25),dark)
- for x in [-.25,.25]: part("Boot",(x,-.08,.12),(.23,.32,.13),dark,'cube')
- if name=="titan":
-  part("Chest plate",(0,-.4,.48),(.46,.13,.22),gold,'cube')
- if name=="inferno":
-  for x in [-.35,.35]: part("Heat fin",(x,.1,1.2),(.13,.15,.35),gold)
- if name=="cryo":
-  frost=mat("Frosted ceramic",(.44,.65,.71),.42)
-  cyan=glow("Refrigerant",(.10,.52,.74))
-  part("Cryostat",(0,.39,.67),(.28,.22,.40),frost,'facet')
-  for side in [-1,1]:
-   shard=part("Shoulder ice shield",(side*.52,-.01,1.0),(.172,.186,.39),frost,'crystal')
-   shard.rotation_euler.y=side*.48
-   part("Coolant gauge",(side*.39,-.338,.68),(.085,.040,.107),cyan,'facet')
- if name=="ghost":
-  part("Crest",(0,0,1.2),(.18,.35,.2),shell)
- if name=="cyborg":
-  part("Antenna",(.35,0,1.35),(.05,.05,.25),gold)
- hero_details(name,shell)
- save(name)
-reset()
-sensor=glow("Enemy sensor",(1,.13,.055))
-enemy_edge=mat("Iron oxide armor",(.32,.058,.048),.55)
-part("Chassis",(0,.03,.32),(.42,.57,.22),dark,'facet')
-part("Carapace",(0,.14,.55),(.44,.47,.29),red,'facet')
-part("Sensor housing",(0,-.33,.42),(.31,.31,.21),enemy_edge,'facet')
-part("Sensor slit",(0,-.57,.47),(.19,.057,.041),sensor,'cube')
-for side in [-1,1]:
- for row in [-1,1]:
-  strut=part("Leg strut",(side*.43,row*.25,.21),(.105,.26,.105),enemy_edge,'cube')
-  strut.rotation_euler.z=side*row*.57
-  part("Foot plate",(side*.57,row*.37,.11),(.13,.17,.11),dark,'facet')
- part("Luminous carapace vent",(side*.20,.29,.78),(.034,.11,.027),sensor,'cube')
-save("enemy")
-reset()
-crate_shell=mat("Crate ceramic alloy",(.073,.15,.17),.38)
-crate_trim=mat("Crate edge alloy",(.27,.38,.37),.68)
-crate_corner=mat("Weathered brass",(.49,.25,.074),.72)
-crate_lock=glow("Crate charge indicator",(1,.48,.07))
-part("Recessed core",(0,0,.44),(.48,.45,.40),dark,'cube')
-part("Bolted base",(0,0,.10),(.56,.52,.10),crate_trim,'cube')
-part("Raised lid",(0,0,.84),(.48,.47,.095),crate_shell,'cube')
-for side in [-1,1]:
- part("Side casing",(side*.46,0,.45),(.095,.40,.29),crate_shell,'cube')
- part("Lid hinge",(side*.31,.46,.83),(.11,.082,.085),crate_trim,'cube')
- for end in [-1,1]:
-  foot=part("Impact corner",(side*.47,end*.43,.46),(.13,.13,.33),crate_corner,'cube')
-  foot.rotation_euler.z=side*end*.20
-  part("Corner rivet",(side*.48,end*.45,.79),(.039,.039,.024),crate_trim)
- part("Live charge bar",(side*.12,0,.942),(.04,.24,.025),crate_lock,'cube')
-for end in [-1,1]:
- part("Handle recess",(0,end*.456,.33),(.18,.038,.075),crate_trim,'cube')
-part("Latch housing",(0,-.48,.66),(.22,.09,.12),crate_trim,'cube')
-part("Latch indicator",(0,-.565,.66),(.095,.024,.043),crate_lock,'cube')
-save("crate")
+def generate():
+ dark=mat("Graphite",(.025,.045,.065),.5)
+ combat_models.generate(reset, save)
+ for name,c in [("forest",(.18,.48,.22)),("city",(.35,.4,.48)),("desert",(.72,.45,.18)),("ice",(.3,.72,.88)),("volcano",(.35,.09,.05))]:
+  reset()
+  surface=mat(name+" surface",c)
+  if name == "forest":
+   slate=mat("Wet slate",(.055,.076,.085),.16)
+   moss=mat("Slate moss",(.085,.145,.065))
+   growth=glow("Forest spores",(.16,.75,.38))
+   for x,y,height in [(-.64,.33,.37),(.15,.17,.65),(.69,-.37,.43)]:
+    rock=weathered_stone("Slate outcrop",(x,y,height*.52),(.52,.45,height),slate,moss)
+    rock.rotation_euler.z=x*1.3
+    for i in range(2):
+     part("Glow lichen",(x+i*.086-.07,y-.34,height*.53+i*.031),(.028,.021,.045),growth,'facet')
+  elif name == "city":
+   aggregate=mat("Weathered concrete aggregate",(.22,.23,.225))
+   rebar=mat("Oxidized reinforcement",(.17,.081,.042),.55)
+   for i, (x,y,height) in enumerate([(-.52,.1,1.28),(.06,.3,.76),(.59,.18,.98)]):
+    slab=combat_models.shell("Fractured concrete pier",[
+     (0,.22,.25,x,y),(.30,.237,.21,x-.05,y),(height*.76,.18,.20,x+.044,y),
+     (height,.13,.15,x-.032,y+.04),
+    ], surface if i%2 else aggregate)
+    for j in range(2):
+     bx=x+(j-.5)*.16
+     combat_models.shaft("Bent exposed rebar",(bx,y,height*.86),(bx+.06,y-.14,height+.17-j*.13),.019,rebar,sides=8)
+    weathered_stone("Fallen concrete chips",(x-.1,y-.52,.1),(.21,.29,.15),aggregate,surface)
+  elif name == "desert":
+   seam=mat("Wind-carved sandstone laminae",(.43,.24,.112))
+   for i, (x,y,height) in enumerate([(-.63,.26,.48),(.05,-.16,.77),(.67,.28,.54)]):
+    formation=combat_models.shell("Sandstone bedrock",[
+     (0,.43,.36,x,y),(.13,.45,.34,x+.033,y),(height*.68,.32,.28,x+.10,y-.065),
+     (height,.23,.21,x+.09,y+.032),
+    ], surface, .033)
+    for fraction in (.27,.49,.70):
+     z=height*fraction
+     seam_band=combat_models.slab("Sediment edge",(x+.05,y-(.347-fraction*.099),z),
+                                  (.35-fraction*.12,.043,.014),seam,.008)
+     seam_band.rotation_euler.y=(i-1)*.14
+  elif name == "ice":
+   blue=mat("Compressed glacial ice",(.08,.26,.40),.18)
+   frost=mat("Snow crust",(.52,.72,.83))
+   for x,y,height,width in [(-.67,.24,.59,.30),(-.14,-.18,1.15,.34),(.58,.14,.89,.38)]:
+    weathered_stone("Rough glacial footing",(x,y,.196),(.48,.44,.35),blue,frost)
+    combat_models.crystal("Exposed blue crevasse ice",(x,y,.18),(x+.16,y-.08,height),width,surface)
+    combat_models.crystal("Frost rind",(x-.17,y-.15,.18),(x-.22,y-.09,height*.79),width*.48,frost)
+  elif name == "volcano":
+   basalt=mat("Columnar basalt",(.047,.039,.040),.22)
+   clinker=mat("Oxidized volcanic clinker",(.14,.063,.032))
+   ember=glow("Hot bedrock seams",(.87,.13,.023))
+   for x,y,height in [(-.67,.18,.51),(-.27,-.19,1.05),(.24,.18,.73),(.67,.09,.49)]:
+    combat_models.shell("Broken basalt column",[
+     (0,.28,.26,x,y),(.12,.30,.27,x,y),(height*.64,.235,.221,x+.055,y-.03),
+     (height,.187,.17,x+.036,y+.019),
+    ], basalt,.014,combat_models.CHAMFER)
+    weathered_stone("Lava-crusted rubble",(x+.1,y-.39,.17),(.28,.25,.20),clinker,surface)
+    combat_models.shaft("Small heated fracture",(x+.02,y-.18,.1),(x+.13,y-.25,height*.62),.027,ember,.011,7)
+  save(name)
+ for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)),("cactus",(.2,.58,.25)),("ice_spire",(.2,.8,.95)),("lava_vent",(.9,.22,.04))]:
+  reset()
+  shell=mat(name,c)
+  if name=="tree":
+   bark=mat("Fir bark",(.104,.061,.032))
+   shaded=mat("Evergreen needles",(.026,.087,.042))
+   tips=mat("Sunlit fir tips",(.064,.155,.063))
+   inner=mat("Deep evergreen",(.012,.042,.021))
+   part("Tapered fir trunk",(0,0,1.14),(.082,.084,1.14),bark,'trunk')
+   pine_branches(shaded,tips,inner)
+  elif name=="rock":
+   cover=mat("Basalt lichen",(.13,.17,.10))
+   weathered_stone("Fractured boulder",(0,0,.41),(.75,.53,.52),shell,cover)
+   weathered_stone("Boulder fragment",(.43,-.31,.15),(.34,.28,.24),shell,cover)
+  elif name=="cactus":
+   ribs=mat("Drought-worn succulent ribs",(.088,.205,.071))
+   thorn=mat("Dried cactus spines",(.33,.235,.117))
+   for x,y,height,radius in [(-.31,.16,.84,.14),(.035,-.10,1.36,.204),(.39,.14,1.04,.157)]:
+    stem_profile=[(math.cos(i*math.tau/20)*(1 if i%2 else .82),
+                   math.sin(i*math.tau/20)*(1 if i%2 else .82)) for i in range(20)]
+    combat_models.shell("Ribbed saguaro branch",[
+     (0,radius*.82,radius*.79,x,y),(.23,radius,radius,x,y),
+     (height*.77,radius*.89,radius*.84,x+.058,y-.024),
+     (height,radius*.36,radius*.35,x+.071,y-.041),
+    ],ribs,.011,stem_profile)
+    for i in range(7):
+     angle=i*math.tau/7
+     z=height*(.38+.041*i)
+     base=(x+(radius-.007)*math.cos(angle),y+(radius-.007)*math.sin(angle),z)
+     tip=(x+(radius+.06)*math.cos(angle),y+(radius+.06)*math.sin(angle),z+.026)
+     combat_models.shaft("Saguaro spine",base,tip,.009,thorn,.001,5)
+  elif name=="lava_vent":
+   clinker=mat("Rough lava crust",(.073,.047,.036))
+   ember=glow("Molten fracture",(.93,.139,.023))
+   combat_models.lens("Viscous vent surface",(0,0,.061),(.48,.43,.071),ember)
+   for i in range(9):
+    angle=i*math.tau/9
+    x,y = math.cos(angle)*.44,math.sin(angle)*.44
+    height=.28+.13*math.sin(i*2.1)**2
+    bank=weathered_stone("Solidified crater shoulder",(x,y,.123),(.26,.22,height),clinker,dark)
+    bank.rotation_euler.z=angle+.14
+  elif name=="ice_spire":
+   frost=mat("Mineral frost",(.45,.66,.76),.18)
+   footing=mat("Blue glacier dirt",(.072,.17,.24))
+   weathered_stone("Cracked moraine footing",(0,0,.117),(.62,.49,.21),footing,frost)
+   for i, (x,y,height,width) in enumerate([(-.31,.13,.86,.18),(.02,-.07,1.55,.26),(.36,.16,1.03,.24),(.16,-.33,.67,.18)]):
+    combat_models.crystal("Wind-fractured ice blade",(x,y,.12),(x*1.36+.11,y-.09,height),width,frost if i%2 else shell)
+  elif name=="ruin":
+   mortar=mat("Aged masonry",(.26,.24,.19))
+   cover=mat("Wall moss",(.09,.14,.07))
+   part("Sunken wall foot",(0,.02,.10),(.91,.30,.12),mortar,'cube')
+   for side,tiers in [(-1,5),(1,3)]:
+    for tier in range(tiers):
+     x=side*(.63+.035*math.cos(tier*2.1))
+     block=part("Hewn wall course",(x,.035*math.sin(tier),.26+tier*.26),
+                (.22+.03*math.cos(tier),.25,.124),shell if tier%2 else mortar,'cube')
+     block.rotation_euler.z=.10*math.sin(tier*1.9+side)
+   for index,angle in enumerate([2.15,1.76,1.39]):
+    span=part("Fallen arch segment",(.61*math.cos(angle),0,1.08+.61*math.sin(angle)),
+              (.22,.24,.107),mortar if index%2 else shell,'cube')
+    span.rotation_euler.y=-angle
+   for x,y,size in [(-.96,-.23,.25),(-.10,-.34,.33),(.25,-.3,.26),(.99,.18,.23),(.82,.42,.19)]:
+    fragment=weathered_stone("Weathered rubble",(x,y,size*.52),(size,size*.75,size*.70),mortar,cover)
+    fragment.rotation_euler.z=x*3.4
+  save(name)
 
-# Environment and vehicle assets
-for name,c in [("forest",(.18,.48,.22)),("city",(.35,.4,.48)),("desert",(.72,.45,.18)),("ice",(.3,.72,.88)),("volcano",(.35,.09,.05))]:
- reset()
- surface=mat(name+" surface",c)
- if name == "forest":
-  slate=mat("Wet slate",(.055,.076,.085),.16)
-  moss=mat("Slate moss",(.085,.145,.065))
-  growth=glow("Forest spores",(.16,.75,.38))
-  for x,y,height in [(-.64,.33,.37),(.15,.17,.65),(.69,-.37,.43)]:
-   rock=weathered_stone("Slate outcrop",(x,y,height*.52),(.52,.45,height),slate,moss)
-   rock.rotation_euler.z=x*1.3
-   for i in range(2):
-    part("Glow lichen",(x+i*.086-.07,y-.34,height*.53+i*.031),(.028,.021,.045),growth,'facet')
- else:
-  part("Base",(0,0,.12),(1.2,1.2,.12),dark,'cube')
-  for i in range(3):
-   part("Formation "+str(i),((i-1)*.65,0,.55+i*.15),(.3,.38,.45+i*.15),surface,'cube' if name=="city" else 'sphere')
- save(name)
-reset()
-part("Chassis",(0,0,.5),(.65,1,.25),gold,'cube')
-part("Cabin",(0,.1,.85),(.45,.5,.3),dark,'cube')
-for x in [-.7,.7]:
- for y in [-.65,.65]:
-  part("Wheel",(x,y,.3),(.22,.32,.32),dark)
-buggy_light=glow("Buggy headlights",(.65,.85,1))
-for x in [-.48,.48]:
- part("Headlight",(x,-1.02,.52),(.12,.06,.10),buggy_light,'cube')
- part("Suspension",(x,0,.33),(.10,.65,.10),dark,'cube')
- for y in [-.65,.65]:
-  part("Wheel hub",(x*1.85,y,.3),(.06,.17,.17),gold)
-part("Front bumper",(0,-1.04,.34),(.68,.09,.09),dark,'cube')
-part("Rear engine",(0,.75,.83),(.36,.22,.15),dark,'cube')
-save("buggy")
-
-
-# Additional original modular assets.
-for name,c,size in [
- ("enemy_fast",(.64,.22,.078),.65),("enemy_armored",(.42,.077,.064),1.2),
- ("boss_overlord",(.65,.08,.2),2.0),("boss_crystal",(.12,.65,.95),1.8),("boss_inferno",(.95,.24,.04),1.9)]:
- reset()
- shell=mat(name,c,.45)
- core_shape='facet' if name in {"enemy_fast","enemy_armored","boss_crystal"} else 'cube'
- part("Core",(0,0,.65*size),(.55*size,.48*size,.55*size),shell,core_shape)
- part("Visor",(0,-.48*size,.8*size),(.38*size,.12*size,.15*size),dark,'cube')
- for x in [-1,1]:
-  armor=part("Armor",(x*.61*size,0,.63*size),(.28*size,.38*size,.37*size),shell,core_shape)
-  armor.rotation_euler.y=x*.36
-  part("Emitter",(x*.65*size,-.32*size,.65*size),(.12*size,.18*size,.12*size),gold)
- sensor=glow(name+" sensor",(1,.12,.04) if name!="boss_crystal" else (.1,.8,1))
- part("Sensor",(0,-.60*size,.8*size),(.24*size,.04*size,.055*size),sensor,'cube')
- for x in [-1,1]:
-  part("Armor trim",(x*.65*size,-.35*size,.88*size),(.13*size,.07*size,.045*size),sensor,'cube')
- trim=mat(name+" armor trim",(.22,.26,.31),.8)
- for x in [-1,1]:
-  part("Joint housing",(x*.48*size,0,.25*size),(.19*size,.24*size,.19*size),dark)
-  part("Armor cap",(x*.65*size,0,1.02*size),(.20*size,.29*size,.07*size),trim,'cube')
- if name=="enemy_fast":
-  for x in [-1,1]:
-   fin=part("Speed fin",(x*.48*size,.32*size,.85*size),(.08*size,.34*size,.16*size),shell,'cube')
-   fin.rotation_euler.z=x*.28
- elif name=="enemy_armored":
-  for side in [-1,1]:
-   plate=part("Segmented dorsal armor",(side*.28*size,.19*size,1.01*size),(.23*size,.28*size,.083*size),trim,'facet')
-   plate.rotation_euler.y=side*.35
-   shield=part("Angled shield",(side*.24*size,-.48*size,.40*size),(.24*size,.14*size,.24*size),trim,'cube')
-   shield.rotation_euler.z=side*.36
-   part("Ground stabilizer",(side*.62*size,-.15*size,.15*size),(.21*size,.39*size,.14*size),dark,'facet')
- elif name=="boss_overlord":
-  for x in [-1,1]:
-   part("Command horn",(x*.38*size,.04*size,1.32*size),(.11*size,.13*size,.29*size),gold)
-   part("Heavy gauntlet",(x*.83*size,-.12*size,.43*size),(.22*size,.31*size,.24*size),trim,'cube')
- elif name=="boss_crystal":
-  for i in range(5):
-   a=i*math.tau/5
-   crystal=part("Crystal crown",(math.cos(a)*.36*size,math.sin(a)*.36*size,1.18*size),(.14*size,.14*size,(.31+.056*i)*size),sensor,'crystal')
-   crystal.rotation_euler.y=.39*math.cos(a)
-   crystal.rotation_euler.x=-.39*math.sin(a)
- elif name=="boss_inferno":
-  for x in [-1,1]:
-   for i in range(3):
-    part("Thermal vent",(x*.44*size,(i-1)*.19*size,1.18*size),(.08*size,.06*size,.18*size),sensor,'cube')
- save(name)
-for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.65))]:
- reset()
- shell=mat(name,c,.5)
- part("Hull",(0,0,.45),(.8,1,.28),shell,'cube')
- part("Cabin",(0,.1,.9),(.45,.5,.3),dark,'cube')
- for x in [-.8,.8]:
-  part("Drive",(x,0,.3),(.22,.85,.25),dark,'cube')
- if name=="tank": part("Cannon",(0,-.85,.9),(.13,.75,.13),shell,'cube')
- if name=="mech":
-  for x in [-.7,.7]: part("Leg",(x,0,.2),(.2,.3,.6),shell,'cube')
- lamp=glow(name+" drive lights",(.12,.85,1) if name=="hovercraft" else (1,.56,.14))
- for x in [-1,1]:
-  part("Headlight",(x*.57,-1.02,.51),(.12,.06,.08),lamp,'cube')
-  part("Side armor",(x*.78,0,.59),(.09,.66,.12),shell,'cube')
-  part("Rear exhaust",(x*.48,.94,.55),(.12,.09,.12),lamp)
- if name=="tank":
-  for x in [-1,1]:
-   for i in range(5):
-    part("Track hub",(x*.99,(i-2)*.31,.30),(.055,.13,.13),shell)
- elif name=="hovercraft":
-  for x in [-1,1]:
-   part("Lift emitter",(x*.8,0,.15),(.16,.66,.06),lamp,'cube')
- elif name=="mech":
-  for x in [-1,1]:
-   part("Leg joint",(x*.7,-.28,.45),(.16,.10,.16),lamp)
- save(name)
-for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)),("cactus",(.2,.58,.25)),("ice_spire",(.2,.8,.95)),("lava_vent",(.9,.22,.04))]:
- reset()
- shell=mat(name,c)
- if name not in ("tree","rock","ruin"):
-  part("Base",(0,0,.12),(.75,.75,.12),dark,'cube')
- if name=="tree":
-  bark=mat("Fir bark",(.104,.061,.032))
-  shaded=mat("Evergreen needles",(.026,.087,.042))
-  tips=mat("Sunlit fir tips",(.064,.155,.063))
-  inner=mat("Deep evergreen",(.012,.042,.021))
-  part("Tapered fir trunk",(0,0,1.14),(.082,.084,1.14),bark,'trunk')
-  pine_branches(shaded,tips,inner)
- elif name=="rock":
-  cover=mat("Basalt lichen",(.13,.17,.10))
-  weathered_stone("Fractured boulder",(0,0,.41),(.75,.53,.52),shell,cover)
-  weathered_stone("Boulder fragment",(.43,-.31,.15),(.34,.28,.24),shell,cover)
- elif name=="cactus":
-  part("Stem",(0,0,.8),(.23,.23,.8),shell)
-  for x in [-1,1]:
-   part("Branch",(x*.29,0,.65),(.32,.13,.13),shell)
-   part("Branch tip",(x*.52,0,.85),(.13,.13,.32),shell)
- elif name=="lava_vent":
-  ember=glow("Molten core",(1,.18,.015))
-  part("Molten core",(0,0,.27),(.38,.38,.15),ember)
-  for i in range(5):
-   angle=i*math.tau/5
-   part("Basalt rim",(math.cos(angle)*.48,math.sin(angle)*.48,.38),(.23,.24,.34),dark,'cube')
- elif name=="ice_spire":
-  frost=mat("Frost facets",(.58,.87,.96),.2)
-  for i in range(3):
-   obj=part("Ice facet",((i-1)*.35,0,.55+i*.24),(.22,.23,.55+i*.24),frost if i==1 else shell,'cube')
-   obj.rotation_euler.y=(i-1)*.18
- elif name=="ruin":
-  mortar=mat("Aged masonry",(.26,.24,.19))
-  cover=mat("Wall moss",(.09,.14,.07))
-  part("Sunken wall foot",(0,.02,.10),(.91,.30,.12),mortar,'cube')
-  for side,tiers in [(-1,5),(1,3)]:
-   for tier in range(tiers):
-    x=side*(.63+.035*math.cos(tier*2.1))
-    block=part("Hewn wall course",(x,.035*math.sin(tier),.26+tier*.26),
-               (.22+.03*math.cos(tier),.25,.124),shell if tier%2 else mortar,'cube')
-    block.rotation_euler.z=.10*math.sin(tier*1.9+side)
-  for index,angle in enumerate([2.15,1.76,1.39]):
-   span=part("Fallen arch segment",(.61*math.cos(angle),0,1.08+.61*math.sin(angle)),
-             (.22,.24,.107),mortar if index%2 else shell,'cube')
-   span.rotation_euler.y=-angle
-  for x,y,size in [(-.96,-.23,.25),(-.10,-.34,.33),(.25,-.3,.26),(.99,.18,.23),(.82,.42,.19)]:
-   fragment=weathered_stone("Weathered rubble",(x,y,size*.52),(size,size*.75,size*.70),mortar,cover)
-   fragment.rotation_euler.z=x*3.4
- save(name)
-
-# Preview rendering is a separate optional invocation.
-if "--preview" in __import__("sys").argv:
+def render_previews():
  preview=os.path.join(out,"previews")
  os.makedirs(preview,exist_ok=True)
- for name in ["hero","cyborg","inferno","ghost","titan","cryo","buggy","forest","city","desert","ice","volcano"]:
+ for name in ("hero cyborg inferno ghost titan cryo enemy enemy_fast enemy_armored boss_overlord boss_crystal boss_inferno buggy hovercraft tank mech crate forest city desert ice volcano tree rock ruin cactus ice_spire lava_vent").split():
   bpy.ops.wm.open_mainfile(filepath=os.path.join(out,name+".blend"))
   scene=bpy.context.scene
-  bpy.ops.object.camera_add(location=(4,-6,3.8))
+  corners=[obj.matrix_world @ Vector(corner) for obj in scene.objects
+           if obj.type == 'MESH' for corner in obj.bound_box]
+  low=Vector(tuple(min(p[i] for p in corners) for i in range(3)))
+  high=Vector(tuple(max(p[i] for p in corners) for i in range(3)))
+  center=(low+high)/2
+  span=max(high-low)
+  bpy.ops.mesh.primitive_plane_add(size=span*150,location=(center.x,center.y,low.z-.015))
+  bpy.context.object.data.materials.append(mat("Matte studio ground",(.083,.102,.112)))
+  bpy.ops.object.camera_add(location=center+Vector((.48,-.79,.53))*span*3.2)
   cam=bpy.context.object
-  cam.rotation_euler=(Vector((0,0,.65))-cam.location).to_track_quat('-Z','Y').to_euler()
-  cam.data.type='ORTHO';cam.data.ortho_scale=4.2
+  cam.rotation_euler=(center-cam.location).to_track_quat('-Z','Y').to_euler()
+  cam.data.type='ORTHO'
+  cam.data.ortho_scale=span*1.50
   scene.camera=cam
-  for loc,energy in [((3,-4,6),900),((-3,2,4),650)]:
-   bpy.ops.object.light_add(type='AREA',location=loc)
-   lamp=bpy.context.object;lamp.data.energy=energy;lamp.data.shape='DISK';lamp.data.size=4
-   lamp.rotation_euler=(Vector((0,0,.5))-lamp.location).to_track_quat('-Z','Y').to_euler()
-  scene.render.engine='CYCLES';scene.cycles.samples=12
-  scene.render.resolution_x=512;scene.render.resolution_y=512;scene.render.resolution_percentage=100
+  for offset,energy,color in [
+   ((1.3,-2.2,2.7),230,(1.,.85,.65)),
+   ((-2.,1.4,2.),270,(.55,.76,1.)),
+   ((-.7,-2.,.8),95,(.82,.91,1.)),
+  ]:
+   bpy.ops.object.light_add(type='AREA',location=center+Vector(offset)*span)
+   lamp=bpy.context.object
+   lamp.data.energy=energy*span*span
+   lamp.data.color=color
+   lamp.data.shape='DISK'
+   lamp.data.size=span*1.8
+   lamp.rotation_euler=(center-lamp.location).to_track_quat('-Z','Y').to_euler()
+  scene.render.engine='CYCLES'
+  scene.cycles.samples=20
+  scene.cycles.use_denoising=False
+  scene.render.resolution_x=420
+  scene.render.resolution_y=420
+  scene.render.resolution_percentage=100
   scene.render.image_settings.file_format='PNG'
   scene.render.filepath=os.path.join(preview,name+".png")
   bpy.ops.render.render(write_still=True)
+
+
+if "--preview" in sys.argv:
+ render_previews()
+else:
+ generate()

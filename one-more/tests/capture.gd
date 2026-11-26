@@ -1,5 +1,7 @@
 extends SceneTree
 
+const ModelGallery = preload("res://tests/model_gallery.gd")
+
 var arena
 var output: String
 var failed := false
@@ -61,9 +63,12 @@ func capture() -> void:
 	arena.finish_run()
 	arena.show_collection()
 	await shot("collection",arena.collection)
-	for hero_id in [4,5]:
+	for hero_id in arena.HEROES.size():
 		arena.credits = 1000
 		arena.select_hero(hero_id)
+		if not arena.hero.has_meta("shot_origin"):
+			push_error("Hero is missing its exported shot origin: " + str(arena.HERO_ART[hero_id]))
+			failed = true
 		arena.show_hero_preview()
 		await shot("hero-" + str(arena.HEROES[hero_id][0]).to_lower(),arena.hero_preview)
 	arena.show_menu()
@@ -101,4 +106,14 @@ func capture() -> void:
 	await create_timer(0.15).timeout
 	arena.queue_free()
 	await process_frame
+	var gallery_names := ["models-heroes","models-enemies","models-equipment"]
+	for index in gallery_names.size():
+		var gallery := ModelGallery.new()
+		gallery.size = Vector2(720,1280)
+		root.add_child(gallery)
+		gallery.populate(index)
+		await shot(gallery_names[index],gallery)
+		failed = failed or not gallery.valid
+		gallery.queue_free()
+		await process_frame
 	quit(1 if failed else 0)

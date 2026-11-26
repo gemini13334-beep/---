@@ -1,6 +1,6 @@
 # Procedural asset manifest
 
-The original models are authored by `tools/generate_assets.py`. Every entry has editable Blender geometry and a runtime GLB. The GLB batches the static geometry by material, while the Blender source retains the separately named parts and modifiers. Godot uses the GLB scenes at runtime. The standalone Blender workflow produces the model files and preview images.
+`tools/generate_assets.py` builds the scenery and calls `tools/combat_models.py` for characters and equipment. Every entry has editable Blender geometry and a runtime GLB. The GLB batches the static geometry by material, while the Blender source retains the separately named parts and modifiers. Godot uses the GLB scenes at runtime. The standalone Blender workflow produces 28 model pairs and renders a preview of every asset. The screenshot workflow also renders three galleries directly from the imported Godot scenes.
 
 | Use | Model basenames |
 | --- | --- |
@@ -22,3 +22,7 @@ Generated for ONE MORE with OpenAI ImageGen in the November 2026 art pass. The i
 | `assets/art/forest-ground.jpg` | Repeating forest albedo with mipmaps | `fc77f124665090fd5086672eb5411ce3f6735301c539258e7aa6e262c88f584f` |
 | `assets/art/forest-slate.jpg` | Forest trail and triplanar masonry material | `9c570d539b0f84c428095120a0f70fa37126220ee2dce4d5787929c5cdd0b6f9` |
 | `assets/art/forest-fern.png` | Mipmapped alpha-scissor foliage shared by instanced forest plants | `40964c2228e76a6c9ab3dfb5ddb24b49d93ec0dd29e3bd6b605d009e4084ca60` |
+
+## Character and equipment art
+
+The six heroes, three regular enemies, three bosses, four vehicles and supply case are original Blender models made for ONE MORE. The painted finishes, steel patina and wear maps are generated in the script and packed in the Blender and GLB files. No external model packs or plugins are required. Each hero includes a `ShotOrigin` marker for the solo and co-op firing visuals. The same model IDs are used by saves and cooperative replication.

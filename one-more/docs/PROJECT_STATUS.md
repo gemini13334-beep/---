@@ -21,3 +21,7 @@ The two-player Android co-op mode shares an authoritative host simulation. The A
 ## Forest environment pass
 
 The forest arena now has a slate trail with relief and canopy lighting, material-mapped boulders and ruins, instanced ferns and mesh-based fir branchlets. The new scenery is visual and the original arena movement rules still apply. Graphics presets adjust fern density, and the medium preset enables 2× MSAA for new settings. The screenshot workflow captures the trail and a second view at the ruined wall.
+
+## Character and equipment pass
+
+Original hero, enemy, boss, vehicle and crate models replace the previous roster. Hero weapons export their muzzle locations, and the regular enemy silhouettes distinguish a ground scout, flying interceptor and tracked armour. The art change also reworks city, desert, ice and volcanic formations and their decorative props. Godot gallery renders cover all 17 characters and equipment assets.

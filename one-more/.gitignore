@@ -6,3 +6,4 @@
 /android/build/
 /android/.build_version
 /addons/one_more_bluetooth/OneMoreBluetooth.aar
+/tools/__pycache__/

@@ -1255,6 +1255,8 @@ func add_contact_shadow(host: Node3D, size: float) -> MeshInstance3D:
 
 func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
 	host.set_meta("model_asset",asset)
+	if host.has_meta("shot_origin"):
+		host.remove_meta("shot_origin")
 	if not art_cache.has(asset):
 		var path := "res://assets/models/" + asset + ".glb"
 		art_cache[asset] = load(path) as PackedScene if ResourceLoader.exists(path) else null
@@ -1266,7 +1268,17 @@ func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
 		host.add_child(art)
 		host.mesh = null
 		art.position.y = -0.5
+		var muzzle := art.find_child("ShotOrigin",true,false) as Node3D
+		if muzzle != null:
+			host.set_meta("shot_origin",muzzle)
 	return art
+
+func shot_origin(host: Node3D) -> Vector3:
+	if host.has_meta("shot_origin"):
+		var muzzle := host.get_meta("shot_origin") as Node3D
+		if is_instance_valid(muzzle):
+			return muzzle.global_position
+	return host.position+Vector3.UP*0.45
 
 func award(points: int) -> void:
 	combo = mini(combo + 1, 20)
@@ -1851,10 +1863,7 @@ func _physics_process(dt: float) -> void:
 		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
 		visual_recoil = 0.13
 		var impact := nearest.position
-		var muzzle := hero.position+Vector3.UP*0.45
-		if is_instance_valid(hero_visual):
-			muzzle = hero_visual.to_global(Vector3(0.72,0.42,0.79))
-		shot_tracer(muzzle,impact+Vector3.UP*0.2)
+		shot_tracer(shot_origin(hero),impact+Vector3.UP*0.2)
 		hit_enemy(nearest)
 		if blast > 0:
 			pulse(impact,1.5+blast*0.4,Color("#64cfff"))
