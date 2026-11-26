@@ -1,0 +1,1 @@
+-keep class game.onemore.bluetooth.OneMoreBluetooth { *; }

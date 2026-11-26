@@ -11,3 +11,12 @@ The original models are authored by `tools/generate_assets.py`. Every entry has 
 | Arena props | crate, forest, city, desert, ice, volcano, tree, rock, ruin, cactus, ice_spire, lava_vent |
 
 The terrain and forest fronds are procedural Godot assets. Ambient music and effects are synthesized by the game. This revision adds no third-party files or runtime dependencies.
+
+## Original environment images
+
+Generated for ONE MORE with OpenAI ImageGen in the November 2026 art pass. The images are stored as JPEGs for the game. They contain no interface or lettering.
+
+| File | Purpose | SHA-256 |
+| --- | --- | --- |
+| `assets/art/gate-valley.jpg` | Portrait menu backdrop | `f402422caf4ce435d5ad7f576f6ce7056ba1755d10642dc448a9d125e9f47b7b` |
+| `assets/art/forest-ground.jpg` | Repeating forest albedo with mipmaps | `fc77f124665090fd5086672eb5411ce3f6735301c539258e7aa6e262c88f584f` |

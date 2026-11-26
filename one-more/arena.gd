@@ -1,4 +1,7 @@
 extends Node3D
+const HangarMenu = preload("res://ui/hangar.gd")
+const CoopSession = preload("res://coop/session.gd")
+var coop: CoopSession
 var hero: MeshInstance3D
 var camera: Camera3D
 var enemies: Array[MeshInstance3D] = []
@@ -38,14 +41,14 @@ var ranks: Dictionary = {}
 var offers: Array[int] = []
 var offer_buttons: Array[Button] = []
 const ABILITIES = [
-	["OVERDRIVE","Faster attacks",0],["DASH","Movement speed",0],
-	["MAGNET","Pickup + heal",0],["NOVA","Area attack",1],
-	["PIERCER","Extra damage",1],["ARMOR","Damage resistance",0],
-	["RADAR","Attack range",0],["REGEN","Health recovery",1],
-	["FORTRESS","Maximum health",1],["JACKPOT","Extra score",1],
-	["THUNDER","Damage + area",2],["PHANTOM","Speed + armor",2],
-	["GRAVITY","Magnet + range",2],["BERSERK","Damage + attack speed",2],
-	["PHOENIX","Heal + regeneration",2],["TITAN CORE","Health + armor",2]
+	["ФОРСАЖ","Быстрее стрельба",0],["РЫВОК","Быстрее движение",0],
+	["МАГНИТ","Подбор и лечение",0],["НОВА","Урон по области",1],
+	["ПРОБОЙ","Больше урона",1],["БРОНЯ","Меньше входящего урона",0],
+	["РАДАР","Дальше стрельба",0],["РЕГЕНЕРАЦИЯ","Восстановление здоровья",1],
+	["КРЕПОСТЬ","Больше здоровья",1],["ДЖЕКПОТ","Больше очков",1],
+	["ГРОМ","Урон и область атаки",2],["ФАНТОМ","Скорость и броня",2],
+	["ТЯГОТЕНИЕ","Магнит и дальность",2],["БЕРСЕРК","Урон и скорострельность",2],
+	["ФЕНИКС","Лечение и восстановление",2],["ЯДРО ТИТАНА","Здоровье и броня",2]
 ]
 
 func roll_offers() -> void:
@@ -58,7 +61,7 @@ func roll_offers() -> void:
 		offers.append(id)
 	for i in range(3):
 		var a: Array = ABILITIES[offers[i]]
-		offer_buttons[i].text = "%s  /  %s  •  RANK %d\n%s" % [["COMMON","RARE","EPIC"][a[2]],a[0],int(ranks.get(offers[i],0))+1,a[1]]
+		offer_buttons[i].text = "%s  /  %s  ·  РАНГ %d\n%s" % [["ОБЫЧНОЕ","РЕДКОЕ","ЭПИЧЕСКОЕ"][a[2]],a[0],int(ranks.get(offers[i],0))+1,a[1]]
 		offer_buttons[i].modulate = [Color.WHITE,Color("#85d9ff"),Color("#e2b2ff")][a[2]]
 
 var selected := 0
@@ -66,7 +69,7 @@ var owned: Array[int] = [0]
 var collection: VBoxContainer
 var collection_balance: Label
 var collection_buttons: Array[Button] = []
-var menu: VBoxContainer
+var menu: HangarMenu
 var result_label: Label
 var max_hp := 100.0
 var mode := 0
@@ -210,6 +213,7 @@ func rebuild_scenery() -> void:
 var ground: MeshInstance3D
 var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
+const BIOME_NAMES = ["ЛЕС","ГОРОД","ПУСТЫНЯ","ЛЕДНИК","ВУЛКАН"]
 const GROUND_COLORS = ["#142d2d","#26323f","#674633","#2b4b68","#342732"]
 const GROUND_ACCENTS = ["#344739","#505f70","#ad7b48","#537a91","#68403b"]
 const GROUND_MARKINGS = ["#62583d","#7b9aa2","#a87744","#88b2c2","#eb784a"]
@@ -221,6 +225,7 @@ func update_ground_material() -> void:
 	mat.set_shader_parameter("second_color",Color(GROUND_ACCENTS[biome]))
 	mat.set_shader_parameter("path_color",Color(GROUND_MARKINGS[biome]))
 	mat.set_shader_parameter("biome",biome)
+	mat.set_shader_parameter("forest_ground",preload("res://assets/art/forest-ground.jpg"))
 	ground.material_override = mat
 
 func build_forest_understory() -> void:
@@ -256,7 +261,7 @@ func build_forest_understory() -> void:
 			x = trail_x+(1.0 if x > trail_x else -1.0)*rng.randf_range(2.2,3.4)
 		var basis := Basis(Vector3.UP,rng.randf_range(0,TAU)).scaled(Vector3.ONE*rng.randf_range(0.55,1.65))
 		clusters.set_instance_transform(index,Transform3D(basis,Vector3(x,0,z)))
-		clusters.set_instance_color(index,Color("#297853").lerp(Color("#7cae5d"),rng.randf()))
+		clusters.set_instance_color(index,Color("#385f52").lerp(Color("#7d975e"),rng.randf()))
 	forest_understory = MultiMeshInstance3D.new()
 	forest_understory.multimesh = clusters
 	forest_understory.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
@@ -278,8 +283,11 @@ func apply_biome_lighting() -> void:
 	biome_environment.background_color = Color(BIOME_SKY[biome])
 
 func cycle_biome() -> void:
-	biome = (biome+1)%BIOMES.size()
-	biome_button.text = "MAP • "+BIOMES[biome]
+	set_biome((biome+1)%BIOMES.size())
+
+func set_biome(index: int) -> void:
+	biome = clampi(index,0,BIOMES.size()-1)
+	biome_button.text = "КАРТА  ·  "+BIOME_NAMES[biome]
 	apply_biome_lighting()
 	update_ground_material()
 	rebuild_scenery()
@@ -291,6 +299,7 @@ var vehicle: MeshInstance3D
 var vehicle_time := 0.0
 var vehicle_kind := 0
 const VEHICLES = ["buggy","hovercraft","tank","mech"]
+const VEHICLE_NAMES = ["БАГГИ","ХОВЕР","ТАНК","МЕХ"]
 const VEHICLE_SPEED = [4.0,6.0,1.5,2.5]
 const VEHICLE_FIRE = [0.3,0.15,0.45,0.35]
 var next_event := 15.0
@@ -304,6 +313,10 @@ func sprint() -> void:
 
 func finish_run() -> void:
 	if not running:
+		return
+	if coop.live:
+		if coop.hosting:
+			coop.finish_host()
 		return
 	gain_hunter_xp(kills*5+int(score/200.0))
 	running = false
@@ -327,7 +340,9 @@ func finish_run() -> void:
 	save_profile()
 	show_menu()
 	if mode == 2:
-		result_label.text = ("GATE CLEARED" if gate_cleared else "GATE FAILED")+"\n"+result_label.text
+		result_label.text = ("ВРАТА ПРОЙДЕНЫ" if gate_cleared else "ВРАТА НЕ ПРОЙДЕНЫ")+"\n"+result_label.text
+	else:
+		result_label.text += "\nПОСЛЕДНИЙ ЗАБЕГ  %d" % score
 
 func spawn_vehicle() -> void:
 	if is_instance_valid(vehicle):
@@ -337,7 +352,7 @@ func spawn_vehicle() -> void:
 	vehicle = model(mesh,Color("#ffc45c"),Vector3(clampf(hero.position.x+5,-19,19),0.5,clampf(hero.position.z+3,-19,19)))
 	vehicle_kind = randi_range(0,3)
 	attach_art(vehicle,VEHICLES[vehicle_kind])
-	event_label.text = "BOOST "+VEHICLES[vehicle_kind].to_upper()+" • Collect vehicle"
+	event_label.text = "ТРАНСПОРТ  ·  "+VEHICLE_NAMES[vehicle_kind]+"  ·  Подберите"
 
 func update_events(dt: float) -> void:
 	if elapsed >= next_event:
@@ -347,7 +362,7 @@ func update_events(dt: float) -> void:
 		else:
 			for i in range(12):
 				drop_gem(Vector3(clampf(hero.position.x+randf_range(-6,6),-20,20),0.3,clampf(hero.position.z+randf_range(-6,6),-20,20)))
-			event_label.text = "ENERGY RAIN"
+			event_label.text = "ЭНЕРГЕТИЧЕСКИЙ ДОЖДЬ"
 	if is_instance_valid(vehicle) and not vehicle.is_queued_for_deletion():
 		if hero.position.distance_to(vehicle.position) < 1.4:
 			vehicle.queue_free()
@@ -356,7 +371,7 @@ func update_events(dt: float) -> void:
 			pulse(hero.position,3.0,Color("#ffc45c"))
 	if vehicle_time > 0:
 		vehicle_time = maxf(0,vehicle_time-dt)
-		event_label.text = "%s BOOST • %.1fs" % [VEHICLES[vehicle_kind].to_upper(),vehicle_time]
+		event_label.text = "%s  ·  %.1f с" % [VEHICLE_NAMES[vehicle_kind],vehicle_time]
 		if vehicle_time <= 0:
 			event_label.text = ""
 
@@ -371,8 +386,9 @@ var hud_stats: Label
 var health_label: Label
 var energy_label: Label
 var menu_scrim: ColorRect
-var showcase_scrim: TextureRect
 var hero_stage: Node3D
+var hero_preview: Control
+var hero_preview_label: Label
 
 func ui_panel(layer: CanvasLayer, pos: Vector2, dimensions: Vector2) -> Panel:
 	var panel := Panel.new()
@@ -416,7 +432,7 @@ func apply_hero_art() -> void:
 	hero.mesh = SphereMesh.new()
 	var mat := hero.material_override as StandardMaterial3D
 	mat.albedo_color = Color(PALETTE[selected])
-	hero_visual = attach_art(hero,["hero","cyborg","inferno","ghost","titan","cryo"][selected])
+	hero_visual = attach_art(hero,HERO_ART[selected])
 
 func make_bar(parent: Control, position: Vector2, color: Color) -> ProgressBar:
 	var bar := ProgressBar.new()
@@ -440,13 +456,16 @@ func make_bar(parent: Control, position: Vector2, color: Color) -> ProgressBar:
 	return bar
 
 const HEROES = [
-	["SLIME",0,"Balanced",100.0,0.0,2.0,0],
-	["CYBORG",150,"Rapid fire",100.0,0.0,2.0,2],
-	["INFERNO",300,"Area blast",100.0,0.0,2.0,0],
-	["GHOST",450,"Fast movement",80.0,2.0,2.0,0],
-	["TITAN",600,"Heavy armor",180.0,-0.5,2.0,0],
-	["CRYO",800,"Energy magnet",120.0,0.0,4.0,0]
+	["SLIME",0,"Универсал",100.0,0.0,2.0,0],
+	["CYBORG",150,"Скорострельность",100.0,0.0,2.0,2],
+	["INFERNO",300,"Взрыв по области",100.0,0.0,2.0,0],
+	["GHOST",450,"Подвижность",80.0,2.0,2.0,0],
+	["TITAN",600,"Тяжёлая броня",180.0,-0.5,2.0,0],
+	["CRYO",800,"Сильный магнит",120.0,0.0,4.0,0]
 ]
+
+const HERO_ART = ["hero","cyborg","inferno","ghost","titan","cryo"]
+const HERO_NAMES = ["СЛАЙМ","КИБОРГ","ИНФЕРНО","ПРИЗРАК","ТИТАН","КРИО"]
 
 const PROFILE_PATH = "user://records.cfg"
 const PROFILE_BACKUP = "user://records.backup.cfg"
@@ -489,15 +508,15 @@ func save_profile() -> void:
 		push_warning("Profile replacement failed: "+str(err))
 
 func refresh_collection() -> void:
-	collection_balance.text = "CREDITS %d  /  OWNED %d OF %d" % [credits,owned.size(),HEROES.size()]
+	collection_balance.text = "КРЕДИТЫ %d  ·  ОТКРЫТО %d ИЗ %d" % [credits,owned.size(),HEROES.size()]
 	for i in range(HEROES.size()):
 		var h: Array = HEROES[i]
-		var status := "SELECTED" if selected == i else ("SELECT" if owned.has(i) else "%d CR" % int(h[1]))
-		collection_buttons[i].text = "%s  /  %s\nHP %d  •  SPEED %.1f  •  MAGNET %.1f\n%s" % [h[0],h[2],int(h[3]),6.0+float(h[4]),float(h[5]),status]
+		var status := "ВЫБРАН" if selected == i else ("ВЫБРАТЬ" if owned.has(i) else "%d КР." % int(h[1]))
+		collection_buttons[i].text = "%s  /  %s\nЗД. %d  ·  СКОР. %.1f  ·  МАГНИТ %.1f\n%s" % [HERO_NAMES[i],h[2],int(h[3]),6.0+float(h[4]),float(h[5]),status]
 		collection_buttons[i].add_theme_color_override("font_color",Color("#8df4d5") if selected == i else Color("#edf8f5"))
 		collection_buttons[i].disabled = not owned.has(i) and credits < int(h[1])
-	result_label.text = "BEST %d  |  CR %d\n60s BEST %d" % [best,credits,best_sprint]
-	achievements.text = "BADGES: %d / 3" % (int(runs >= 1)+int(total_kills >= 100)+int(best >= 10000))
+	result_label.text = "РЕКОРД %d  ·  КРЕДИТЫ %d  ·  60 С  %d" % [best,credits,best_sprint]
+	achievements.text = "НАГРАДЫ %d / 3" % (int(runs >= 1)+int(total_kills >= 100)+int(best >= 10000))
 
 func select_hero(index: int) -> void:
 	if index < 0 or index >= HEROES.size():
@@ -531,6 +550,7 @@ var settings_tabs: TabContainer
 var preset_button: Button
 var preset_index := 1
 const PRESET_NAMES = ["LOW","MEDIUM","HIGH","ULTRA"]
+const PRESET_LABELS = {"LOW":"НИЗКОЕ","MEDIUM":"СРЕДНЕЕ","HIGH":"ВЫСОКОЕ","ULTRA":"УЛЬТРА","CUSTOM":"СВОЁ"}
 const PRESET_VALUES = {
 	"render_scale": [0.65,1.0,1.0,1.0],
 	"msaa": [0.0,0.0,1.0,2.0],
@@ -592,7 +612,7 @@ func build_settings(layer: CanvasLayer) -> void:
 	settings_panel.position = Vector2(90,125)
 	settings_panel.add_theme_constant_override("separation",12)
 	var heading := Label.new()
-	heading.text = "SETTINGS"
+	heading.text = "НАСТРОЙКИ"
 	heading.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	heading.add_theme_font_size_override("font_size",40)
 	settings_panel.add_child(heading)
@@ -623,38 +643,38 @@ func build_settings(layer: CanvasLayer) -> void:
 		tab_style.content_margin_bottom = 8
 		settings_tabs.add_theme_stylebox_override(state,tab_style)
 	settings_panel.add_child(settings_tabs)
-	var controls := settings_page("CONTROLS")
-	setting_slider(controls,"sensitivity","TOUCH SENSITIVITY",0.25,2.5,0.05)
-	setting_slider(controls,"deadzone","JOYSTICK DEADZONE",0.0,0.35,0.01)
-	setting_slider(controls,"camera_speed","CAMERA RESPONSE",2.0,20.0,0.5)
-	setting_slider(controls,"zoom","CAMERA DISTANCE",18.0,28.0,0.5)
-	setting_slider(controls,"stick_size","JOYSTICK RADIUS",55.0,125.0,5.0)
-	setting_slider(controls,"stick_opacity","JOYSTICK OPACITY",0.0,1.0,0.05)
-	setting_slider(controls,"vibration","HAPTICS (0 OFF / 1 ON)",0.0,1.0,1.0)
-	var graphics := settings_page("VIDEO")
+	var controls := settings_page("УПРАВЛЕНИЕ")
+	setting_slider(controls,"sensitivity","ЧУВСТВИТЕЛЬНОСТЬ",0.25,2.5,0.05)
+	setting_slider(controls,"deadzone","МЁРТВАЯ ЗОНА",0.0,0.35,0.01)
+	setting_slider(controls,"camera_speed","ОТКЛИК КАМЕРЫ",2.0,20.0,0.5)
+	setting_slider(controls,"zoom","ДИСТАНЦИЯ КАМЕРЫ",18.0,28.0,0.5)
+	setting_slider(controls,"stick_size","РАДИУС ДЖОЙСТИКА",55.0,125.0,5.0)
+	setting_slider(controls,"stick_opacity","ПРОЗРАЧНОСТЬ ДЖОЙСТИКА",0.0,1.0,0.05)
+	setting_slider(controls,"vibration","ВИБРАЦИЯ (0 / 1)",0.0,1.0,1.0)
+	var graphics := settings_page("ГРАФИКА")
 	preset_button = menu_button(graphics,"",cycle_preset)
 	preset_button.custom_minimum_size = Vector2(0,56)
 	fps_button = menu_button(graphics,"",toggle_fps)
 	quality_button = menu_button(graphics,"",toggle_quality)
-	setting_slider(graphics,"particles","EFFECT DENSITY",0.25,1.0,0.05)
-	setting_slider(graphics,"brightness","LIGHT INTENSITY",0.65,1.35,0.05)
-	setting_slider(graphics,"render_scale","3D RENDER SCALE",0.5,1.0,0.05)
-	setting_slider(graphics,"msaa","MSAA (0 OFF / 1 2X / 2 4X)",0.0,2.0,1.0)
+	setting_slider(graphics,"particles","ПЛОТНОСТЬ ЭФФЕКТОВ",0.25,1.0,0.05)
+	setting_slider(graphics,"brightness","ЯРКОСТЬ СВЕТА",0.65,1.35,0.05)
+	setting_slider(graphics,"render_scale","РАЗРЕШЕНИЕ 3D",0.5,1.0,0.05)
+	setting_slider(graphics,"msaa","СГЛАЖИВАНИЕ (0 / 2× / 4×)",0.0,2.0,1.0)
 	fps_button.custom_minimum_size = Vector2(0,56)
 	quality_button.custom_minimum_size = Vector2(0,56)
-	var audio := settings_page("AUDIO")
+	var audio := settings_page("ЗВУК")
 	audio_button = menu_button(audio,"",toggle_audio)
-	setting_slider(audio,"master","MASTER VOLUME",0.0,1.0,0.05)
-	setting_slider(audio,"music","MUSIC VOLUME",0.0,1.0,0.05)
-	setting_slider(audio,"effects","EFFECTS VOLUME",0.0,1.0,0.05)
-	setting_slider(audio,"weapons","WEAPONS",0.0,1.0,0.05)
-	setting_slider(audio,"enemies","ENEMY IMPACTS",0.0,1.0,0.05)
-	setting_slider(audio,"notifications","SYSTEM NOTIFICATIONS",0.0,1.0,0.05)
-	setting_slider(audio,"vehicles","VEHICLE BOOST",0.0,1.0,0.05)
+	setting_slider(audio,"master","ОБЩАЯ ГРОМКОСТЬ",0.0,1.0,0.05)
+	setting_slider(audio,"music","МУЗЫКА",0.0,1.0,0.05)
+	setting_slider(audio,"effects","ЭФФЕКТЫ",0.0,1.0,0.05)
+	setting_slider(audio,"weapons","ОРУЖИЕ",0.0,1.0,0.05)
+	setting_slider(audio,"enemies","ПРОТИВНИКИ",0.0,1.0,0.05)
+	setting_slider(audio,"notifications","УВЕДОМЛЕНИЯ",0.0,1.0,0.05)
+	setting_slider(audio,"vehicles","ТРАНСПОРТ",0.0,1.0,0.05)
 	audio_button.custom_minimum_size = Vector2(0,56)
-	var reset := menu_button(settings_panel,"RESTORE DEFAULTS",reset_settings)
+	var reset := menu_button(settings_panel,"СБРОСИТЬ НАСТРОЙКИ",reset_settings)
 	reset.custom_minimum_size.y = 56
-	menu_button(settings_panel,"BACK",close_settings)
+	menu_button(settings_panel,"НАЗАД",close_settings)
 	settings_panel.hide()
 
 func reset_settings() -> void:
@@ -674,7 +694,6 @@ func close_settings() -> void:
 
 func show_settings() -> void:
 	menu.hide()
-	showcase_scrim.hide()
 	menu_scrim.show()
 	collection.hide()
 	settings_panel.show()
@@ -685,7 +704,7 @@ func apply_settings() -> void:
 		1: get_viewport().msaa_3d = Viewport.MSAA_2X
 		2: get_viewport().msaa_3d = Viewport.MSAA_4X
 		_: get_viewport().msaa_3d = Viewport.MSAA_DISABLED
-	preset_button.text = "QUALITY  /  "+graphics_preset_name()
+	preset_button.text = "КАЧЕСТВО  ·  "+PRESET_LABELS[graphics_preset_name()]
 	if running:
 		camera.size = float(advanced["zoom"])
 	world_light.light_energy = 1.18*float(advanced["brightness"])
@@ -705,9 +724,9 @@ func apply_settings() -> void:
 		voice.volume_db = fx_volume(str(voice.get_meta("fx_key","pickup"))) if audio_enabled else -80.0
 		if not audio_enabled:
 			voice.stop()
-	fps_button.text = "FRAME LIMIT  /  %d FPS" % fps_limit
-	quality_button.text = "SHADOWS  /  "+("ON" if high_quality else "OFF")
-	audio_button.text = "SOUND  /  "+("ON" if audio_enabled else "OFF")
+	fps_button.text = "ЛИМИТ КАДРОВ  ·  %d FPS" % fps_limit
+	quality_button.text = "ТЕНИ  ·  "+("ВКЛ" if high_quality else "ВЫКЛ")
+	audio_button.text = "ЗВУК  ·  "+("ВКЛ" if audio_enabled else "ВЫКЛ")
 
 func load_settings() -> void:
 	var cfg := ConfigFile.new()
@@ -751,7 +770,7 @@ var hunter_level := 1
 var hunter_xp := 0
 var stat_points := 0
 var hunter_stats: Array[int] = [0,0,0,0,0]
-const STAT_NAMES = ["STRENGTH","VITALITY","AGILITY","PERCEPTION","DEFENSE"]
+const STAT_NAMES = ["СИЛА","ЖИВУЧЕСТЬ","ЛОВКОСТЬ","ВОСПРИЯТИЕ","ЗАЩИТА"]
 var awakening_panel: VBoxContainer
 var awakening_status: Label
 var stat_buttons: Array[Button] = []
@@ -801,10 +820,10 @@ func build_awakening(layer: CanvasLayer) -> void:
 	awakening_panel.add_child(awakening_xp_bar)
 	for i in range(5):
 		stat_buttons.append(menu_button(awakening_panel,"",spend_stat.bind(i)))
-	menu_button(awakening_panel,"DIMENSIONAL GATES",show_gates)
+	menu_button(awakening_panel,"ВРАТА",show_gates)
 	build_gates(layer)
-	menu_button(awakening_panel,"SYSTEM QUESTS",show_quests)
-	menu_button(awakening_panel,"BACK",show_menu)
+	menu_button(awakening_panel,"СИСТЕМНЫЕ ЗАДАНИЯ",show_quests)
+	menu_button(awakening_panel,"НАЗАД",show_menu)
 	build_quests(layer)
 	awakening_panel.hide()
 
@@ -813,7 +832,7 @@ func refresh_awakening() -> void:
 	awakening_xp_bar.value = hunter_xp
 	var rank_index := GATE_RANKS.find(hunter_rank())
 	awakening_status.add_theme_color_override("font_color",Color(SYSTEM_RANK_COLORS[maxi(0,rank_index)]))
-	awakening_status.text = "AWAKENING  /  RANK %s\nLEVEL %d  /  XP %d/%d\nAVAILABLE POINTS: %d" % [hunter_rank(),hunter_level,hunter_xp,hunter_level*100,stat_points]
+	awakening_status.text = "ПРОБУЖДЕНИЕ  ·  РАНГ %s\nУРОВЕНЬ %d  ·  ОПЫТ %d/%d\nСВОБОДНЫЕ ОЧКИ  %d" % [hunter_rank(),hunter_level,hunter_xp,hunter_level*100,stat_points]
 	for i in range(5):
 		stat_buttons[i].text = "%s  %d   +" % [STAT_NAMES[i],hunter_stats[i]]
 		stat_buttons[i].disabled = stat_points <= 0
@@ -830,14 +849,13 @@ func show_awakening() -> void:
 	gate_panel.hide()
 	quest_panel.hide()
 	menu.hide()
-	showcase_scrim.hide()
 	menu_scrim.show()
 	awakening_panel.show()
 	refresh_awakening()
 
 var quest_progress: Array[int] = [0,0,0]
 var quest_tiers: Array[int] = [0,0,0]
-const QUEST_NAMES = ["HUNT","SURVIVE","BREAK RECORDS"]
+const QUEST_NAMES = ["ОХОТА","ВЫЖИВАНИЕ","РЕКОРДЫ"]
 const QUEST_BASE = [20,3,5000]
 var quest_panel: VBoxContainer
 var quest_buttons: Array[Button] = []
@@ -851,7 +869,7 @@ func build_quests(layer: CanvasLayer) -> void:
 	quest_panel.position = Vector2(90,240)
 	quest_panel.add_theme_constant_override("separation",18)
 	var heading := Label.new()
-	heading.text = "SYSTEM QUESTS"
+	heading.text = "СИСТЕМНЫЕ ЗАДАНИЯ"
 	heading.add_theme_font_size_override("font_size",36)
 	system_heading(heading)
 	quest_panel.add_child(heading)
@@ -860,14 +878,14 @@ func build_quests(layer: CanvasLayer) -> void:
 		btn.custom_minimum_size = Vector2(540,132)
 		btn.add_theme_font_size_override("font_size",23)
 		quest_buttons.append(btn)
-	menu_button(quest_panel,"BACK",show_awakening)
+	menu_button(quest_panel,"НАЗАД",show_awakening)
 	quest_panel.hide()
 
 func refresh_quests() -> void:
 	for i in range(3):
 		var tier := quest_tiers[i]+1
 		var ready := quest_progress[i] >= quest_target(i) and quest_tiers[i] < 1000
-		quest_buttons[i].text = "%s  /  TIER %d\n%d / %d\n+%d XP  +%d CR  %s" % [QUEST_NAMES[i],tier,mini(quest_progress[i],quest_target(i)),quest_target(i),100*tier,50*tier,"CLAIM" if ready else ""]
+		quest_buttons[i].text = "%s  ·  ЭТАП %d\n%d / %d\n+%d XP  +%d КР.  %s" % [QUEST_NAMES[i],tier,mini(quest_progress[i],quest_target(i)),quest_target(i),100*tier,50*tier,"ЗАБРАТЬ" if ready else ""]
 		quest_buttons[i].disabled = not ready
 
 func claim_quest(index: int) -> void:
@@ -882,6 +900,8 @@ func claim_quest(index: int) -> void:
 	refresh_quests()
 
 func show_quests() -> void:
+	menu.hide()
+	menu_scrim.show()
 	awakening_panel.hide()
 	quest_panel.show()
 	refresh_quests()
@@ -900,7 +920,7 @@ func build_gates(layer: CanvasLayer) -> void:
 	gate_panel.position = Vector2(90,130)
 	gate_panel.add_theme_constant_override("separation",10)
 	var heading := Label.new()
-	heading.text = "DIMENSIONAL GATES"
+	heading.text = "ВРАТА"
 	heading.add_theme_font_size_override("font_size",32)
 	system_heading(heading)
 	gate_panel.add_child(heading)
@@ -909,17 +929,19 @@ func build_gates(layer: CanvasLayer) -> void:
 		btn.custom_minimum_size = Vector2(540,100)
 		btn.add_theme_font_size_override("font_size",22)
 		gate_buttons.append(btn)
-	menu_button(gate_panel,"BACK",show_awakening)
+	menu_button(gate_panel,"НАЗАД",show_awakening)
 	gate_panel.hide()
 
 func show_gates() -> void:
+	menu.hide()
+	menu_scrim.show()
 	awakening_panel.hide()
 	gate_panel.show()
 	for i in range(7):
-		gate_buttons[i].text = "RANK %s  /  LEVEL %d\nCLEARS %d  /  +%d XP" % [GATE_RANKS[i],GATE_LEVELS[i],gate_wins[i],150*(i+1)]
+		gate_buttons[i].text = "РАНГ %s  ·  УРОВЕНЬ %d\nПОБЕДЫ %d  ·  +%d ОПЫТА" % [GATE_RANKS[i],GATE_LEVELS[i],gate_wins[i],150*(i+1)]
 		gate_buttons[i].disabled = hunter_level < int(GATE_LEVELS[i])
 		gate_buttons[i].add_theme_color_override("font_color",Color(SYSTEM_RANK_COLORS[i]))
-		gate_buttons[i].text += "  /  LOCKED" if gate_buttons[i].disabled else "  /  ENTER"
+		gate_buttons[i].text += "  ·  ЗАКРЫТО" if gate_buttons[i].disabled else "  ·  ВОЙТИ"
 
 func enter_gate(index: int) -> void:
 	if index < 0 or index >= 7 or hunter_level < int(GATE_LEVELS[index]):
@@ -927,26 +949,27 @@ func enter_gate(index: int) -> void:
 	gate_rank = index
 	start()
 	mode = 2
-	event_label.text = "GATE "+GATE_RANKS[index]+" / DEFEAT BOSS IN 120s"
+	event_label.text = "ВРАТА "+GATE_RANKS[index]+"  ·  Победите босса за 120 с"
 
 func show_collection() -> void:
 	menu.hide()
-	showcase_scrim.hide()
+	hero_preview.hide()
 	menu_scrim.show()
 	collection.show()
 	refresh_collection()
 
 func show_menu() -> void:
+	hero_preview.hide()
 	gate_panel.hide()
 	quest_panel.hide()
 	awakening_panel.hide()
 	settings_panel.hide()
 	collection.hide()
 	menu_scrim.hide()
-	showcase_scrim.show()
 	hud_panel.hide()
 	event_label.hide()
 	hero_stage.show()
+	hero.show()
 	hero_shadow.hide()
 	for actor in enemies + crates + gems:
 		actor.hide()
@@ -963,6 +986,56 @@ func show_menu() -> void:
 	camera.size = 7.25
 	menu.show()
 	refresh_collection()
+
+func show_hero_preview() -> void:
+	menu.hide()
+	collection.hide()
+	menu_scrim.hide()
+	hero_preview_label.text = HERO_NAMES[selected]
+	hero_preview.show()
+
+func build_hero_preview(layer: CanvasLayer) -> void:
+	hero_preview = Control.new()
+	hero_preview.size = Vector2(720,1280)
+	hero_preview.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	layer.add_child(hero_preview)
+	hero_preview_label = Label.new()
+	hero_preview_label.position = Vector2(80,48)
+	hero_preview_label.size.x = 560
+	hero_preview_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hero_preview_label.add_theme_font_size_override("font_size",52)
+	hero_preview.add_child(hero_preview_label)
+	var back := menu_button(hero_preview,"НАЗАД К ГЕРОЯМ",show_collection)
+	back.position = Vector2(90,1050)
+	hero_preview.hide()
+
+func choose_menu_action(action: String) -> void:
+	match action:
+		"play":
+			if menu.selected_mode == 1:
+				sprint()
+			else:
+				start()
+		"endless": menu.select_mode(0)
+		"sprint": menu.select_mode(1)
+		"map": cycle_biome()
+		"heroes": show_collection()
+		"awakening": show_awakening()
+		"settings": show_settings()
+		"quests": show_quests()
+		"gates": show_gates()
+		"coop":
+			menu.hide()
+			menu_scrim.show()
+			coop.open_lobby()
+
+func display_coop_result(reason: String) -> void:
+	running = false
+	choosing = false
+	clear_touch()
+	upgrades.hide()
+	show_menu()
+	result_label.text = "%s\nСЧЁТ  %d" % [reason,score]
 
 func menu_button(parent: Control, label: String, action: Callable) -> Button:
 	var btn := Button.new()
@@ -1000,46 +1073,54 @@ func pulse(pos: Vector3, radius: float, color: Color) -> void:
 		active_pulses -= 1
 	)
 
+func clear_boss_warning(enemy: MeshInstance3D) -> void:
+	if enemy.has_meta("warning_ring"):
+		var warning := enemy.get_meta("warning_ring") as MeshInstance3D
+		if is_instance_valid(warning):
+			warning.queue_free()
+		enemy.remove_meta("warning_ring")
+
+func render_boss_warning(enemy: MeshInstance3D,radius: float) -> void:
+	var ring: MeshInstance3D
+	if enemy.has_meta("warning_ring"):
+		ring = enemy.get_meta("warning_ring") as MeshInstance3D
+	if not is_instance_valid(ring):
+		var mesh := TorusMesh.new()
+		mesh.inner_radius = radius-0.09
+		mesh.outer_radius = radius+0.09
+		ring = MeshInstance3D.new()
+		ring.mesh = mesh
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.albedo_color = Color("#ffb34f")
+		ring.material_override = mat
+		enemy.add_child(ring)
+		ring.scale = Vector3.ONE/enemy.scale.x
+		ring.position.y = -0.42
+		enemy.set_meta("warning_ring",ring)
+	var intensity := 0.55+0.45*sin(elapsed*22.0)
+	ring.material_override.albedo_color = Color("#df7042").lerp(Color("#ffdc87"),intensity)
+
 func update_boss_attack(enemy: MeshInstance3D) -> void:
 	var kind := int(enemy.get_meta("kind",0))
 	var radius := 3.0+kind
 	var deadline := float(enemy.get_meta("next_pulse",99999.0))
 	if elapsed >= deadline:
-		if enemy.has_meta("warning_ring"):
-			var warning := enemy.get_meta("warning_ring") as MeshInstance3D
-			if is_instance_valid(warning):
-				warning.queue_free()
-			enemy.remove_meta("warning_ring")
+		clear_boss_warning(enemy)
 		pulse(enemy.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
 		if hero.position.distance_to(enemy.position) < radius:
 			hp -= (12.0+kind*4.0)*(1.0-armor)
+		coop.damage_partner(enemy.position,radius,12.0+kind*4.0)
 		enemy.set_meta("next_pulse",elapsed+4.0)
 	elif deadline-elapsed <= 1.2:
-		var ring: MeshInstance3D
-		if enemy.has_meta("warning_ring"):
-			ring = enemy.get_meta("warning_ring") as MeshInstance3D
-		if not is_instance_valid(ring):
-			var mesh := TorusMesh.new()
-			mesh.inner_radius = radius-0.09
-			mesh.outer_radius = radius+0.09
-			ring = MeshInstance3D.new()
-			ring.mesh = mesh
-			var mat := StandardMaterial3D.new()
-			mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-			mat.albedo_color = Color("#ffb34f")
-			ring.material_override = mat
-			enemy.add_child(ring)
-			ring.scale = Vector3.ONE/enemy.scale.x
-			ring.position.y = -0.42
-			enemy.set_meta("warning_ring",ring)
-		var intensity := 0.55+0.45*sin(elapsed*22.0)
-		ring.material_override.albedo_color = Color("#df7042").lerp(Color("#ffdc87"),intensity)
+		render_boss_warning(enemy,radius)
 
 var active_tracers := 0
 func shot_tracer(from: Vector3, to: Vector3) -> void:
 	var length := from.distance_to(to)
 	if length < 0.05:
 		return
+	coop.record_shot(from,to)
 	play_fx("shot")
 	if active_tracers >= 24:
 		return
@@ -1179,6 +1260,7 @@ func add_contact_shadow(host: Node3D, size: float) -> MeshInstance3D:
 	return shadow
 
 func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
+	host.set_meta("model_asset",asset)
 	if not art_cache.has(asset):
 		var path := "res://assets/models/" + asset + ".glb"
 		art_cache[asset] = load(path) as PackedScene if ResourceLoader.exists(path) else null
@@ -1200,6 +1282,9 @@ func award(points: int) -> void:
 var gem_mesh: SphereMesh
 var gem_material: StandardMaterial3D
 func drop_gem(pos: Vector3) -> void:
+	gems.append(make_gem(pos))
+
+func make_gem(pos: Vector3) -> MeshInstance3D:
 	if gem_mesh == null:
 		gem_mesh = SphereMesh.new()
 		gem_mesh.radius = 0.18
@@ -1217,7 +1302,21 @@ func drop_gem(pos: Vector3) -> void:
 	gem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(gem)
 	gem.position = Vector3(pos.x,0.3,pos.z)
-	gems.append(gem)
+	return gem
+
+func create_coop_visual(asset: String,pos: Vector3) -> MeshInstance3D:
+	if asset == "gem":
+		return make_gem(pos)
+	var mesh := BoxMesh.new()
+	mesh.size = Vector3(0.9,0.9,0.9)
+	var color := Color("#d49b43") if asset == "crate" else Color("#ff7865")
+	if asset.begins_with("boss_"):
+		mesh.size = Vector3(1.6,1.4,1.6)
+		color = Color("#a56bff")
+	var visual := model(mesh,color,pos)
+	attach_art(visual,asset)
+	add_contact_shadow(visual,2.8 if asset.begins_with("boss_") else 1.7)
+	return visual
 
 func choose_upgrade(index: int) -> void:
 	if not choosing:
@@ -1263,11 +1362,11 @@ func choose_upgrade(index: int) -> void:
 	if ranks.has(0) and ranks.has(3) and not ranks.has(100):
 		ranks[100] = 1
 		blast += 2
-		event_label.text = "SYNERGY • OVERDRIVE NOVA"
+		event_label.text = "СВЯЗКА  ·  ФОРСИРОВАННАЯ НОВА"
 	if ranks.has(1) and ranks.has(2) and not ranks.has(101):
 		ranks[101] = 1
 		magnet += 2
-		event_label.text = "SYNERGY • GRAVITY DASH"
+		event_label.text = "СВЯЗКА  ·  ГРАВИТАЦИОННЫЙ РЫВОК"
 	choosing = false
 	upgrades.hide()
 	clear_touch()
@@ -1386,7 +1485,7 @@ func _ready() -> void:
 	retry.position = Vector2(110,550)
 	retry.size = Vector2(500,110)
 	retry.add_theme_font_size_override("font_size",34)
-	retry.text = "PLAY • ONE MORE"
+	retry.text = "ИГРАТЬ"
 	retry.pressed.connect(start)
 	retry.hide()
 	menu_scrim = ColorRect.new()
@@ -1394,67 +1493,27 @@ func _ready() -> void:
 	menu_scrim.size = Vector2(720,1280)
 	menu_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	layer.add_child(menu_scrim)
-	showcase_scrim = TextureRect.new()
-	var gradient := Gradient.new()
-	gradient.offsets = PackedFloat32Array([0.0,0.18,0.29,0.39,1.0])
-	gradient.colors = PackedColorArray([Color("#08151be8"),Color("#08151b10"),Color("#08151b02"),Color("#0b1922ec"),Color("#07121afe")])
-	var backdrop := GradientTexture2D.new()
-	backdrop.gradient = gradient
-	backdrop.fill_to = Vector2.DOWN
-	backdrop.width = 4
-	backdrop.height = 256
-	showcase_scrim.texture = backdrop
-	showcase_scrim.size = Vector2(720,1280)
-	showcase_scrim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(showcase_scrim)
-	menu = VBoxContainer.new()
+	menu = HangarMenu.new()
 	layer.add_child(menu)
-	menu.position = Vector2(90,42)
-	menu.add_theme_constant_override("separation",12)
-	var title := Label.new()
-	title.text = "ONE MORE"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size",76)
-	menu.add_child(title)
-	title.add_theme_color_override("font_color",Color("#8df4d5"))
-	var hero_space := Control.new()
-	hero_space.custom_minimum_size.y = 254
-	hero_space.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	menu.add_child(hero_space)
-	result_label = Label.new()
-	result_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	result_label.add_theme_font_size_override("font_size",22)
-	result_label.add_theme_color_override("font_color",Color("#bdd4d5"))
-	menu.add_child(result_label)
-	var play := menu_button(menu,"PLAY  /  ENDLESS",start)
-	var primary := StyleBoxFlat.new()
-	primary.bg_color = Color("#8df4d5")
-	primary.set_corner_radius_all(14)
-	play.add_theme_stylebox_override("normal",primary)
-	play.add_theme_color_override("font_color",Color("#102b29"))
-	menu_button(menu,"SCORE ATTACK • 60s",sprint)
-	biome_button = menu_button(menu,"MAP • FOREST",cycle_biome)
-	achievements = Label.new()
-	achievements.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	achievements.add_theme_font_size_override("font_size",24)
-	menu.add_child(achievements)
+	menu.action_requested.connect(choose_menu_action)
+	biome_button = menu.map_button
+	biome_button.text = "КАРТА  ·  "+BIOME_NAMES[biome]
+	result_label = menu.summary
+	achievements = menu.badges
 	event_label = Label.new()
 	layer.add_child(event_label)
 	event_label.position = Vector2(24,166)
 	event_label.add_theme_font_size_override("font_size",24)
 	event_label.add_theme_color_override("font_outline_color",Color("#102029"))
 	event_label.add_theme_constant_override("outline_size",6)
-	menu_button(menu,"HERO COLLECTION",show_collection)
-	menu_button(menu,"AWAKENING",show_awakening)
 	build_awakening(layer)
-	menu_button(menu,"SETTINGS",show_settings)
 	build_settings(layer)
 	collection = VBoxContainer.new()
 	layer.add_child(collection)
 	collection.position = Vector2(90,150)
 	collection.add_theme_constant_override("separation",10)
 	var collection_title := Label.new()
-	collection_title.text = "HERO COLLECTION"
+	collection_title.text = "КОЛЛЕКЦИЯ ГЕРОЕВ"
 	collection_title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	collection_title.add_theme_font_size_override("font_size",36)
 	collection.add_child(collection_title)
@@ -1468,20 +1527,25 @@ func _ready() -> void:
 		card.custom_minimum_size = Vector2(540,112)
 		card.add_theme_font_size_override("font_size",22)
 		collection_buttons.append(card)
-	menu_button(collection,"BACK",show_menu)
+	menu_button(collection,"ПОКАЗАТЬ ГЕРОЯ",show_hero_preview)
+	menu_button(collection,"НАЗАД",show_menu)
 	collection.hide()
+	build_hero_preview(layer)
+	coop = CoopSession.new()
+	add_child(coop)
+	coop.configure(self,layer)
 	upgrades = VBoxContainer.new()
 	layer.add_child(upgrades)
 	upgrades.position = Vector2(90,430)
 	upgrades.size = Vector2(540,320)
 	upgrades.add_theme_constant_override("separation",16)
 	var heading := Label.new()
-	heading.text = "EVOLUTION • CHOOSE ONE"
+	heading.text = "ВЫБЕРИТЕ УСИЛЕНИЕ"
 	heading.add_theme_font_size_override("font_size",28)
 	upgrades.add_child(heading)
 	for i in range(3):
 		var btn := Button.new()
-		btn.text = "UPGRADE"
+		btn.text = "УСИЛЕНИЕ"
 		offer_buttons.append(btn)
 		btn.custom_minimum_size = Vector2(540,110)
 		btn.add_theme_font_size_override("font_size",24)
@@ -1534,7 +1598,7 @@ func load_profile() -> void:
 	if not owned.has(selected):
 		selected = 0
 
-func start() -> void:
+func start(populate := true) -> void:
 	visual_stride = 0.0
 	visual_lean = Vector2.ZERO
 	visual_recoil = 0.0
@@ -1555,7 +1619,7 @@ func start() -> void:
 	for crate in crates:
 		crate.queue_free()
 	crates.clear()
-	for i in range(22):
+	for i in range(22 if populate else 0):
 		var p := Vector3(randf_range(-19,19),0.5,randf_range(-19,19))
 		if p.length() < 4:
 			p.x += 6
@@ -1581,6 +1645,7 @@ func start() -> void:
 	magnet = 2
 	choosing = false
 	upgrades.hide()
+	hero.show()
 	hero.position = Vector3(0,0.5,0)
 	hero.rotation = Vector3.ZERO
 	camera.position = hero.position + COMBAT_CAMERA_OFFSET
@@ -1612,7 +1677,6 @@ func start() -> void:
 	clear_touch()
 	running = true
 	menu_scrim.hide()
-	showcase_scrim.hide()
 	hero_stage.hide()
 	hero_shadow.show()
 	hud_panel.show()
@@ -1662,6 +1726,9 @@ func clear_touch() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		clear_touch()
+	elif what == NOTIFICATION_APPLICATION_RESUMED and is_instance_valid(coop) and coop.lobby.visible:
+		coop.update_devices()
+		coop.refresh_lobby()
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and not event.pressed and event.index == finger:
@@ -1671,6 +1738,8 @@ func _input(event: InputEvent) -> void:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and finger == -1:
+			if coop.live and coop.exit_button.get_global_rect().has_point(event.position):
+				return
 			finger = event.index
 			origin = event.position
 	elif event is InputEventScreenDrag and event.index == finger:
@@ -1682,11 +1751,23 @@ func _input(event: InputEvent) -> void:
 var visual_stride := 0.0
 var visual_lean := Vector2.ZERO
 var visual_recoil := 0.0
+func movement_input() -> Vector2:
+	if finger != -1:
+		return direction
+	return Input.get_vector("ui_left","ui_right","ui_up","ui_down")
+
+func follow_player_camera(dt: float) -> void:
+	var focus := hero.position
+	if hp <= 0 and coop.live and is_instance_valid(coop.partner):
+		focus = coop.partner.position
+	camera.position = camera.position.lerp(focus + COMBAT_CAMERA_OFFSET,1.0-exp(-float(advanced["camera_speed"])*dt))
+
 func _physics_process(dt: float) -> void:
-	if not running or choosing:
+	if not running or choosing or (coop.live and not coop.hosting):
 		return
 	elapsed += dt
-	hp = minf(max_hp,hp+regen*dt)
+	if not coop.live or hp > 0:
+		hp = minf(max_hp,hp+regen*dt)
 	update_events(dt)
 	if mode == 1 and elapsed >= 60:
 		finish_run()
@@ -1695,9 +1776,7 @@ func _physics_process(dt: float) -> void:
 	combo_time -= dt
 	if combo_time <= 0:
 		combo = 0
-	var move := direction
-	if finger == -1:
-		move = Input.get_vector("ui_left","ui_right","ui_up","ui_down")
+	var move := movement_input() if not coop.live or hp > 0 else Vector2.ZERO
 	if move.length() > 0.05:
 		hero.rotation.y = lerp_angle(hero.rotation.y,atan2(move.x,move.y),minf(dt*12,1.0))
 	var motion := move.length()
@@ -1712,12 +1791,14 @@ func _physics_process(dt: float) -> void:
 	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
-	camera.position = camera.position.lerp(hero.position + COMBAT_CAMERA_OFFSET,1.0-exp(-float(advanced["camera_speed"])*dt))
+	follow_player_camera(dt)
+	coop.tick_partner(dt)
 	spawn_timer -= dt
 	if spawn_timer <= 0 and enemies.size() < 100:
 		spawn_timer = maxf(0.25,1.1-elapsed/150.0)
 		var a := randf()*TAU
-		var p := hero.position+Vector3(cos(a),0,sin(a))*12
+		var center: Vector3 = coop.partner.position if hp <= 0 and coop.live_partner() != null else hero.position
+		var p := center+Vector3(cos(a),0,sin(a))*12
 		p.x = clampf(p.x,-21,21)
 		p.z = clampf(p.z,-21,21)
 		var mesh := BoxMesh.new()
@@ -1755,20 +1836,24 @@ func _physics_process(dt: float) -> void:
 	var nearest: MeshInstance3D = null
 	var distance := 4.0+level*0.3+reach
 	for e in enemies:
-		var offset: Vector3 = hero.position-e.position
+		var target := coop.target_for(e.position)
+		var offset: Vector3 = target.position-e.position
 		var d := offset.length()
+		var hero_distance := d if target == hero else hero.position.distance_to(e.position)
 		if d > 0.05:
 			e.rotation.y = lerp_angle(e.rotation.y,atan2(offset.x,offset.z),1.0-exp(-9.0*dt))
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
 		if e.get_meta("boss",false):
 			update_boss_attack(e)
-		if d < 0.9*e.scale.x:
-			hp -= dt*(24 if e.get_meta("boss",false) else 12)*(1.0-armor)
-		if d < distance:
-			distance = d
+		var contact_damage: float = dt*(24 if e.get_meta("boss",false) else 12)
+		if hero_distance < 0.9*e.scale.x:
+			hp -= contact_damage*(1.0-armor)
+		coop.damage_partner(e.position,0.9*e.scale.x,contact_damage)
+		if hero_distance < distance:
+			distance = hero_distance
 			nearest = e
 	attack_timer -= dt
-	if nearest != null and attack_timer <= 0:
+	if nearest != null and attack_timer <= 0 and (not coop.live or hp > 0):
 		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
 		visual_recoil = 0.13
 		var impact := nearest.position
@@ -1783,7 +1868,7 @@ func _physics_process(dt: float) -> void:
 				if other != nearest and other.position.distance_to(impact) < 1.5+blast*0.4:
 					hit_enemy(other)
 	for crate in crates.duplicate():
-		if hero.position.distance_to(crate.position) < 1.0+level*0.12:
+		if coop.target_for(crate.position).position.distance_to(crate.position) < 1.0+level*0.12:
 			drop_gem(crate.position)
 			pulse(crate.position,2.2,Color("#ff9d45"))
 			for enemy in enemies.duplicate():
@@ -1793,7 +1878,7 @@ func _physics_process(dt: float) -> void:
 			crates.erase(crate)
 			crate.queue_free()
 	for gem in gems.duplicate():
-		var offset: Vector3 = hero.position-gem.position
+		var offset: Vector3 = coop.target_for(gem.position).position-gem.position
 		if offset.length() < magnet:
 			gem.position += offset.normalized()*dt*9
 		if offset.length() < 0.65:
@@ -1812,7 +1897,11 @@ func _physics_process(dt: float) -> void:
 		clear_touch()
 		roll_offers()
 		upgrades.show()
-	if hp <= 0 or (mode == 2 and (gate_cleared or elapsed >= 120.0)):
+	if coop.live:
+		hero.visible = hp > 0
+		if hp <= 0 and coop.partner_hp <= 0:
+			finish_run()
+	elif hp <= 0 or (mode == 2 and (gate_cleared or elapsed >= 120.0)):
 		finish_run()
 
 var hud_elapsed := 0.0
@@ -1830,6 +1919,7 @@ func _process(dt: float) -> void:
 	if fps_elapsed >= 0.5:
 		fps_elapsed = 0.0
 		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
+		menu.fps.text = fps_label.text
 
 func update_hud() -> void:
 	hp_bar.max_value = max_hp
@@ -1838,7 +1928,7 @@ func update_hud() -> void:
 	xp_bar.max_value = level*3
 	xp_bar.value = xp
 	var clock := maxi(0,60-int(elapsed)) if mode == 1 else int(elapsed)
-	hud.text = "SCORE  %d" % score
-	hud_stats.text = "%02d:%02d   ·   LV %d   ·   %d KILLS   ·   ×%d COMBO" % [int(clock/60.0),clock%60,level,kills,combo]
-	health_label.text = "HP  %d / %d" % [maxi(0,int(hp)),int(max_hp)]
-	energy_label.text = "XP  %d / %d" % [xp,level*3]
+	hud.text = "СЧЁТ  %d" % score
+	hud_stats.text = "%02d:%02d   ·   УР. %d   ·   ПОБЕЖДЕНО %d   ·   КОМБО ×%d" % [int(clock/60.0),clock%60,level,kills,combo]
+	health_label.text = "ЗДОРОВЬЕ  %d / %d" % [maxi(0,int(hp)),int(max_hp)]
+	energy_label.text = "ОПЫТ  %d / %d" % [xp,level*3]

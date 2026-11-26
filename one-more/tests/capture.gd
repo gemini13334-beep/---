@@ -34,6 +34,18 @@ func capture() -> void:
 	root.add_child(arena)
 	arena.set_physics_process(false)
 	await shot("menu",arena.menu)
+	var button_rects: Array[Rect2] = []
+	for control in arena.menu.get_children():
+		if control is Button:
+			var rect: Rect2 = control.get_global_rect()
+			for existing in button_rects:
+				if rect.intersects(existing):
+					push_error("Hangar buttons overlap: "+control.text)
+					failed = true
+			button_rects.append(rect)
+	arena.choose_menu_action("coop")
+	await shot("coop-lobby",arena.coop.lobby)
+	arena.coop.leave_lobby()
 	arena.start()
 	advance(365)
 	await shot("gameplay",arena.hud_panel)
@@ -47,8 +59,9 @@ func capture() -> void:
 	for hero_id in [4,5]:
 		arena.credits = 1000
 		arena.select_hero(hero_id)
-		arena.show_menu()
-		await shot("hero-" + str(arena.HEROES[hero_id][0]).to_lower(),arena.menu)
+		arena.show_hero_preview()
+		await shot("hero-" + str(arena.HEROES[hero_id][0]).to_lower(),arena.hero_preview)
+	arena.show_menu()
 	arena.show_awakening()
 	await shot("awakening",arena.awakening_panel)
 	arena.show_quests()

@@ -1,3 +1,8 @@
 .godot/
 *.apk
 *.aab
+/android-plugin/.gradle/
+/android-plugin/build/
+/android/build/
+/android/.build_version
+/addons/one_more_bluetooth/OneMoreBluetooth.aar

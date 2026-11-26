@@ -5,6 +5,7 @@ uniform vec4 base_color : source_color = vec4(0.16, 0.29, 0.22, 1.0);
 uniform vec4 second_color : source_color = vec4(0.24, 0.43, 0.30, 1.0);
 uniform vec4 path_color : source_color = vec4(0.39, 0.33, 0.24, 1.0);
 uniform int biome = 0;
+uniform sampler2D forest_ground : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 varying vec3 world_pos;
 
 void vertex() {
@@ -37,8 +38,13 @@ void fragment() {
 
 	if (biome == 0) {
 		float moss = smoothstep(0.32, 0.66, broad * 0.7 + texture_detail * 0.3);
-		surface = mix(surface, surface * vec3(1.16, 1.44, 0.90), moss * (1.0 - path));
-		surface = mix(surface, path_color.rgb * (0.73 + 0.32 * texture_detail), path * 0.85);
+		vec3 soil = texture(forest_ground, p * 0.44).rgb;
+		vec3 gravel = texture(forest_ground, vec2(-p.y, p.x) * 0.29).rgb;
+		vec3 ground_detail = mix(soil, gravel, 0.28);
+		vec3 shaded_ground = ground_detail * (0.69 + 0.36 * broad);
+		vec3 mossy_ground = shaded_ground * vec3(0.80, 1.10, 0.69) + surface * 0.10;
+		surface = mix(shaded_ground, mossy_ground, moss * (1.0 - path));
+		surface = mix(surface, ground_detail * 0.84 + path_color.rgb * 0.24, path * 0.67);
 	} else if (biome == 1) {
 		vec2 slab = abs(fract(p * vec2(0.42, 0.27) + vec2(mod(floor(p.y * 0.27), 2.0) * 0.5, 0.0)) - 0.5);
 		float seam = smoothstep(0.455, 0.49, max(slab.x, slab.y));
@@ -59,6 +65,6 @@ void fragment() {
 	pebble_pos -= vec2(hash(cell), hash(cell + vec2(4, 9))) * 0.56 - 0.28;
 	float stone = (1.0 - smoothstep(0.08, 0.21, length(pebble_pos * vec2(0.75, 1.4))))
 		* step(0.71, hash(cell + vec2(8, 3)));
-	ALBEDO = mix(surface, surface * 1.25 + vec3(0.025), stone * 0.91);
+	ALBEDO = mix(surface, surface * 1.25 + vec3(0.025), stone * (biome == 0 ? 0.20 : 0.91));
 	ROUGHNESS = mix(0.90, 0.69, stone);
 }

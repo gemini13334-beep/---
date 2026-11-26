@@ -67,7 +67,7 @@ func run_tests() -> void:
 	for id in scene.ABILITIES.size():
 		scene.ranks[id] = 2
 	scene.roll_offers()
-	check(scene.offer_buttons.all(func(button: Button) -> bool: return "RANK 3" in button.text),"Upgrade offers show the stored rank")
+	check(scene.offer_buttons.all(func(button: Button) -> bool: return "РАНГ 3" in button.text),"Upgrade offers show the stored rank")
 	scene.elapsed = 45.0
 	scene._physics_process(0.016)
 	check(scene.boss_spawned,"Boss spawns")

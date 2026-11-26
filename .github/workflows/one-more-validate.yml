@@ -30,9 +30,37 @@ jobs:
           set -o pipefail
           timeout 60s /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path one-more --script res://tests/gameplay_test.gd 2>&1 | tee gameplay-test.log
           if grep -E 'SCRIPT ERROR|Parse Error|FAIL:' gameplay-test.log; then exit 1; fi
+      - name: Cooperative gameplay regression tests
+        env:
+          XDG_DATA_HOME: ${{ runner.temp }}/one-more-coop-test-data
+        run: |
+          set -o pipefail
+          timeout 60s /tmp/godot/Godot_v4.4.1-stable_linux.x86_64 --headless --path one-more --script res://tests/coop_test.gd 2>&1 | tee coop-test.log
+          if grep -E 'SCRIPT ERROR|Parse Error|FAIL:' coop-test.log; then exit 1; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: ONE-MORE-gameplay-test-log
-          path: gameplay-test.log
+          path: |
+            gameplay-test.log
+            coop-test.log
           if-no-files-found: warn
+  android-library:
+    name: Bluetooth AAR
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.11.1'
+      - run: bash one-more/tools/build_bluetooth_library.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ONE-MORE-Bluetooth-library
+          path: one-more/addons/one_more_bluetooth/OneMoreBluetooth.aar
+          if-no-files-found: error

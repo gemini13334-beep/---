@@ -11,3 +11,9 @@
 ## Next art pass
 
 Develop the other biome silhouettes and compositions to the same level as the forest. Check them in actual gameplay, including enemy visibility during dense effects and legibility across portrait aspect ratios.
+
+## Russian interface and Bluetooth
+
+The current menu and game screens use Russian labels. The menu draws separately from the arena using original key art. Forest gameplay uses photographed-style ground shading, weathered rock meshes and conifer silhouettes. The screenshots workflow captures the Russian game and co-op lobby.
+
+The two-player Android co-op mode shares an authoritative host simulation. The Android library and game protocol have separate build and test steps. Physical Bluetooth and Android export are pending.

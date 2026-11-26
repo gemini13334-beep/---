@@ -1,7 +1,15 @@
 # ONE MORE
 
-Portrait survival arcade game for Godot 4.4.1. Drag on the arena or use the arrow keys to move. Weapons fire automatically at nearby enemies. Play Endless, a 60-second Score Attack or a ranked Gate.
+Вертикальная игра на выживание для Godot 4.4.1. Перетаскивайте палец по арене или используйте стрелки для движения. Оружие автоматически стреляет по ближайшим противникам. В игре есть бесконечный режим, забег на 60 секунд, ранговые врата и Bluetooth-кооператив.
 
-Run the project with `godot --path one-more`. To use the production models, run `blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py` first, then import the project with `godot --headless --path one-more --editor --import`.
+Для локального запуска используйте Godot 4.4.1 с параметром `--path one-more`. Чтобы получить игровые модели, запустите `blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py`, затем импортируйте проект командой `godot --headless --path one-more --editor --import`.
 
-The validation, Blender and screenshot workflows run independently of Android export. The Android workflow is manual and requires separate authorization.
+## Кооператив
+
+1. Сопрягите два телефона в системных настройках Bluetooth. На обоих нужна одна версия ONE MORE для Android 14 или новее.
+2. Откройте «Кооператив · Bluetooth» на обоих устройствах и предоставьте доступ к ближайшим устройствам.
+3. На одном телефоне нажмите «Создать забег». На другом выберите ведущий телефон из списка сопряжённых устройств и нажмите «Подключиться».
+
+Ведущий выбирает карту и усиления. Каждый игрок управляет своим героем, у героев отдельное здоровье. Враги, опыт, усиления и счёт ведутся в общем забеге. При потере связи игра возвращается в меню. Одиночные рекорды и сохранения не зависят от кооператива.
+
+Godot, Blender, рендер кадров и компиляция Android-библиотеки проверяются отдельно. Android APK запускается вручную после разрешения. Библиотека поставляется в APK при будущем экспорте и сама по себе на телефон не устанавливается.

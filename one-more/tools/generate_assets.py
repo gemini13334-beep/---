@@ -44,6 +44,8 @@ def part(name,loc,scale,m,kind='sphere'):
  if kind=='sphere': bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=12,location=loc)
  elif kind=='facet': bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2,location=loc)
  elif kind=='crystal': bpy.ops.mesh.primitive_cone_add(vertices=5,radius1=1.0,radius2=.43,depth=2.0,location=loc)
+ elif kind=='pine': bpy.ops.mesh.primitive_cone_add(vertices=13,radius1=1.0,radius2=.05,depth=2.0,location=loc)
+ elif kind=='trunk': bpy.ops.mesh.primitive_cone_add(vertices=9,radius1=1.0,radius2=.56,depth=2.0,location=loc)
  else: bpy.ops.mesh.primitive_cube_add(size=2,location=loc)
  o=bpy.context.object;o.name=name;o.scale=scale;o.data.materials.append(m)
  bpy.ops.object.transform_apply(location=False,rotation=False,scale=True)
@@ -53,6 +55,21 @@ def part(name,loc,scale,m,kind='sphere'):
  elif kind=='sphere':
   for face in o.data.polygons: face.use_smooth=True
  return o
+
+def weathered_stone(name, location, scale, stone, cover):
+ obj = part(name, location, scale, stone, 'facet')
+ obj.data.materials.append(cover)
+ for vertex in obj.data.vertices:
+  x, y, z = vertex.co
+  variation = 1.0 + .20 * math.sin(23*x + 14*y + 17*z + location[0]*9)
+  vertex.co.x = (x + .16*z) * variation
+  vertex.co.y = (y - .09*x) * variation
+  vertex.co.z = max(-scale[2]*.68, z * variation)
+ for face in obj.data.polygons:
+  center = sum((obj.data.vertices[index].co for index in face.vertices), Vector((0,0,0))) / len(face.vertices)
+  if center.z + .16*math.sin(21*center.x + 15*center.y) > scale[2]*.35:
+   face.material_index = 1
+ return obj
 
 def save(name):
  bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out,name+".blend"))
@@ -188,15 +205,14 @@ for name,c in [("forest",(.18,.48,.22)),("city",(.35,.4,.48)),("desert",(.72,.45
  reset()
  surface=mat(name+" surface",c)
  if name == "forest":
-  slate=mat("Wet slate",(.092,.15,.16),.16)
-  moss=mat("Slate moss",(.12,.30,.18))
+  slate=mat("Wet slate",(.055,.076,.085),.16)
+  moss=mat("Slate moss",(.085,.145,.065))
   growth=glow("Forest spores",(.16,.75,.38))
-  for x,y,height in [(-.64,.35,.38),(.15,.17,.83),(.73,-.38,.54)]:
-   rock=part("Slate outcrop",(x,y,height*.44),(.53,.49,height),slate,'facet')
-   rock.rotation_euler.y=x*.34
-   part("Moss bank",(x-.15,y-.24,height*.38),(.29,.3,height*.35),moss,'facet')
-   for i in range(3):
-    part("Glow lichen",(x+i*.085-.10,y-.33,height*.68+i*.035),(.043,.035,.065),growth,'facet')
+  for x,y,height in [(-.64,.33,.37),(.15,.17,.65),(.69,-.37,.43)]:
+   rock=weathered_stone("Slate outcrop",(x,y,height*.52),(.52,.45,height),slate,moss)
+   rock.rotation_euler.z=x*1.3
+   for i in range(2):
+    part("Glow lichen",(x+i*.086-.07,y-.34,height*.53+i*.031),(.028,.021,.045),growth,'facet')
  else:
   part("Base",(0,0,.12),(1.2,1.2,.12),dark,'cube')
   for i in range(3):
@@ -293,15 +309,28 @@ for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.
 for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)),("cactus",(.2,.58,.25)),("ice_spire",(.2,.8,.95)),("lava_vent",(.9,.22,.04))]:
  reset()
  shell=mat(name,c)
- part("Base",(0,0,.12),(.75,.75,.12),dark,'cube')
+ if name not in ("tree","rock"):
+  part("Base",(0,0,.12),(.75,.75,.12),dark,'cube')
  if name=="tree":
-  bark=mat("Warm bark",(.22,.12,.065))
-  leaf=mat("Young leaves",(.23,.62,.19))
-  part("Trunk",(0,0,.65),(.16,.16,.65),bark,'cube')
-  part("Crown",(0,0,1.4),(.7,.65,.75),shell)
-  for i in range(3):
-   angle=i*math.tau/3
-   part("Leaf cluster",(math.cos(angle)*.42,math.sin(angle)*.42,1.35),(.36,.34,.43),leaf)
+  bark=mat("Pine bark",(.125,.077,.045))
+  shaded=mat("Evergreen needles",(.047,.135,.072))
+  tips=mat("Sunlit pine needles",(.094,.22,.105))
+  part("Tapered pine trunk",(0,0,.99),(.13,.13,.99),bark,'trunk')
+  for tier in range(5):
+   height=.95+tier*.32
+   radius=.66-tier*.105
+   crown=part("Pine whorl",(0,.03*math.sin(tier),height),(radius,radius,.46),shaded if tier%2==0 else tips,'pine')
+   crown.rotation_euler.z=tier*.53
+   for branch in range(3):
+    angle=branch*math.tau/3+tier*.82
+    tip=part("Irregular bough",(math.cos(angle)*radius*.56,math.sin(angle)*radius*.56,height-.14),
+             (radius*.45,radius*.38,.18),tips if branch==0 else shaded,'pine')
+    tip.rotation_euler.y=math.cos(angle)*.31
+    tip.rotation_euler.x=-math.sin(angle)*.31
+ elif name=="rock":
+  cover=mat("Basalt lichen",(.13,.17,.10))
+  weathered_stone("Fractured boulder",(0,0,.41),(.75,.53,.52),shell,cover)
+  weathered_stone("Boulder fragment",(.43,-.31,.15),(.34,.28,.24),shell,cover)
  elif name=="cactus":
   part("Stem",(0,0,.8),(.23,.23,.8),shell)
   for x in [-1,1]:
@@ -324,8 +353,6 @@ for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)
    obj.rotation_euler.z=i*.3
   if name=="ruin":
    part("Broken lintel",(0,0,1.12),(.48,.16,.11),dark,'cube')
-  else:
-   part("Mineral vein",(.15,-.28,.55),(.24,.07,.12),gold,'cube')
  save(name)
 
 # Preview rendering is a separate optional invocation.
