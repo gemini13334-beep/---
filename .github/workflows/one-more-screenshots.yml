@@ -35,7 +35,7 @@ jobs:
           xvfb-run -a -s "-screen 0 1280x1600x24" timeout 120s "$G" --path one-more --audio-driver Dummy --resolution 720x1280 --script res://tests/capture.gd -- "$RUNNER_TEMP/screenshots" 2>&1 | tee screenshot-capture.log
           if grep -E 'SCRIPT ERROR|Parse Error|Failed to load|Error importing|Shader compilation failed' screenshot-import.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' screenshot-capture.log; then exit 1; fi
-          for frame in menu coop-lobby gameplay upgrade collection hero-titan hero-cryo awakening quests gates settings settings-video settings-audio city desert ice volcano; do
+          for frame in menu coop-lobby gameplay forest-ruins upgrade collection hero-titan hero-cryo awakening quests gates settings settings-video settings-audio city desert ice volcano; do
             test -s "$RUNNER_TEMP/screenshots/$frame.png"
           done
       - uses: actions/upload-artifact@v4

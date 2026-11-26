@@ -17,3 +17,7 @@ Develop the other biome silhouettes and compositions to the same level as the fo
 The current menu and game screens use Russian labels. The menu draws separately from the arena using original key art. Forest gameplay uses photographed-style ground shading, weathered rock meshes and conifer silhouettes. The screenshots workflow captures the Russian game and co-op lobby.
 
 The two-player Android co-op mode shares an authoritative host simulation. The Android library and game protocol have separate build and test steps. Physical Bluetooth and Android export are pending.
+
+## Forest environment pass
+
+The forest arena now has a slate trail with relief and canopy lighting, material-mapped boulders and ruins, instanced ferns and mesh-based fir branchlets. The new scenery is visual and the original arena movement rules still apply. Graphics presets adjust fern density, and the medium preset enables 2× MSAA for new settings. The screenshot workflow captures the trail and a second view at the ruined wall.

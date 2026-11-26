@@ -1,5 +1,6 @@
 extends Node3D
 const HangarMenu = preload("res://ui/hangar.gd")
+const ForestCover = preload("res://forest_cover.gd")
 const CoopSession = preload("res://coop/session.gd")
 var coop: CoopSession
 var hero: MeshInstance3D
@@ -79,7 +80,7 @@ var sound: AudioStreamPlayer
 var sounds: Dictionary = {}
 
 var ambient_player: AudioStreamPlayer
-var forest_understory: MultiMeshInstance3D
+var forest_understory: ForestCover
 func ambient_loop() -> AudioStreamWAV:
 	var rate := 16000
 	var count := rate*8
@@ -199,16 +200,41 @@ func rebuild_scenery() -> void:
 			prop.scale = Vector3.ONE*rng.randf_range(0.65,1.5)
 			prop.rotation.y = angle
 			scenery.append(prop)
-		for point in [Vector2(-4.45,-6.0),Vector2(4.8,5.9),Vector2(4.9,-9.0),Vector2(-7.5,4.2)]:
-			var rock_mesh := SphereMesh.new()
-			rock_mesh.radius = 0.55
-			rock_mesh.height = 0.4
-			var outcrop := model(rock_mesh,Color("#28473d"),Vector3(point.x,0.35,point.y))
-			if attach_art(outcrop,"forest") == null:
-				outcrop.position.y = 0.14
-			outcrop.rotation.y = rng.randf_range(0,TAU)
-			outcrop.scale = Vector3(0.9,0.7,0.9)
-			scenery.append(outcrop)
+		place_forest_landmarks()
+
+func place_forest_landmarks() -> void:
+	var layout := [
+		["ruin",Vector2(4.7,-5.8),Vector3(1.60,0.75,1.45),-0.45],
+		["ruin",Vector2(-4.5,7.0),Vector3(1.40,0.43,1.25),0.85],
+		["ruin",Vector2(6.4,1.15),Vector3(1.35,0.50,0.95),0.85],
+		["forest",Vector2(-4.15,-3.7),Vector3(1.7,0.82,1.22),0.70],
+		["forest",Vector2(4.75,5.7),Vector3(1.55,0.80,1.55),-0.75],
+		["forest",Vector2(4.7,-8.7),Vector3(1.42,0.45,1.15),-0.15],
+		["rock",Vector2(-3.45,2.85),Vector3(1.05,0.47,1.1),-0.85],
+		["rock",Vector2(4.1,2.5),Vector3(1.16,0.42,0.98),1.37],
+		["rock",Vector2(-5.55,-7.0),Vector3(1.20,0.65,1.32),1.26],
+		["tree",Vector2(-6.3,-2.6),Vector3(1.65,1.54,1.65),0.7],
+		["tree",Vector2(-6.9,-7.1),Vector3(1.45,1.45,1.45),1.3],
+		["tree",Vector2(6.7,-6.7),Vector3(1.85,1.62,1.85),-1.35],
+		["tree",Vector2(6.2,6.1),Vector3(1.40,1.49,1.40),0.72],
+	]
+	for entry in layout:
+		var asset: String = entry[0]
+		var point: Vector2 = entry[1]
+		var scale_factor: Vector3 = entry[2]
+		var fallback := SphereMesh.new()
+		fallback.height = 0.56
+		fallback.radius = 0.65
+		var prop := model(fallback,Color("#526044"),Vector3(point.x,0.5*scale_factor.y,point.y))
+		var art := attach_art(prop,asset)
+		if art == null:
+			prop.position.y = 0.23*scale_factor.y
+		elif asset != "tree":
+			forest_understory.dress_stone(art)
+		prop.rotation.y = entry[3]
+		prop.scale = scale_factor
+		add_contact_shadow(prop,2.1)
+		scenery.append(prop)
 
 var ground: MeshInstance3D
 var biome_button: Button
@@ -226,52 +252,18 @@ func update_ground_material() -> void:
 	mat.set_shader_parameter("path_color",Color(GROUND_MARKINGS[biome]))
 	mat.set_shader_parameter("biome",biome)
 	mat.set_shader_parameter("forest_ground",preload("res://assets/art/forest-ground.jpg"))
+	mat.set_shader_parameter("forest_slate",preload("res://assets/art/forest-slate.jpg"))
 	ground.material_override = mat
 
 func build_forest_understory() -> void:
-	var rng := RandomNumberGenerator.new()
-	rng.seed = 20191
-	var mesh_builder := SurfaceTool.new()
-	mesh_builder.begin(Mesh.PRIMITIVE_TRIANGLES)
-	for index in 9:
-		var angle := TAU*float(index)/9.0
-		var side := Vector3(cos(angle),0,sin(angle))
-		var width := side.cross(Vector3.UP)*rng.randf_range(0.025,0.055)
-		var root := side*0.05
-		var bend := side*rng.randf_range(0.12,0.24)+Vector3.UP*0.18
-		var tip := side*rng.randf_range(0.24,0.39)+Vector3.UP*rng.randf_range(0.22,0.36)
-		for vertex in [root,bend+width,bend-width,bend+width,tip,bend-width]:
-			mesh_builder.add_vertex(vertex)
-	mesh_builder.generate_normals()
-	var fronds := StandardMaterial3D.new()
-	fronds.cull_mode = BaseMaterial3D.CULL_DISABLED
-	fronds.vertex_color_use_as_albedo = true
-	fronds.roughness = 0.92
-	mesh_builder.set_material(fronds)
-	var clusters := MultiMesh.new()
-	clusters.mesh = mesh_builder.commit()
-	clusters.transform_format = MultiMesh.TRANSFORM_3D
-	clusters.use_colors = true
-	clusters.instance_count = 225
-	for index in clusters.instance_count:
-		var z := rng.randf_range(-20.5,20.5)
-		var x := rng.randf_range(-20.5,20.5)
-		var trail_x := sin(z*0.21)*2.4-z*0.28
-		if absf(x-trail_x) < 2.2:
-			x = trail_x+(1.0 if x > trail_x else -1.0)*rng.randf_range(2.2,3.4)
-		var basis := Basis(Vector3.UP,rng.randf_range(0,TAU)).scaled(Vector3.ONE*rng.randf_range(0.55,1.65))
-		clusters.set_instance_transform(index,Transform3D(basis,Vector3(x,0,z)))
-		clusters.set_instance_color(index,Color("#385f52").lerp(Color("#7d975e"),rng.randf()))
-	forest_understory = MultiMeshInstance3D.new()
-	forest_understory.multimesh = clusters
-	forest_understory.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	forest_understory = ForestCover.new()
 	add_child(forest_understory)
 
 var biome_rim: DirectionalLight3D
 var biome_environment: Environment
-const BIOME_KEY_LIGHT = ["#fff1d2","#dbeaff","#ffe0a6","#d9f3ff","#ffb58b"]
+const BIOME_KEY_LIGHT = ["#ffe2a8","#dbeaff","#ffe0a6","#d9f3ff","#ffb58b"]
 const BIOME_RIM_LIGHT = ["#80bfff","#83baff","#c2aaff","#75dfff","#ff6c48"]
-const BIOME_AMBIENT = ["#b5d3df","#aabbd4","#e3c9aa","#b3dff5","#c9a1aa"]
+const BIOME_AMBIENT = ["#b9c8af","#aabbd4","#e3c9aa","#b3dff5","#c9a1aa"]
 const BIOME_SKY = ["#13242c","#172331","#3c3028","#203748","#321c28"]
 
 func apply_biome_lighting() -> void:
@@ -305,7 +297,7 @@ const VEHICLE_FIRE = [0.3,0.15,0.45,0.35]
 var next_event := 15.0
 var event_label: Label
 var achievements: Label
-const COMBAT_CAMERA_OFFSET := Vector3(0,17,16)
+const COMBAT_CAMERA_OFFSET := Vector3(0,16,18)
 
 func sprint() -> void:
 	start()
@@ -543,7 +535,7 @@ var fps_limit := 60
 var high_quality := false
 var audio_enabled := true
 
-const DEFAULT_ADVANCED = {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":20.5,"master":1.0,"music":0.7,"effects":1.0,"particles":0.65,"brightness":1.0,"render_scale":1.0,"msaa":0.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
+const DEFAULT_ADVANCED = {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":20.5,"master":1.0,"music":0.7,"effects":1.0,"particles":0.65,"brightness":1.0,"render_scale":1.0,"msaa":1.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
 var advanced: Dictionary = DEFAULT_ADVANCED.duplicate()
 var advanced_sliders: Dictionary = {}
 var settings_tabs: TabContainer
@@ -553,7 +545,7 @@ const PRESET_NAMES = ["LOW","MEDIUM","HIGH","ULTRA"]
 const PRESET_LABELS = {"LOW":"НИЗКОЕ","MEDIUM":"СРЕДНЕЕ","HIGH":"ВЫСОКОЕ","ULTRA":"УЛЬТРА","CUSTOM":"СВОЁ"}
 const PRESET_VALUES = {
 	"render_scale": [0.65,1.0,1.0,1.0],
-	"msaa": [0.0,0.0,1.0,2.0],
+	"msaa": [0.0,1.0,1.0,2.0],
 	"particles": [0.25,0.65,0.85,1.0],
 }
 
@@ -704,7 +696,9 @@ func apply_settings() -> void:
 		1: get_viewport().msaa_3d = Viewport.MSAA_2X
 		2: get_viewport().msaa_3d = Viewport.MSAA_4X
 		_: get_viewport().msaa_3d = Viewport.MSAA_DISABLED
-	preset_button.text = "КАЧЕСТВО  ·  "+PRESET_LABELS[graphics_preset_name()]
+	var preset := graphics_preset_name()
+	forest_understory.set_density(preset)
+	preset_button.text = "КАЧЕСТВО  ·  "+PRESET_LABELS[preset]
 	if running:
 		camera.size = float(advanced["zoom"])
 	world_light.light_energy = 1.18*float(advanced["brightness"])

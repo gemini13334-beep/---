@@ -44,7 +44,6 @@ def part(name,loc,scale,m,kind='sphere'):
  if kind=='sphere': bpy.ops.mesh.primitive_uv_sphere_add(segments=24,ring_count=12,location=loc)
  elif kind=='facet': bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2,location=loc)
  elif kind=='crystal': bpy.ops.mesh.primitive_cone_add(vertices=5,radius1=1.0,radius2=.43,depth=2.0,location=loc)
- elif kind=='pine': bpy.ops.mesh.primitive_cone_add(vertices=13,radius1=1.0,radius2=.05,depth=2.0,location=loc)
  elif kind=='trunk': bpy.ops.mesh.primitive_cone_add(vertices=9,radius1=1.0,radius2=.56,depth=2.0,location=loc)
  else: bpy.ops.mesh.primitive_cube_add(size=2,location=loc)
  o=bpy.context.object;o.name=name;o.scale=scale;o.data.materials.append(m)
@@ -70,6 +69,53 @@ def weathered_stone(name, location, scale, stone, cover):
   if center.z + .16*math.sin(21*center.x + 15*center.y) > scale[2]*.35:
    face.material_index = 1
  return obj
+
+def pine_branches(shade, tips, inner):
+ vertices = []
+ faces = []
+ colors = []
+
+ def triangle(a, b, c, color):
+  first = len(vertices)
+  vertices.extend((a,b,c))
+  faces.append((first,first+1,first+2))
+  colors.append(color)
+
+ up = Vector((0,0,1))
+ for tier in range(8):
+  height = .66 + tier*.214
+  radius = .87 - tier*.103
+  branches = 8 if tier < 4 else 6
+  for index in range(branches):
+   angle = index*math.tau/branches + tier*1.09 + .14*math.sin(index+tier)
+   outward = Vector((math.cos(angle),math.sin(angle),0))
+   side_vector = Vector((-outward.y,outward.x,0))
+   length = radius*(.82 + .24*math.sin(index*2.49+tier*1.2)**2)
+   root = up*(height + .05*math.cos(index*2.7))
+   end = root + outward*length + up*(-.13+.032*tier)
+   for needle in range(8):
+    along = (needle+1)/9
+    origin = root.lerp(end,along*.88)
+    width = length*(.31*(1-along) + .078)
+    for side in [-1,1]:
+     tip = origin + outward*(length*.29*(1-along)+.024) + side_vector*width*side
+     tip += up*(.047+math.sin(needle*7.2+index)*.027)
+     vein = origin.lerp(tip,.53) + up*.062
+     shoulder = origin + outward*(length*.115) - up*.023
+     accent = 1 if (needle+index+tier) % 5 == 0 else 0
+     triangle(origin,tip,vein,accent)
+     triangle(vein,tip,shoulder,accent)
+     triangle(origin,vein,shoulder,2)
+     triangle(shoulder,tip,origin,2)
+ mesh = bpy.data.meshes.new("Fir needle sprays")
+ mesh.from_pydata(vertices, [], faces)
+ mesh.update()
+ for material in (shade,tips,inner):
+  mesh.materials.append(material)
+ for face,color in zip(mesh.polygons,colors):
+  face.material_index = color
+ branches = bpy.data.objects.new("Irregular fir branchlets",mesh)
+ bpy.context.collection.objects.link(branches)
 
 def save(name):
  bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out,name+".blend"))
@@ -108,7 +154,7 @@ def save(name):
 mint=mat("Jade shell",(.024,.47,.31),.26);dark=mat("Graphite",(.025,.045,.065),.5);gold=mat("Amber",(.95,.48,.06),.3);red=mat("Coral",(.85,.08,.09),.2)
 reset()
 core=glow("Jade energy",(.085,.76,.49))
-gel=mat("Slime membrane",(.077,.59,.37),.08)
+gel=mat("Slime membrane",(.032,.32,.205),.12)
 optic=mat("Smoked green visor",(.009,.043,.043),.42)
 bezel=mat("Burnished titanium trim",(.21,.31,.29),.76)
 part("Gel dome",(0,.025,.98),(.57,.45,.35),gel)
@@ -121,6 +167,8 @@ for side in [-1,1]:
  eye.rotation_euler.z=side*.16
  part("Shoulder seal",(side*.56,-.006,.614),(.192,.235,.21),dark)
  part("Armored shoulder",(side*.61,.034,.68),(.19,.23,.145),mint,'facet')
+ for rib in range(3):
+  part("Shoulder plate seam",(side*.72,.015+rib*.084,.689),(.028,.020,.096),bezel,'cube')
  part("Forearm guiding rail",(side*.61,-.146,.475),(.106,.118,.149),bezel,'cube')
  part("Boot",(side*.267,-.089,.128),(.223,.279,.132),dark,'cube')
  part("Boot toe",(side*.267,-.293,.13),(.159,.123,.080),mint,'facet')
@@ -183,6 +231,7 @@ save("enemy")
 reset()
 crate_shell=mat("Crate ceramic alloy",(.073,.15,.17),.38)
 crate_trim=mat("Crate edge alloy",(.27,.38,.37),.68)
+crate_corner=mat("Weathered brass",(.49,.25,.074),.72)
 crate_lock=glow("Crate charge indicator",(1,.48,.07))
 part("Recessed core",(0,0,.44),(.48,.45,.40),dark,'cube')
 part("Bolted base",(0,0,.10),(.56,.52,.10),crate_trim,'cube')
@@ -191,8 +240,9 @@ for side in [-1,1]:
  part("Side casing",(side*.46,0,.45),(.095,.40,.29),crate_shell,'cube')
  part("Lid hinge",(side*.31,.46,.83),(.11,.082,.085),crate_trim,'cube')
  for end in [-1,1]:
-  foot=part("Impact corner",(side*.47,end*.43,.46),(.13,.13,.33),gold,'cube')
+  foot=part("Impact corner",(side*.47,end*.43,.46),(.13,.13,.33),crate_corner,'cube')
   foot.rotation_euler.z=side*end*.20
+  part("Corner rivet",(side*.48,end*.45,.79),(.039,.039,.024),crate_trim)
  part("Live charge bar",(side*.12,0,.942),(.04,.24,.025),crate_lock,'cube')
 for end in [-1,1]:
  part("Handle recess",(0,end*.456,.33),(.18,.038,.075),crate_trim,'cube')
@@ -237,7 +287,7 @@ save("buggy")
 
 # Additional original modular assets.
 for name,c,size in [
- ("enemy_fast",(.95,.32,.12),.65),("enemy_armored",(.48,.12,.15),1.2),
+ ("enemy_fast",(.64,.22,.078),.65),("enemy_armored",(.42,.077,.064),1.2),
  ("boss_overlord",(.65,.08,.2),2.0),("boss_crystal",(.12,.65,.95),1.8),("boss_inferno",(.95,.24,.04),1.9)]:
  reset()
  shell=mat(name,c,.45)
@@ -262,6 +312,8 @@ for name,c,size in [
    fin.rotation_euler.z=x*.28
  elif name=="enemy_armored":
   for side in [-1,1]:
+   plate=part("Segmented dorsal armor",(side*.28*size,.19*size,1.01*size),(.23*size,.28*size,.083*size),trim,'facet')
+   plate.rotation_euler.y=side*.35
    shield=part("Angled shield",(side*.24*size,-.48*size,.40*size),(.24*size,.14*size,.24*size),trim,'cube')
    shield.rotation_euler.z=side*.36
    part("Ground stabilizer",(side*.62*size,-.15*size,.15*size),(.21*size,.39*size,.14*size),dark,'facet')
@@ -309,24 +361,15 @@ for name,c in [("hovercraft",(.1,.7,.8)),("tank",(.25,.42,.18)),("mech",(.5,.4,.
 for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)),("cactus",(.2,.58,.25)),("ice_spire",(.2,.8,.95)),("lava_vent",(.9,.22,.04))]:
  reset()
  shell=mat(name,c)
- if name not in ("tree","rock"):
+ if name not in ("tree","rock","ruin"):
   part("Base",(0,0,.12),(.75,.75,.12),dark,'cube')
  if name=="tree":
-  bark=mat("Pine bark",(.125,.077,.045))
-  shaded=mat("Evergreen needles",(.047,.135,.072))
-  tips=mat("Sunlit pine needles",(.094,.22,.105))
-  part("Tapered pine trunk",(0,0,.99),(.13,.13,.99),bark,'trunk')
-  for tier in range(5):
-   height=.95+tier*.32
-   radius=.66-tier*.105
-   crown=part("Pine whorl",(0,.03*math.sin(tier),height),(radius,radius,.46),shaded if tier%2==0 else tips,'pine')
-   crown.rotation_euler.z=tier*.53
-   for branch in range(3):
-    angle=branch*math.tau/3+tier*.82
-    tip=part("Irregular bough",(math.cos(angle)*radius*.56,math.sin(angle)*radius*.56,height-.14),
-             (radius*.45,radius*.38,.18),tips if branch==0 else shaded,'pine')
-    tip.rotation_euler.y=math.cos(angle)*.31
-    tip.rotation_euler.x=-math.sin(angle)*.31
+  bark=mat("Fir bark",(.104,.061,.032))
+  shaded=mat("Evergreen needles",(.026,.087,.042))
+  tips=mat("Sunlit fir tips",(.064,.155,.063))
+  inner=mat("Deep evergreen",(.012,.042,.021))
+  part("Tapered fir trunk",(0,0,1.14),(.082,.084,1.14),bark,'trunk')
+  pine_branches(shaded,tips,inner)
  elif name=="rock":
   cover=mat("Basalt lichen",(.13,.17,.10))
   weathered_stone("Fractured boulder",(0,0,.41),(.75,.53,.52),shell,cover)
@@ -347,12 +390,23 @@ for name,c in [("tree",(.15,.55,.24)),("rock",(.42,.43,.48)),("ruin",(.5,.47,.4)
   for i in range(3):
    obj=part("Ice facet",((i-1)*.35,0,.55+i*.24),(.22,.23,.55+i*.24),frost if i==1 else shell,'cube')
    obj.rotation_euler.y=(i-1)*.18
- else:
-  for i in range(3):
-   obj=part("Detail "+str(i),((i-1)*.38,0,.4+i*.22),(.26,.35,.4+i*.2),shell,'cube' if name=="ruin" else 'sphere')
-   obj.rotation_euler.z=i*.3
-  if name=="ruin":
-   part("Broken lintel",(0,0,1.12),(.48,.16,.11),dark,'cube')
+ elif name=="ruin":
+  mortar=mat("Aged masonry",(.26,.24,.19))
+  cover=mat("Wall moss",(.09,.14,.07))
+  part("Sunken wall foot",(0,.02,.10),(.91,.30,.12),mortar,'cube')
+  for side,tiers in [(-1,5),(1,3)]:
+   for tier in range(tiers):
+    x=side*(.63+.035*math.cos(tier*2.1))
+    block=part("Hewn wall course",(x,.035*math.sin(tier),.26+tier*.26),
+               (.22+.03*math.cos(tier),.25,.124),shell if tier%2 else mortar,'cube')
+    block.rotation_euler.z=.10*math.sin(tier*1.9+side)
+  for index,angle in enumerate([2.15,1.76,1.39]):
+   span=part("Fallen arch segment",(.61*math.cos(angle),0,1.08+.61*math.sin(angle)),
+             (.22,.24,.107),mortar if index%2 else shell,'cube')
+   span.rotation_euler.y=-angle
+  for x,y,size in [(-.96,-.23,.25),(-.10,-.34,.33),(.25,-.3,.26),(.99,.18,.23),(.82,.42,.19)]:
+   fragment=weathered_stone("Weathered rubble",(x,y,size*.52),(size,size*.75,size*.70),mortar,cover)
+   fragment.rotation_euler.z=x*3.4
  save(name)
 
 # Preview rendering is a separate optional invocation.

@@ -49,6 +49,11 @@ func capture() -> void:
 	arena.start()
 	advance(365)
 	await shot("gameplay",arena.hud_panel)
+	arena.finger = 0
+	arena.direction = Vector2(0.85,-0.53)
+	advance(48)
+	arena.clear_touch()
+	await shot("forest-ruins",arena.hud_panel)
 	arena.xp = arena.level * 3
 	advance(1)
 	await shot("upgrade",arena.upgrades)
