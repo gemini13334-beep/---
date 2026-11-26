@@ -2,11 +2,12 @@ extends Node3D
 const HangarMenu = preload("res://ui/hangar.gd")
 const ForestCover = preload("res://forest_cover.gd")
 const CoopSession = preload("res://coop/session.gd")
+const ActorPose = preload("res://actor_pose.gd")
+const CombatHUD = preload("res://ui/combat_hud.gd")
 var coop: CoopSession
 var hero: MeshInstance3D
 var camera: Camera3D
 var enemies: Array[MeshInstance3D] = []
-var hud: Label
 var retry: Button
 var elapsed := 0.0
 var spawn_timer := 0.0
@@ -52,6 +53,14 @@ const ABILITIES = [
 	["ФЕНИКС","Лечение и восстановление",2],["ЯДРО ТИТАНА","Здоровье и броня",2]
 ]
 
+const COMBINATIONS := {
+	100: ["ФОРСИРОВАННАЯ НОВА","Больше урона по области",2],
+	101: ["ГРАВИТАЦИОННЫЙ РЫВОК","Увеличивает радиус подбора осколков",2],
+}
+
+func ability_data(id: int) -> Array:
+	return COMBINATIONS[id] if COMBINATIONS.has(id) else ABILITIES[id]
+
 func roll_offers() -> void:
 	offers.clear()
 	while offers.size() < 3:
@@ -65,9 +74,11 @@ func roll_offers() -> void:
 		offer_buttons[i].text = "%s  /  %s  ·  РАНГ %d\n%s" % [["ОБЫЧНОЕ","РЕДКОЕ","ЭПИЧЕСКОЕ"][a[2]],a[0],int(ranks.get(offers[i],0))+1,a[1]]
 		offer_buttons[i].modulate = [Color.WHITE,Color("#85d9ff"),Color("#e2b2ff")][a[2]]
 
-var selected := 0
-var owned: Array[int] = [0]
+const DEFAULT_HERO := 6
+var selected := DEFAULT_HERO
+var owned: Array[int] = [0,DEFAULT_HERO]
 var collection: VBoxContainer
+var hero_list: ScrollContainer
 var collection_balance: Label
 var collection_buttons: Array[Button] = []
 var menu: HangarMenu
@@ -367,38 +378,19 @@ func update_events(dt: float) -> void:
 		if vehicle_time <= 0:
 			event_label.text = ""
 
-var hp_bar: ProgressBar
-var xp_bar: ProgressBar
 var hero_visual: Node3D
 var hero_shadow: MeshInstance3D
-const PALETTE = ["#62f5c5","#8caee9","#ff7043","#b998ff","#e2b45d","#72e5ff"]
+const PALETTE = ["#62f5c5","#8caee9","#ff7043","#b998ff","#e2b45d","#72e5ff","#ffc179","#f1a16f","#ffc15c","#d69592"]
 
-var hud_panel: Panel
-var hud_stats: Label
-var health_label: Label
-var energy_label: Label
+var hud_panel: CombatHUD
+var hud_paused := false
+var hud_in_settings := false
+var run_pickups := 0
+var range_marker: MeshInstance3D
 var menu_scrim: ColorRect
 var hero_stage: Node3D
 var hero_preview: Control
 var hero_preview_label: Label
-
-func ui_panel(layer: CanvasLayer, pos: Vector2, dimensions: Vector2) -> Panel:
-	var panel := Panel.new()
-	panel.position = pos
-	panel.size = dimensions
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var style := StyleBoxFlat.new()
-	style.bg_color = Color("#101d29f2")
-	style.shadow_color = Color(0,0,0,0.38)
-	style.shadow_size = 8
-	style.shadow_offset = Vector2(0,4)
-	style.border_color = Color("#416475")
-	style.set_border_width_all(1)
-	style.border_width_top = 3
-	style.set_corner_radius_all(16)
-	panel.add_theme_stylebox_override("panel",style)
-	layer.add_child(panel)
-	return panel
 
 func style_button(btn: Button) -> void:
 	for state in ["normal","hover","pressed","disabled"]:
@@ -426,38 +418,21 @@ func apply_hero_art() -> void:
 	mat.albedo_color = Color(PALETTE[selected])
 	hero_visual = attach_art(hero,HERO_ART[selected])
 
-func make_bar(parent: Control, position: Vector2, color: Color) -> ProgressBar:
-	var bar := ProgressBar.new()
-	parent.add_child(bar)
-	bar.position = position
-	bar.show_percentage = false
-	var bg := StyleBoxFlat.new()
-	bg.bg_color = Color("#09151f")
-	bg.border_color = Color("#36505f")
-	bg.set_border_width_all(1)
-	bg.set_corner_radius_all(8)
-	var fill := StyleBoxFlat.new()
-	fill.bg_color = color
-	fill.border_color = color.lightened(0.3)
-	fill.border_width_top = 2
-	fill.set_corner_radius_all(8)
-	bar.add_theme_stylebox_override("background",bg)
-	bar.add_theme_stylebox_override("fill",fill)
-	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bar.size = Vector2(316,12)
-	return bar
-
 const HEROES = [
 	["SLIME",0,"Универсал",100.0,0.0,2.0,0],
 	["CYBORG",150,"Скорострельность",100.0,0.0,2.0,2],
 	["INFERNO",300,"Взрыв по области",100.0,0.0,2.0,0],
 	["GHOST",450,"Подвижность",80.0,2.0,2.0,0],
 	["TITAN",600,"Тяжёлая броня",180.0,-0.5,2.0,0],
-	["CRYO",800,"Сильный магнит",120.0,0.0,4.0,0]
+	["CRYO",800,"Сильный магнит",120.0,0.0,4.0,0],
+	["VEGA",0,"Полевой разведчик",100.0,0.0,2.0,0],
+	["FOX",320,"Быстрый дозор",100.0,0.45,2.0,0],
+	["AMBER",520,"Стрелок прикрытия",110.0,0.0,2.0,2],
+	["NORTH",680,"Щит отряда",135.0,-0.25,2.5,0],
 ]
 
-const HERO_ART = ["hero","cyborg","inferno","ghost","titan","cryo"]
-const HERO_NAMES = ["СЛАЙМ","КИБОРГ","ИНФЕРНО","ПРИЗРАК","ТИТАН","КРИО"]
+const HERO_ART = ["hero","cyborg","inferno","ghost","titan","cryo","vega","fox","amber","north"]
+const HERO_NAMES = ["СЛАЙМ","КИБОРГ","ИНФЕРНО","ПРИЗРАК","ТИТАН","КРИО","ВЕГА","ЛИСА","ЯНТАРЬ","СЕВЕР"]
 
 const PROFILE_PATH = "user://records.cfg"
 const PROFILE_BACKUP = "user://records.backup.cfg"
@@ -682,6 +657,12 @@ func reset_settings() -> void:
 
 func close_settings() -> void:
 	save_settings()
+	if hud_in_settings and running:
+		hud_in_settings = false
+		settings_panel.hide()
+		menu_scrim.hide()
+		hud_panel.show()
+		return
 	show_menu()
 
 func show_settings() -> void:
@@ -950,9 +931,13 @@ func show_collection() -> void:
 	hero_preview.hide()
 	menu_scrim.show()
 	collection.show()
+	hero_list.scroll_vertical = 0
 	refresh_collection()
 
 func show_menu() -> void:
+	hud_paused = false
+	hud_in_settings = false
+	range_marker.hide()
 	hero_preview.hide()
 	gate_panel.hide()
 	quest_panel.hide()
@@ -972,8 +957,13 @@ func show_menu() -> void:
 	hero.position = Vector3(0,0.67,0)
 	hero.scale = Vector3.ONE
 	hero.rotation.y = -0.24
-	if is_instance_valid(hero_visual):
-		hero_visual.rotation = Vector3.ZERO
+	var pose := actor_pose(hero)
+	if pose != null:
+		pose.aiming = 0.0
+		pose.recoil = 0.0
+		pose.hit = 0.0
+		pose.art.rotation = pose.base_rotation
+		pose.reset_clips()
 	var target := Vector3(0,-0.98,0.90)
 	camera.position = target + Vector3(0,4.2,7.6)
 	camera.look_at(target)
@@ -986,6 +976,10 @@ func show_hero_preview() -> void:
 	collection.hide()
 	menu_scrim.hide()
 	hero_preview_label.text = HERO_NAMES[selected]
+	var focus := Vector3(0,0.96,0.05)
+	camera.position = focus+Vector3(1.23,0.7,4)
+	camera.look_at(focus)
+	camera.size = 2.75
 	hero_preview.show()
 
 func build_hero_preview(layer: CanvasLayer) -> void:
@@ -1073,6 +1067,9 @@ func clear_boss_warning(enemy: MeshInstance3D) -> void:
 		if is_instance_valid(warning):
 			warning.queue_free()
 		enemy.remove_meta("warning_ring")
+		var pose := actor_pose(enemy)
+		if pose != null:
+			pose.release()
 
 func render_boss_warning(enemy: MeshInstance3D,radius: float) -> void:
 	var ring: MeshInstance3D
@@ -1092,6 +1089,9 @@ func render_boss_warning(enemy: MeshInstance3D,radius: float) -> void:
 		ring.scale = Vector3.ONE/enemy.scale.x
 		ring.position.y = -0.42
 		enemy.set_meta("warning_ring",ring)
+		var pose := actor_pose(enemy)
+		if pose != null:
+			pose.charging = true
 	var intensity := 0.55+0.45*sin(elapsed*22.0)
 	ring.material_override.albedo_color = Color("#df7042").lerp(Color("#ffdc87"),intensity)
 
@@ -1103,18 +1103,27 @@ func update_boss_attack(enemy: MeshInstance3D) -> void:
 		clear_boss_warning(enemy)
 		pulse(enemy.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
 		if hero.position.distance_to(enemy.position) < radius:
-			hp -= (12.0+kind*4.0)*(1.0-armor)
+			damage_hero((12.0+kind*4.0)*(1.0-armor),enemy.position)
 		coop.damage_partner(enemy.position,radius,12.0+kind*4.0)
 		enemy.set_meta("next_pulse",elapsed+4.0)
 	elif deadline-elapsed <= 1.2:
 		render_boss_warning(enemy,radius)
 
 var active_tracers := 0
-func shot_tracer(from: Vector3, to: Vector3) -> void:
+func fire_visual(shooter: Node3D, target: Vector3, fallback_origin := Vector3.INF) -> void:
+	var pose := actor_pose(shooter)
+	if pose != null:
+		pose.fire(target)
+	var origin := shot_origin(shooter)
+	if pose == null and fallback_origin.is_finite():
+		origin = fallback_origin
+	shot_tracer(origin,target,shooter)
+
+func shot_tracer(from: Vector3, to: Vector3, shooter: Node3D = null) -> void:
 	var length := from.distance_to(to)
 	if length < 0.05:
 		return
-	coop.record_shot(from,to)
+	coop.record_shot(from,to,shooter)
 	play_fx("shot")
 	if active_tracers >= 24:
 		return
@@ -1194,12 +1203,15 @@ func impact_sparks(pos: Vector3, tint: Color, count: int) -> void:
 	)
 	sparks.emitting = true
 
-func hit_enemy(enemy: MeshInstance3D) -> void:
+func hit_enemy(enemy: MeshInstance3D, source: Node3D = null) -> void:
 	if not is_instance_valid(enemy) or enemy.is_queued_for_deletion():
 		return
 	play_fx("hit")
 	var health := int(enemy.get_meta("health",1))-damage
 	enemy.set_meta("health",health)
+	var origin := hero.position if source == null else source.position
+	show_actor_hit(enemy,origin,health <= 0)
+	coop.record_hit(enemy,origin,health <= 0)
 	pulse(enemy.position,0.8,Color("#ffb85a"))
 	if health > 0:
 		impact_sparks(enemy.position,Color("#ffc879"),4)
@@ -1257,6 +1269,8 @@ func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
 	host.set_meta("model_asset",asset)
 	if host.has_meta("shot_origin"):
 		host.remove_meta("shot_origin")
+	if host.has_meta("actor_pose"):
+		host.remove_meta("actor_pose")
 	if not art_cache.has(asset):
 		var path := "res://assets/models/" + asset + ".glb"
 		art_cache[asset] = load(path) as PackedScene if ResourceLoader.exists(path) else null
@@ -1271,6 +1285,11 @@ func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
 		var muzzle := art.find_child("ShotOrigin",true,false) as Node3D
 		if muzzle != null:
 			host.set_meta("shot_origin",muzzle)
+		if ActorPose.GAIT.has(asset):
+			var pose := ActorPose.new()
+			pose.configure(host,art,asset)
+			art.add_child(pose)
+			host.set_meta("actor_pose",pose)
 	return art
 
 func shot_origin(host: Node3D) -> Vector3:
@@ -1278,7 +1297,61 @@ func shot_origin(host: Node3D) -> Vector3:
 		var muzzle := host.get_meta("shot_origin") as Node3D
 		if is_instance_valid(muzzle):
 			return muzzle.global_position
+	var pose := actor_pose(host)
+	if pose != null:
+		var muzzle := pose.muzzle_position()
+		if muzzle != Vector3.INF:
+			return muzzle
 	return host.position+Vector3.UP*0.45
+
+func actor_pose(host: Node3D) -> ActorPose:
+	if not is_instance_valid(host) or not host.has_meta("actor_pose"):
+		return null
+	return host.get_meta("actor_pose") as ActorPose
+
+func damage_hero(amount: float, origin: Vector3) -> void:
+	var alive := hp > 0
+	hp -= amount
+	if amount <= 0.0 or not alive:
+		return
+	if hp <= 0.0 and play_defeat(hero):
+		if not coop.live:
+			defeat_timer = 0.9
+			clear_touch()
+	else:
+		show_actor_hit(hero,origin)
+
+var defeat_timer := 0.0
+
+func play_defeat(actor: Node3D) -> bool:
+	var pose := actor_pose(actor)
+	return pose != null and pose.fall()
+
+var falling_models := 0
+
+func show_actor_hit(host: Node3D, origin: Vector3, defeated := false) -> void:
+	var pose := actor_pose(host)
+	if pose == null:
+		return
+	if not defeated:
+		if pose.hit < 0.62:
+			pose.impact(origin)
+		return
+	if falling_models >= 12 or pose.art.get_parent() != host:
+		return
+	var art := pose.art
+	pose.set_process(false)
+	host.remove_meta("actor_pose")
+	art.reparent(self,true)
+	falling_models += 1
+	var fall := create_tween().set_parallel(true).set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_IN)
+	fall.tween_property(art,"rotation:z",art.rotation.z+0.83,0.24)
+	fall.tween_property(art,"position:y",art.position.y-0.26,0.24)
+	fall.tween_property(art,"scale",art.scale*0.08,0.24)
+	fall.chain().tween_callback(func():
+		art.queue_free()
+		falling_models -= 1
+	)
 
 func award(points: int) -> void:
 	combo = mini(combo + 1, 20)
@@ -1368,11 +1441,11 @@ func choose_upgrade(index: int) -> void:
 	if ranks.has(0) and ranks.has(3) and not ranks.has(100):
 		ranks[100] = 1
 		blast += 2
-		event_label.text = "СВЯЗКА  ·  ФОРСИРОВАННАЯ НОВА"
+		event_label.text = "СВЯЗКА  ·  "+COMBINATIONS[100][0]
 	if ranks.has(1) and ranks.has(2) and not ranks.has(101):
 		ranks[101] = 1
 		magnet += 2
-		event_label.text = "СВЯЗКА  ·  ГРАВИТАЦИОННЫЙ РЫВОК"
+		event_label.text = "СВЯЗКА  ·  "+COMBINATIONS[101][0]
 	choosing = false
 	upgrades.hide()
 	clear_touch()
@@ -1408,15 +1481,6 @@ func build_hero_stage() -> void:
 	rim.scale.y = 0.45
 	rim.position.y = 0.12
 	hero_stage.add_child(rim)
-
-func hud_label(position: Vector2, font_size: int, color: Color) -> Label:
-	var label := Label.new()
-	label.position = position
-	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	label.add_theme_font_size_override("font_size",font_size)
-	label.add_theme_color_override("font_color",color)
-	hud_panel.add_child(label)
-	return label
 
 func _ready() -> void:
 	sound = AudioStreamPlayer.new()
@@ -1476,16 +1540,11 @@ func _ready() -> void:
 	var layer := CanvasLayer.new()
 	add_child(layer)
 	build_touch_stick(layer)
-	hud_panel = ui_panel(layer,Vector2(16,16),Vector2(688,140))
-	hud = hud_label(Vector2(18,10),29,Color("#f0fff9"))
-	fps_label = hud_label(Vector2(552,17),18,Color("#93b1bb"))
-	fps_label.size.x = 118
-	fps_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	hud_stats = hud_label(Vector2(18,51),22,Color("#aacecb"))
-	health_label = hud_label(Vector2(18,86),20,Color("#9ef4c8"))
-	energy_label = hud_label(Vector2(354,86),20,Color("#ffe0a1"))
-	hp_bar = make_bar(hud_panel,Vector2(18,113),Color("#65e5a5"))
-	xp_bar = make_bar(hud_panel,Vector2(354,113),Color("#f9c95b"))
+	hud_panel = CombatHUD.new()
+	layer.add_child(hud_panel)
+	hud_panel.configure(self)
+	fps_label = hud_panel.fps
+	build_attack_range()
 	retry = Button.new()
 	layer.add_child(retry)
 	retry.position = Vector2(110,550)
@@ -1508,15 +1567,15 @@ func _ready() -> void:
 	achievements = menu.badges
 	event_label = Label.new()
 	layer.add_child(event_label)
-	event_label.position = Vector2(24,166)
-	event_label.add_theme_font_size_override("font_size",24)
+	event_label.position = Vector2(246,145)
+	event_label.add_theme_font_size_override("font_size",18)
 	event_label.add_theme_color_override("font_outline_color",Color("#102029"))
 	event_label.add_theme_constant_override("outline_size",6)
 	build_awakening(layer)
 	build_settings(layer)
 	collection = VBoxContainer.new()
 	layer.add_child(collection)
-	collection.position = Vector2(90,150)
+	collection.position = Vector2(90,80)
 	collection.add_theme_constant_override("separation",10)
 	var collection_title := Label.new()
 	collection_title.text = "КОЛЛЕКЦИЯ ГЕРОЕВ"
@@ -1528,11 +1587,20 @@ func _ready() -> void:
 	collection_balance.add_theme_font_size_override("font_size",24)
 	collection_balance.add_theme_color_override("font_color",Color("#f9c95b"))
 	collection.add_child(collection_balance)
-	for i in range(HEROES.size()):
-		var card := menu_button(collection,"",select_hero.bind(i))
-		card.custom_minimum_size = Vector2(540,112)
+	hero_list = ScrollContainer.new()
+	hero_list.custom_minimum_size = Vector2(540,830)
+	hero_list.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	collection.add_child(hero_list)
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation",10)
+	hero_list.add_child(rows)
+	collection_buttons.resize(HEROES.size())
+	for id in [6,7,8,9,0,1,2,3,4,5]:
+		var card := menu_button(rows,"",select_hero.bind(id))
+		card.custom_minimum_size = Vector2(516,109)
 		card.add_theme_font_size_override("font_size",22)
-		collection_buttons.append(card)
+		collection_buttons[id] = card
 	menu_button(collection,"ПОКАЗАТЬ ГЕРОЯ",show_hero_preview)
 	menu_button(collection,"НАЗАД",show_menu)
 	collection.hide()
@@ -1580,7 +1648,8 @@ func load_profile() -> void:
 	var cfg := read_profile(PROFILE_PATH)
 	if cfg == null:
 		cfg = read_profile(PROFILE_BACKUP)
-	if cfg == null:
+	var fresh := cfg == null
+	if fresh:
 		cfg = ConfigFile.new()
 	load_profile_array(gate_wins,cfg.get_value("gates","wins",[]),9223372036854775807)
 	load_profile_array(quest_progress,cfg.get_value("quests","progress",[]),1000000000)
@@ -1594,20 +1663,22 @@ func load_profile() -> void:
 	best_sprint = maxi(0,profile_int(cfg.get_value("records","sprint",0)))
 	runs = maxi(0,profile_int(cfg.get_value("records","runs",0)))
 	total_kills = maxi(0,profile_int(cfg.get_value("records","kills",0)))
-	owned = [0]
+	owned = [0,DEFAULT_HERO]
 	var saved: Variant = cfg.get_value("collection","owned",[])
 	if saved is Array:
 		for id in saved:
 			if id is int and id > 0 and id < HEROES.size() and not owned.has(id):
 				owned.append(id)
-	selected = profile_int(cfg.get_value("collection","selected",0))
+	selected = profile_int(cfg.get_value("collection","selected",DEFAULT_HERO if fresh else 0))
 	if not owned.has(selected):
 		selected = 0
 
 func start(populate := true) -> void:
-	visual_stride = 0.0
-	visual_lean = Vector2.ZERO
-	visual_recoil = 0.0
+	defeat_timer = 0.0
+	hud_paused = false
+	hud_in_settings = false
+	run_pickups = 0
+	hud_panel.reset_run()
 	gate_panel.hide()
 	gate_cleared = false
 	mode = 0
@@ -1682,10 +1753,12 @@ func start(populate := true) -> void:
 	attack_timer = 0
 	clear_touch()
 	running = true
+	refresh_touch_stick()
 	menu_scrim.hide()
 	hero_stage.hide()
 	hero_shadow.show()
 	hud_panel.show()
+	fps_label.text = "%d FPS" % Engine.get_frames_per_second()
 	event_label.show()
 	update_hud()
 	retry.hide()
@@ -1699,7 +1772,7 @@ func stick_circle(parent: Node, tint: Color) -> Panel:
 	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
 	style.bg_color = tint
-	style.border_color = Color("#9bdfff")
+	style.border_color = Color("#c58c53")
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(256)
 	panel.add_theme_stylebox_override("panel",style)
@@ -1707,19 +1780,20 @@ func stick_circle(parent: Node, tint: Color) -> Panel:
 	return panel
 
 func build_touch_stick(layer: CanvasLayer) -> void:
-	stick_base = stick_circle(layer,Color(0.06,0.15,0.22,0.65))
-	stick_knob = stick_circle(stick_base,Color(0.35,0.78,0.95,0.85))
+	stick_base = stick_circle(layer,Color(0.04,0.07,0.10,0.78))
+	stick_knob = stick_circle(stick_base,Color(0.45,0.49,0.54,0.89))
 	stick_base.hide()
 
 func refresh_touch_stick() -> void:
 	if not is_instance_valid(stick_base):
 		return
-	stick_base.visible = running and not choosing and finger != -1
+	stick_base.visible = running and not choosing and not hud_paused and not hud_in_settings and defeat_timer <= 0.0
 	if not stick_base.visible:
 		return
 	var radius := float(advanced["stick_size"])
 	stick_base.size = Vector2.ONE*radius*2.0
-	stick_base.position = origin-Vector2.ONE*radius
+	var center := origin if finger != -1 else Vector2(130,979)
+	stick_base.position = center-Vector2.ONE*radius
 	stick_base.modulate.a = float(advanced["stick_opacity"])
 	stick_knob.size = Vector2.ONE*radius*0.7
 	stick_knob.position = Vector2.ONE*radius-stick_knob.size*0.5+direction*radius*0.65
@@ -1732,19 +1806,30 @@ func clear_touch() -> void:
 func _notification(what: int) -> void:
 	if what == NOTIFICATION_APPLICATION_FOCUS_OUT or what == NOTIFICATION_APPLICATION_PAUSED:
 		clear_touch()
-	elif what == NOTIFICATION_APPLICATION_RESUMED and is_instance_valid(coop) and coop.lobby.visible:
-		coop.update_devices()
-		coop.refresh_lobby()
+		if is_instance_valid(stick_base):
+			stick_base.hide()
+	elif what == NOTIFICATION_APPLICATION_RESUMED or what == NOTIFICATION_APPLICATION_FOCUS_IN:
+		refresh_touch_stick()
+		if is_instance_valid(coop) and coop.lobby.visible:
+			coop.update_devices()
+			coop.refresh_lobby()
 
 func _input(event: InputEvent) -> void:
+	if running and event.is_action_pressed("ui_cancel") and not event.is_echo():
+		if hud_in_settings:
+			close_settings()
+		elif not choosing:
+			toggle_hud_pause()
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventScreenTouch and not event.pressed and event.index == finger:
 		clear_touch()
 		return
-	if not running or choosing:
+	if not running or choosing or hud_paused or hud_in_settings or defeat_timer > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and finger == -1:
-			if coop.live and coop.exit_button.get_global_rect().has_point(event.position):
+			if hud_panel.blocks_at(event.position):
 				return
 			finger = event.index
 			origin = event.position
@@ -1754,10 +1839,9 @@ func _input(event: InputEvent) -> void:
 		direction = raw.normalized()*maxf(0.0,(raw.length()-dead)/(1.0-dead))
 	refresh_touch_stick()
 
-var visual_stride := 0.0
-var visual_lean := Vector2.ZERO
-var visual_recoil := 0.0
 func movement_input() -> Vector2:
+	if hud_paused or hud_in_settings:
+		return Vector2.ZERO
 	if finger != -1:
 		return direction
 	return Input.get_vector("ui_left","ui_right","ui_up","ui_down")
@@ -1769,7 +1853,12 @@ func follow_player_camera(dt: float) -> void:
 	camera.position = camera.position.lerp(focus + COMBAT_CAMERA_OFFSET,1.0-exp(-float(advanced["camera_speed"])*dt))
 
 func _physics_process(dt: float) -> void:
-	if not running or choosing or (coop.live and not coop.hosting):
+	if running and defeat_timer > 0.0:
+		defeat_timer -= dt
+		if defeat_timer <= 0.0:
+			finish_run()
+		return
+	if not running or choosing or (hud_paused and not coop.live) or (coop.live and not coop.hosting):
 		return
 	elapsed += dt
 	if not coop.live or hp > 0:
@@ -1785,16 +1874,7 @@ func _physics_process(dt: float) -> void:
 	var move := movement_input() if not coop.live or hp > 0 else Vector2.ZERO
 	if move.length() > 0.05:
 		hero.rotation.y = lerp_angle(hero.rotation.y,atan2(move.x,move.y),minf(dt*12,1.0))
-	var motion := move.length()
-	visual_stride = lerpf(visual_stride,motion,1.0-exp(-12.0*dt))
-	visual_lean = visual_lean.lerp(move*0.09,1.0-exp(-10.0*dt))
-	visual_recoil = move_toward(visual_recoil,0.0,dt*0.8)
-	var bob := -0.5+sin(elapsed*12.0)*0.065*visual_stride
-	if is_instance_valid(hero_visual):
-		hero_visual.position.y = bob
-		hero_visual.rotation.x = visual_lean.y+visual_recoil
-		hero_visual.rotation.z = -visual_lean.x+sin(elapsed*6.0)*0.035*visual_stride
-	hero.position += Vector3(move.x,0,move.y)*dt*(6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0))
+	hero.position += Vector3(move.x,0,move.y)*dt*move_speed()
 	hero.position.x = clampf(hero.position.x,-20,20)
 	hero.position.z = clampf(hero.position.z,-20,20)
 	follow_player_camera(dt)
@@ -1835,12 +1915,14 @@ func _physics_process(dt: float) -> void:
 		boss.set_meta("kind",boss_kind)
 		boss.set_meta("next_pulse",elapsed+4.0)
 		boss.set_meta("boss",true)
-		boss.set_meta("health",24+boss_kind*6+(gate_rank*12 if mode == 2 else 0))
+		var boss_health := 24+boss_kind*6+(gate_rank*12 if mode == 2 else 0)
+		boss.set_meta("health",boss_health)
+		boss.set_meta("max_health",boss_health)
 		boss.set_meta("speed",1.5)
 		add_contact_shadow(boss,3.35)
 		enemies.append(boss)
 	var nearest: MeshInstance3D = null
-	var distance := 4.0+level*0.3+reach
+	var distance := attack_distance()
 	for e in enemies:
 		var target := coop.target_for(e.position)
 		var offset: Vector3 = target.position-e.position
@@ -1853,18 +1935,17 @@ func _physics_process(dt: float) -> void:
 			update_boss_attack(e)
 		var contact_damage: float = dt*(24 if e.get_meta("boss",false) else 12)
 		if hero_distance < 0.9*e.scale.x:
-			hp -= contact_damage*(1.0-armor)
+			damage_hero(contact_damage*(1.0-armor),e.position)
 		coop.damage_partner(e.position,0.9*e.scale.x,contact_damage)
 		if hero_distance < distance:
 			distance = hero_distance
 			nearest = e
 	attack_timer -= dt
-	if nearest != null and attack_timer <= 0 and (not coop.live or hp > 0):
+	if nearest != null and attack_timer <= 0 and hp > 0:
 		attack_timer = maxf(0.15,0.7-power*0.08-(VEHICLE_FIRE[vehicle_kind] if vehicle_time > 0 else 0.0))
-		visual_recoil = 0.13
 		var impact := nearest.position
-		shot_tracer(shot_origin(hero),impact+Vector3.UP*0.2)
-		hit_enemy(nearest)
+		fire_visual(hero,impact+Vector3.UP*0.2)
+		hit_enemy(nearest,hero)
 		if blast > 0:
 			pulse(impact,1.5+blast*0.4,Color("#64cfff"))
 			for other in enemies.duplicate():
@@ -1876,7 +1957,7 @@ func _physics_process(dt: float) -> void:
 			pulse(crate.position,2.2,Color("#ff9d45"))
 			for enemy in enemies.duplicate():
 				if enemy.position.distance_to(crate.position) < 2.2:
-					hit_enemy(enemy)
+					hit_enemy(enemy,crate)
 			award(50)
 			crates.erase(crate)
 			crate.queue_free()
@@ -1888,9 +1969,10 @@ func _physics_process(dt: float) -> void:
 			gems.erase(gem)
 			gem.queue_free()
 			xp += 1
+			run_pickups += 1
 			play_fx("pickup")
 			award(20)
-	if xp >= level*3:
+	if xp >= level*3 and (hp > 0 or coop.live):
 		xp -= level*3
 		level += 1
 		play_fx("level")
@@ -1904,7 +1986,7 @@ func _physics_process(dt: float) -> void:
 		hero.visible = hp > 0
 		if hp <= 0 and coop.partner_hp <= 0:
 			finish_run()
-	elif hp <= 0 or (mode == 2 and (gate_cleared or elapsed >= 120.0)):
+	elif defeat_timer <= 0.0 and (hp <= 0 or (mode == 2 and (gate_cleared or elapsed >= 120.0))):
 		finish_run()
 
 var hud_elapsed := 0.0
@@ -1912,26 +1994,74 @@ var fps_elapsed := 0.0
 var fps_label: Label
 
 func _process(dt: float) -> void:
-	if not running and is_instance_valid(hero_visual):
-		hero_visual.position.y = -0.5+sin(Time.get_ticks_msec()*0.002)*0.025
 	hud_elapsed += dt
 	fps_elapsed += dt
 	if hud_elapsed >= 0.1:
 		hud_elapsed = 0.0
 		update_hud()
+	if range_marker.visible:
+		range_marker.position = Vector3(hero.position.x,0.044,hero.position.z)
 	if fps_elapsed >= 0.5:
 		fps_elapsed = 0.0
 		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
 		menu.fps.text = fps_label.text
 
+func move_speed() -> float:
+	if coop.live and not coop.hosting:
+		return 6.0+float(HEROES[selected][4])
+	return 6.0+speed_bonus+(VEHICLE_SPEED[vehicle_kind] if vehicle_time > 0 else 0.0)
+
+func attack_distance() -> float:
+	return 4.0+level*0.3+reach
+
 func update_hud() -> void:
-	hp_bar.max_value = max_hp
-	hp_bar.value = hp
-	hp_bar.modulate = Color("#ff8b79") if hp < max_hp*0.25 else Color.WHITE
-	xp_bar.max_value = level*3
-	xp_bar.value = xp
-	var clock := maxi(0,60-int(elapsed)) if mode == 1 else int(elapsed)
-	hud.text = "СЧЁТ  %d" % score
-	hud_stats.text = "%02d:%02d   ·   УР. %d   ·   ПОБЕЖДЕНО %d   ·   КОМБО ×%d" % [int(clock/60.0),clock%60,level,kills,combo]
-	health_label.text = "ЗДОРОВЬЕ  %d / %d" % [maxi(0,int(hp)),int(max_hp)]
-	energy_label.text = "ОПЫТ  %d / %d" % [xp,level*3]
+	if hud_panel.visible:
+		hud_panel.refresh()
+	range_marker.visible = running and not choosing and not hud_paused and hud_panel.range_button.button_pressed
+	if range_marker.visible:
+		var radius := attack_distance()
+		range_marker.position = Vector3(hero.position.x,0.044,hero.position.z)
+		range_marker.scale = Vector3(radius,1,radius)
+
+func build_attack_range() -> void:
+	range_marker = MeshInstance3D.new()
+	var ring := TorusMesh.new()
+	ring.inner_radius = 0.991
+	ring.outer_radius = 1.0
+	ring.rings = 56
+	ring.ring_segments = 4
+	range_marker.mesh = ring
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.albedo_color = Color("#ffbb54aa")
+	range_marker.material_override = material
+	range_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(range_marker)
+	range_marker.hide()
+
+func toggle_attack_range() -> void:
+	update_hud()
+
+func toggle_hud_pause() -> void:
+	if not running or choosing or defeat_timer > 0.0:
+		return
+	hud_paused = not hud_paused
+	hud_panel.set_paused(hud_paused)
+	clear_touch()
+	update_hud()
+
+func open_hud_settings() -> void:
+	if not running or choosing or hud_in_settings or defeat_timer > 0.0:
+		return
+	if not hud_paused:
+		toggle_hud_pause()
+	hud_in_settings = true
+	hud_panel.hide()
+	show_settings()
+
+func exit_hud_run() -> void:
+	if coop.live:
+		coop.leave_match()
+	else:
+		finish_run()

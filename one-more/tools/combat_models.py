@@ -3,6 +3,7 @@
 Blender units are metres. Models face -Y and stand on Z=0.
 """
 
+from contextlib import contextmanager
 from math import cos, pi, sin, tau
 
 import bpy
@@ -187,6 +188,27 @@ def light_at(name, x, y, z, width, height, glow):
     return slab(name, (x, y, z), (width, 0.018, height), glow, 0.004)
 
 
+@contextmanager
+def pivot(name, location):
+    """Parent the authored pieces to a joint without changing their rest pose."""
+    existing = set(bpy.context.scene.objects)
+    yield
+    parts = [obj for obj in bpy.context.scene.objects if obj not in existing and obj.parent is None]
+    joint = bpy.data.objects.new(name, None)
+    joint.location = location
+    joint.empty_display_size = 0.11
+    bpy.context.collection.objects.link(joint)
+    bpy.context.view_layer.update()
+    for part in parts:
+        world = part.matrix_world.copy()
+        part.parent = joint
+        part.matrix_world = world
+
+
+def side_name(side):
+    return "Left" if side < 0 else "Right"
+
+
 def muzzle_marker(point):
     marker = bpy.data.objects.new("ShotOrigin", None)
     marker.location = point
@@ -196,33 +218,35 @@ def muzzle_marker(point):
 
 
 def rifle(x, y, z, armor, structural, steel, light, length, paired=False):
-    slab("Weapon receiver", (x, y - 0.09, z), (0.134, 0.23, 0.103), armor)
-    slab("Weapon shroud", (x, y - 0.20, z + 0.077), (0.102, 0.145, 0.051), structural)
-    for offset in ((-0.061, 0.061) if paired else (0,)):
-        start = (x + offset, y - 0.25, z)
-        end = (x + offset, y - length, z)
-        shaft("Barrel", start, end, 0.048, steel)
-        shaft("Muzzle collar", (end[0], end[1] + 0.112, z), end, 0.071, structural)
-        shaft("Emitter bore", (end[0], end[1] + 0.010, z), (end[0], end[1] - 0.005, z), 0.034, light)
-    for i in range(3):
-        slab("Receiver ribs", (x, y - 0.12 - i * 0.064, z + 0.122), (0.08, 0.019, 0.014), steel, 0.005)
-    muzzle_marker((x, y - length - 0.015, z))
+    with pivot("WeaponPivot", (x, y, z)):
+        slab("Weapon receiver", (x, y - 0.09, z), (0.134, 0.23, 0.103), armor)
+        slab("Weapon shroud", (x, y - 0.20, z + 0.077), (0.102, 0.145, 0.051), structural)
+        for offset in ((-0.061, 0.061) if paired else (0,)):
+            start = (x + offset, y - 0.25, z)
+            end = (x + offset, y - length, z)
+            shaft("Barrel", start, end, 0.048, steel)
+            shaft("Muzzle collar", (end[0], end[1] + 0.112, z), end, 0.071, structural)
+            shaft("Emitter bore", (end[0], end[1] + 0.010, z), (end[0], end[1] - 0.005, z), 0.034, light)
+        for i in range(3):
+            slab("Receiver ribs", (x, y - 0.12 - i * 0.064, z + 0.122), (0.08, 0.019, 0.014), steel, 0.005)
+        muzzle_marker((x, y - length - 0.015, z))
 
 
 def boots(sign, x, calf_height, armor, frame, steel):
     x *= sign
-    shell("Split sole boot", [
-        (0.018, 0.125, 0.235, x, -0.068),
-        (0.087, 0.148, 0.254, x, -0.062),
-        (0.18, 0.119, 0.157, x, 0.011),
-    ], frame)
-    slab("Toe strike plate", (x, -0.222, 0.111), (0.108, 0.075, 0.049), steel, 0.009)
-    shaft("Ankle ram", (x, 0.044, 0.12), (x, 0.018, calf_height), 0.047, steel)
-    shell("Greave", [
-        (0.15, 0.090, 0.099, x, 0.013),
-        (0.27, 0.125, 0.121, x, -0.024),
-        (calf_height, 0.079, 0.092, x, 0.031),
-    ], armor)
+    with pivot("Leg" + side_name(sign), (x, 0.023, calf_height)):
+        shell("Split sole boot", [
+            (0.018, 0.125, 0.235, x, -0.068),
+            (0.087, 0.148, 0.254, x, -0.062),
+            (0.18, 0.119, 0.157, x, 0.011),
+        ], frame)
+        slab("Toe strike plate", (x, -0.222, 0.111), (0.108, 0.075, 0.049), steel, 0.009)
+        shaft("Ankle ram", (x, 0.044, 0.12), (x, 0.018, calf_height), 0.047, steel)
+        shell("Greave", [
+            (0.15, 0.090, 0.099, x, 0.013),
+            (0.27, 0.125, 0.121, x, -0.024),
+            (calf_height, 0.079, 0.092, x, 0.031),
+        ], armor)
 
 
 def slime(frame, steel):
@@ -236,16 +260,18 @@ def slime(frame, steel):
         (0.49, 0.52, 0.36, 0, 0.02),
         (0.63, 0.41, 0.26, 0, 0.03),
     ], jade, 0.03)
-    lens("Asymmetric gel mass", (0.0, 0.012, 0.83), (0.43, 0.33, 0.37), gel)
+    with pivot("AxisTop", (0, 0.012, 0.64)):
+        lens("Asymmetric gel mass", (0.0, 0.012, 0.83), (0.43, 0.33, 0.37), gel)
     for radius, height in ((0.405, 0.59), (0.367, 0.69)):
         hoop("Retention band", (0, 0.034, height), radius, 0.033, steel)
     lens("Reinforced inspection window", (0, -0.283, 0.775), (0.37, 0.104, 0.128), frame)
     lens("Optical glass", (0, -0.336, 0.78), (0.319, 0.077, 0.083), optic)
     for side in (-1, 1):
         light_at("Optic split", side * 0.15, -0.406, 0.789, 0.071, 0.023, light)
-        slab("Stabilizer arm", (side * 0.53, 0.01, 0.39), (0.137, 0.241, 0.129), jade, tilt=side * 0.21)
-        shaft("Hover cushion", (side * 0.46, 0.075, 0.055), (side * 0.46, 0.075, 0.25), 0.126, frame)
-        hoop("Ion ring", (side * 0.46, 0.075, 0.095), 0.103, 0.018, light)
+        with pivot("Panel" + side_name(side), (side * 0.43, 0.02, 0.37)):
+            slab("Stabilizer arm", (side * 0.53, 0.01, 0.39), (0.137, 0.241, 0.129), jade, tilt=side * 0.21)
+            shaft("Hover cushion", (side * 0.46, 0.075, 0.055), (side * 0.46, 0.075, 0.25), 0.126, frame)
+            hoop("Ion ring", (side * 0.46, 0.075, 0.095), 0.103, 0.018, light)
         shaft("Rear reagent vial", (side * 0.235, 0.355, 0.33), (side * 0.235, 0.355, 0.72), 0.075, steel)
         slab("Tank sight glass", (side * 0.235, 0.425, 0.56), (0.029, 0.02, 0.088), light, 0.008)
     light_at("Front charge aperture", 0, -0.371, 0.39, 0.088, 0.057, light)
@@ -321,13 +347,14 @@ def ghost(frame, steel):
     ], steel, 0.011)
     light_at("Vertical mask seam", 0, -0.346, 1.071, 0.023, 0.089, light)
     for side in (-1, 1):
-        shell("Floating mantle blade", [
-            (0.14, 0.035, 0.067, side * 0.52, 0.216),
-            (0.38, 0.116, 0.136, side * 0.456, 0.14),
-            (0.74, 0.145, 0.188, side * 0.397, 0.028),
-            (0.91, 0.093, 0.103, side * 0.32, 0.047),
-        ], armor)
-        shaft("Mantle edge filament", (side * 0.52, 0.13, 0.26), (side * 0.48, -0.126, 0.73), 0.016, light, 0.010, 8)
+        with pivot("Panel" + side_name(side), (side * 0.32, 0.047, 0.9)):
+            shell("Floating mantle blade", [
+                (0.14, 0.035, 0.067, side * 0.52, 0.216),
+                (0.38, 0.116, 0.136, side * 0.456, 0.14),
+                (0.74, 0.145, 0.188, side * 0.397, 0.028),
+                (0.91, 0.093, 0.103, side * 0.32, 0.047),
+            ], armor)
+            shaft("Mantle edge filament", (side * 0.52, 0.13, 0.26), (side * 0.48, -0.126, 0.73), 0.016, light, 0.010, 8)
     hoop("Field stabilizer", (0, 0.1, 0.255), 0.174, 0.024, light)
     rifle(0.47, -0.07, 0.607, armor, frame, steel, light, 0.62)
 
@@ -401,9 +428,10 @@ def scout(frame, steel):
             joint = (side * 0.37, row * 0.236, 0.28)
             knee = (side * 0.585, row * 0.37, 0.142)
             claw = (side * 0.71, row * 0.405 + 0.024, 0.045)
-            lens("Actuator joint", joint, (0.085, 0.087, 0.075), steel)
-            shaft("Leg armor linkage", joint, knee, 0.074, armor, 0.049, 8)
-            shaft("Ground hook", knee, claw, 0.049, frame, 0.019, 8)
+            with pivot(("LegRear" if row > 0 else "Leg") + side_name(side), joint):
+                lens("Actuator joint", joint, (0.085, 0.087, 0.075), steel)
+                shaft("Leg armor linkage", joint, knee, 0.074, armor, 0.049, 8)
+                shaft("Ground hook", knee, claw, 0.049, frame, 0.019, 8)
         slab("Dorsal armor strip", (side * 0.165, 0.126, 0.476), (0.11, 0.223, 0.049), steel, tilt=side * 0.09)
 
 
@@ -421,8 +449,9 @@ def interceptor(frame, steel):
         x = side * 0.46
         shaft("Outboard engine pod", (x, 0.031, 0.328), (x, 0.43, 0.328), 0.091, frame)
         shaft("Rear nozzle glow", (x, 0.419, 0.328), (x, 0.459, 0.328), 0.063, light)
-        fin = slab("Steering vane", (side * 0.54, 0.34, 0.488), (0.048, 0.177, 0.108), armor, tilt=side * 0.31)
-        fin.rotation_euler.y = side * 0.23
+        with pivot("Panel" + side_name(side), (side * 0.54, 0.30, 0.36)):
+            fin = slab("Steering vane", (side * 0.54, 0.34, 0.488), (0.048, 0.177, 0.108), armor, tilt=side * 0.31)
+            fin.rotation_euler.y = side * 0.23
     slab("Targeting nose", (0, -0.451, 0.30), (0.101, 0.111, 0.071), frame)
     light_at("Forward target lock", 0, -0.565, 0.318, 0.081, 0.017, light)
 
@@ -458,8 +487,9 @@ def armored(frame, steel):
     for side in (-1, 1):
         slab("Split frontal glacis", (side * 0.32, -0.49, 0.383), (0.236, 0.168, 0.133), steel, tilt=side * 0.35)
         slab("Track guard", (side * 0.575, 0.06, 0.342), (0.135, 0.48, 0.076), armor)
-    slab("Protected sensor bay", (0, -0.487, 0.482), (0.141, 0.102, 0.065), frame)
-    light_at("Horizontal range finder", 0, -0.586, 0.492, 0.121, 0.023, light)
+    with pivot("AxisTop", (0, -0.45, 0.44)):
+        slab("Protected sensor bay", (0, -0.487, 0.482), (0.141, 0.102, 0.065), frame)
+        light_at("Horizontal range finder", 0, -0.586, 0.492, 0.121, 0.023, light)
     for i in range(4):
         slab("Rear heat vent", (0, 0.27 + i * 0.063, 0.694 - i * 0.019), (0.173, 0.019, 0.015), frame, 0.006)
 
@@ -478,22 +508,25 @@ def overlord(frame, steel):
     light_at("Command visor", 0, -0.532, 1.692, 0.212, 0.042, light)
     for side in (-1, 1):
         x = side * 0.51
-        shell("Command ground foot", [
-            (0.035, 0.252, 0.343, x, -0.105), (0.19, 0.275, 0.364, x, -0.106),
-            (0.34, 0.244, 0.22, x, 0.02),
-        ], steel, 0.035)
-        shaft("Hydraulic leg", (x, 0.053, 0.272), (side * 0.45, 0.106, 0.94), 0.153, frame)
-        slab("Knee armour", (x, -0.103, 0.539), (0.218, 0.161, 0.215), armor)
-        shell("High command shoulder", [
-            (1.02, 0.26, 0.25, side * 0.86, 0.032),
-            (1.36, 0.38, 0.34, side * 0.92, 0.056),
-            (1.67, 0.29, 0.24, side * 0.83, 0.098),
-        ], armor, 0.033)
-        shaft("Arm cylinder", (side * 0.885, 0, 1.258), (side * 1.07, -0.182, 0.68), 0.151, steel)
-        slab("Siege gauntlet", (side * 1.06, -0.245, 0.628), (0.239, 0.278, 0.179), frame)
-        light_at("Shoulder declaration light", side * 0.91, -0.275, 1.40, 0.124, 0.035, light)
-    hoop("Broken command halo", (0, 0.34, 1.84), 0.56, 0.068, steel, (pi / 2, 0, -0.39), pi * 1.68)
-    hoop("Halo telemetry path", (0, 0.31, 1.845), 0.574, 0.026, light, (pi / 2, 0, -0.39), pi * 1.68)
+        with pivot("Leg" + side_name(side), (side * 0.45, 0.106, 0.87)):
+            shell("Command ground foot", [
+                (0.035, 0.252, 0.343, x, -0.105), (0.19, 0.275, 0.364, x, -0.106),
+                (0.34, 0.244, 0.22, x, 0.02),
+            ], steel, 0.035)
+            shaft("Hydraulic leg", (x, 0.053, 0.272), (side * 0.45, 0.106, 0.94), 0.153, frame)
+            slab("Knee armour", (x, -0.103, 0.539), (0.218, 0.161, 0.215), armor)
+        with pivot("Panel" + side_name(side), (side * 0.86, 0.06, 1.38)):
+            shell("High command shoulder", [
+                (1.02, 0.26, 0.25, side * 0.86, 0.032),
+                (1.36, 0.38, 0.34, side * 0.92, 0.056),
+                (1.67, 0.29, 0.24, side * 0.83, 0.098),
+            ], armor, 0.033)
+            shaft("Arm cylinder", (side * 0.885, 0, 1.258), (side * 1.07, -0.182, 0.68), 0.151, steel)
+            slab("Siege gauntlet", (side * 1.06, -0.245, 0.628), (0.239, 0.278, 0.179), frame)
+            light_at("Shoulder declaration light", side * 0.91, -0.275, 1.40, 0.124, 0.035, light)
+    with pivot("AxisTop", (0, 0.34, 1.84)):
+        hoop("Broken command halo", (0, 0.34, 1.84), 0.56, 0.068, steel, (pi / 2, 0, -0.39), pi * 1.68)
+        hoop("Halo telemetry path", (0, 0.31, 1.845), 0.574, 0.026, light, (pi / 2, 0, -0.39), pi * 1.68)
 
 
 def crystal(name, base, end, width, paint):
@@ -519,12 +552,14 @@ def crystal_boss(frame, steel):
     lens("Exposed fracture heart", (0, -0.414, 0.983), (0.274, 0.175, 0.311), light, True)
     hoop("Fracture containment belt", (0, 0.075, 0.826), 0.612, 0.049, steel)
     for side in (-1, 1):
-        lens("Mineral foot", (side * 0.46, -0.147, 0.232), (0.31, 0.392, 0.241), stone, True)
-        crystal("Crystal tibia", (side * 0.475, -0.04, 0.17), (side * 0.33, 0.06, 0.84), 0.258, mineral)
-        lens("Stone shoulder mass", (side * 0.72, 0.02, 1.22), (0.36, 0.33, 0.31), stone, True)
-        lens("Fractured forearm", (side * 0.95, -0.25, 0.654), (0.315, 0.38, 0.301), stone, True)
-        crystal("Outward crystal arm", (side * 0.83, -0.02, 0.95), (side * 1.23, -0.07, 1.56), 0.138, frost)
-        crystal("Forearm fang", (side * 0.94, -0.4, 0.66), (side * 1.13, -0.64, 0.31), 0.153, mineral)
+        with pivot("Leg" + side_name(side), (side * 0.33, 0.06, 0.76)):
+            lens("Mineral foot", (side * 0.46, -0.147, 0.232), (0.31, 0.392, 0.241), stone, True)
+            crystal("Crystal tibia", (side * 0.475, -0.04, 0.17), (side * 0.33, 0.06, 0.84), 0.258, mineral)
+        with pivot("Panel" + side_name(side), (side * 0.72, 0.02, 1.22)):
+            lens("Stone shoulder mass", (side * 0.72, 0.02, 1.22), (0.36, 0.33, 0.31), stone, True)
+            lens("Fractured forearm", (side * 0.95, -0.25, 0.654), (0.315, 0.38, 0.301), stone, True)
+            crystal("Outward crystal arm", (side * 0.83, -0.02, 0.95), (side * 1.23, -0.07, 1.56), 0.138, frost)
+            crystal("Forearm fang", (side * 0.94, -0.4, 0.66), (side * 1.13, -0.64, 0.31), 0.153, mineral)
     for i, (base, tip, width) in enumerate([
         ((-0.41, 0.13, 1.24), (-0.65, 0.28, 2.09), .179),
         ((-0.16, 0.11, 1.41), (-0.22, 0.08, 2.36), .233),
@@ -545,13 +580,15 @@ def furnace_boss(frame, steel):
     ], basalt, 0.045)
     lens("Incandescent furnace chamber", (0, -0.392, 0.925), (0.419, 0.235, 0.426), light)
     hoop("Refractory chamber collar", (0, -0.489, 0.915), 0.443, 0.069, copper, (pi / 2, 0, 0))
-    for i in range(5):
-        x = (i - 2) * 0.155
-        slab("Refractory face ribs", (x, -0.586, 0.92), (0.038, 0.067, 0.269 - abs(i - 2) * 0.037), frame)
+    with pivot("AxisTop", (0, -0.586, 1.18)):
+        for i in range(5):
+            x = (i - 2) * 0.155
+            slab("Refractory face ribs", (x, -0.586, 0.92), (0.038, 0.067, 0.269 - abs(i - 2) * 0.037), frame)
     for side in (-1, 1):
         stack_height = 2.10 if side == -1 else 1.89
-        shaft("Auxiliary exhaust stack", (side * 0.50, 0.39, 0.96), (side * 0.57, 0.46, stack_height), 0.155, copper, 0.104)
-        hoop("Hot stack rim", (side * 0.57, 0.46, stack_height), 0.102, 0.026, light)
+        with pivot("Panel" + side_name(side), (side * 0.50, 0.39, 0.96)):
+            shaft("Auxiliary exhaust stack", (side * 0.50, 0.39, 0.96), (side * 0.57, 0.46, stack_height), 0.155, copper, 0.104)
+            hoop("Hot stack rim", (side * 0.57, 0.46, stack_height), 0.102, 0.026, light)
         shaft("Furnace suspension", (side * 0.615, 0.12, 0.77), (side * 0.88, -0.03, 0.287), 0.179, steel)
         slab("Protective ground ram", (side * 0.86, -0.052, 0.245), (0.236, 0.387, 0.217), copper, 0.033)
         crystal("Forged intake spike", (side * 0.57, -0.243, 1.37), (side * 0.87, -0.53, 1.81), 0.153, basalt)
@@ -622,14 +659,15 @@ def tank(frame, steel):
         slab("Armored track fairing", (side * .661, .002, .489), (.175, .812, .104), armor)
         light_at("Tank lamps", side * .392, -.82, .493, .098, .049, light)
     shaft("Turret collar", (0, .102, .64), (0, .102, .78), .398, steel)
-    shell("Chamfered turret", [
-        (.736, .33, .401, 0, .087), (.849, .453, .469, 0, .102),
-        (1.029, .386, .40, 0, .142), (1.113, .285, .337, 0, .174),
-    ], armor, .032)
-    shaft("Armored barrel", (0, -.207, .918), (0, -1.19, .938), .091, steel)
-    shaft("Sleeve", (0, -.959, .933), (0, -1.245, .941), .121, frame)
-    slab("Optics housing", (.286, -.134, 1.088), (.069, .13, .065), steel)
-    light_at("Optic marker", .286, -.257, 1.101, .046, .023, light)
+    with pivot("AxisTop", (0, .102, .75)):
+        shell("Chamfered turret", [
+            (.736, .33, .401, 0, .087), (.849, .453, .469, 0, .102),
+            (1.029, .386, .40, 0, .142), (1.113, .285, .337, 0, .174),
+        ], armor, .032)
+        shaft("Armored barrel", (0, -.207, .918), (0, -1.19, .938), .091, steel)
+        shaft("Sleeve", (0, -.959, .933), (0, -1.245, .941), .121, frame)
+        slab("Optics housing", (.286, -.134, 1.088), (.069, .13, .065), steel)
+        light_at("Optic marker", .286, -.257, 1.101, .046, .023, light)
     for i in range(4):
         slab("Rear louvres", (0, .487 + i * .078, .682), (.305, .021, .022), frame, .008)
 
@@ -647,11 +685,12 @@ def mech(frame, steel):
         hip = (side * .43, .05, .901)
         knee = (side * .54, -.18, .502)
         ankle = (side * .599, .121, .165)
-        lens("Hip actuator bearing", hip, (.174, .187, .168), steel)
-        shaft("Walker upper leg", hip, knee, .118, armor)
-        shaft("Walker lower actuator", knee, ankle, .109, steel, .085)
-        slab("Walker foot", (side * .59, -.046, .097), (.187, .267, .079), frame)
-        lens("Protected knee", knee, (.137, .13, .129), armor, True)
+        with pivot("Leg" + side_name(side), hip):
+            lens("Hip actuator bearing", hip, (.174, .187, .168), steel)
+            shaft("Walker upper leg", hip, knee, .118, armor)
+            shaft("Walker lower actuator", knee, ankle, .109, steel, .085)
+            slab("Walker foot", (side * .59, -.046, .097), (.187, .267, .079), frame)
+            lens("Protected knee", knee, (.137, .13, .129), armor, True)
         shaft("Tool shoulder", (side * .46, .028, 1.206), (side * .692, -.055, .943), .105, steel)
         slab("Outboard tool pack", (side * .698, -.149, .855), (.128, .228, .132), armor)
         light_at("Outboard work light", side * .698, -.38, .859, .069, .04, light)

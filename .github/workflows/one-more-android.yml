@@ -1,6 +1,11 @@
 name: ONE MORE Android APK
 on:
   workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: Publish the verified APK as a ONE MORE GitHub prerelease
+        type: boolean
+        default: false
 concurrency:
   group: one-more-android-${{ github.ref }}
   cancel-in-progress: true
@@ -25,7 +30,10 @@ jobs:
       - name: Generate models
         run: |
           blender -b -t 2 --python-exit-code 1 -P one-more/tools/generate_assets.py
-          test -s one-more/assets/models/hero.glb
+          test "$(find one-more/assets/models -maxdepth 1 -type f -name '*.glb' | wc -l)" -eq 32
+          test -s one-more/assets/models/vega.glb
+          mkdir -p "$RUNNER_TEMP/one-more-blender"
+          mv one-more/assets/models/*.blend "$RUNNER_TEMP/one-more-blender/"
       - name: Install Godot and templates
         run: |
           base=https://github.com/godotengine/godot-builds/releases/download/4.4.1-stable
@@ -52,7 +60,8 @@ jobs:
           mkdir -p build-logs
           GODOT=/tmp/godot/Godot_v4.4.1-stable_linux.x86_64
           timeout 420 "$GODOT" --headless --path one-more --editor --import --quit 2>&1 | tee build-logs/import.log
-          if grep -E 'SCRIPT ERROR|Parse Error' build-logs/import.log; then exit 1; fi
+          if grep -E 'SCRIPT ERROR|Parse Error|Failed to load|Error importing' build-logs/import.log; then exit 1; fi
+          test "$(find one-more/.godot/imported -name '*.glb-*.scn' | wc -l)" -eq 32
       - name: Export Android APK
         timeout-minutes: 15
         run: |
@@ -60,6 +69,7 @@ jobs:
           GODOT=/tmp/godot/Godot_v4.4.1-stable_linux.x86_64
           timeout 840 "$GODOT" --headless --path one-more --export-debug Android "$GITHUB_WORKSPACE/one-more.apk" 2>&1 | tee build-logs/export.log
           test -s one-more.apk
+          unzip -tq one-more.apk
       - name: Preserve build logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -73,6 +83,9 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
           "$AAPT" dump badging one-more.apk | tee android-compatibility.txt
           python3 -c 'import re; s=open("android-compatibility.txt").read(); m=re.search(r"sdkVersion:\x27(\d+)\x27",s); t=re.search(r"targetSdkVersion:\x27(\d+)\x27",s); assert m and int(m[1])<=34, "APK must install on Android 14"; assert t and int(t[1])>=34, "Target SDK must be at least 34"; assert "arm64-v8a" in s, "ARM64 required"'
+          APKSIGNER="$(dirname "$AAPT")/apksigner"
+          "$APKSIGNER" verify --min-sdk-version 34 --verbose one-more.apk | tee -a android-compatibility.txt
+          sha256sum one-more.apk | tee -a android-compatibility.txt
           "$AAPT" dump permissions one-more.apk | tee -a android-compatibility.txt
           grep -Fq 'android.permission.BLUETOOTH_CONNECT' android-compatibility.txt
       - uses: actions/upload-artifact@v4
@@ -86,5 +99,38 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ONE-MORE-Blender-models
-          path: one-more/assets/models/
+          path: |
+            ${{ runner.temp }}/one-more-blender/*.blend
+            one-more/assets/models/*.glb
           if-no-files-found: warn
+  publish-preview:
+    if: inputs.publish_preview
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ONE-MORE-Android
+          path: preview
+      - uses: actions/download-artifact@v4
+        with:
+          name: ONE-MORE-Android-compatibility
+          path: preview
+      - name: Publish the verified test APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          tag="one-more-preview-${GITHUB_SHA:0:7}"
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo "The preview for this commit has already been published."
+            exit 0
+          fi
+          gh release create "$tag" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title "ONE MORE · Android · ${GITHUB_SHA:0:7}" \
+            --notes "Тестовая сборка ONE MORE для Android 14 и новее (ARM64)." \
+            preview/one-more.apk preview/android-compatibility.txt

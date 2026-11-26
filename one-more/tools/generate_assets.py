@@ -3,6 +3,7 @@ from mathutils import Vector
 
 sys.path.insert(0, os.path.dirname(__file__))
 import combat_models
+import human_models
 out=os.path.abspath(os.path.join(os.path.dirname(__file__),"../assets/models"))
 os.makedirs(out,exist_ok=True)
 def mat(name,c,metal=0):
@@ -95,45 +96,58 @@ def pine_branches(shade, tips, inner):
  bpy.context.collection.objects.link(branches)
 
 def save(name):
+ bpy.context.view_layer.update()
  bpy.ops.wm.save_as_mainfile(filepath=os.path.join(out,name+".blend"))
- # Keep parts editable in Blender and batch the static geometry by material in glTF.
- depsgraph = bpy.context.evaluated_depsgraph_get()
- sources = [obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
- export_meshes = []
- export_objects = []
- for source in sources:
-  mesh = bpy.data.meshes.new_from_object(source.evaluated_get(depsgraph), depsgraph=depsgraph)
-  export_meshes.append(mesh)
-  obj = bpy.data.objects.new(source.name + " export", mesh)
-  bpy.context.collection.objects.link(obj)
-  obj.matrix_world = source.matrix_world.copy()
-  export_objects.append(obj)
- combined_mesh = bpy.data.meshes.new(name)
- combined = bpy.data.objects.new(name, combined_mesh)
- bpy.context.collection.objects.link(combined)
+ # Keep one baked mesh per joint, sharing surfaces by material within the joint.
+ sources=[obj for obj in bpy.context.scene.objects if obj.type == 'MESH']
+ markers=[obj for obj in bpy.context.scene.objects if obj.type == 'EMPTY']
+ groups={}
+ for obj in sources:
+  groups.setdefault(obj.parent,[]).append(obj)
+ baked=[]
+ meshes=[]
  try:
+  for joint,parts in groups.items():
+   bpy.ops.object.select_all(action='DESELECT')
+   depsgraph=bpy.context.evaluated_depsgraph_get()
+   inverse=joint.matrix_world.inverted() if joint is not None else None
+   for source in parts:
+    mesh=bpy.data.meshes.new_from_object(source.evaluated_get(depsgraph),depsgraph=depsgraph)
+    transform=source.matrix_world if inverse is None else inverse @ source.matrix_world
+    mesh.transform(transform)
+    meshes.append(mesh)
+    obj=bpy.data.objects.new(source.name+" export",mesh)
+    bpy.context.collection.objects.link(obj)
+    obj.select_set(True)
+   label=name if joint is None else joint.name+" mesh"
+   combined_mesh=bpy.data.meshes.new(label)
+   meshes.append(combined_mesh)
+   combined=bpy.data.objects.new(label,combined_mesh)
+   bpy.context.collection.objects.link(combined)
+   baked.append(combined)
+   combined.select_set(True)
+   bpy.context.view_layer.objects.active=combined
+   bpy.ops.object.join()
+   combined.parent=joint
   bpy.ops.object.select_all(action='DESELECT')
-  for obj in export_objects:
+  for obj in baked+markers:
    obj.select_set(True)
-  combined.select_set(True)
-  bpy.context.view_layer.objects.active = combined
-  bpy.ops.object.join()
-  marker = bpy.context.scene.objects.get("ShotOrigin")
-  if marker is not None:
-   marker.select_set(True)
-  result = bpy.ops.export_scene.gltf(
-   filepath=os.path.join(out,name+".glb"), export_format='GLB', use_selection=True
+  result=bpy.ops.export_scene.gltf(
+   filepath=os.path.join(out,name+".glb"),export_format='GLB',use_selection=True
   )
   if 'FINISHED' not in result:
    raise RuntimeError(f"GLB export failed for {name}")
  finally:
-  bpy.data.objects.remove(combined, do_unlink=True)
-  for mesh in [combined_mesh, *export_meshes]:
+  for obj in baked:
+   bpy.data.objects.remove(obj,do_unlink=True)
+  for mesh in meshes:
    if mesh.users == 0:
     bpy.data.meshes.remove(mesh)
+
 def generate():
  dark=mat("Graphite",(.025,.045,.065),.5)
  combat_models.generate(reset, save)
+ human_models.generate(reset,out)
  for name,c in [("forest",(.18,.48,.22)),("city",(.35,.4,.48)),("desert",(.72,.45,.18)),("ice",(.3,.72,.88)),("volcano",(.35,.09,.05))]:
   reset()
   surface=mat(name+" surface",c)
@@ -258,7 +272,7 @@ def generate():
 def render_previews():
  preview=os.path.join(out,"previews")
  os.makedirs(preview,exist_ok=True)
- for name in ("hero cyborg inferno ghost titan cryo enemy enemy_fast enemy_armored boss_overlord boss_crystal boss_inferno buggy hovercraft tank mech crate forest city desert ice volcano tree rock ruin cactus ice_spire lava_vent").split():
+ for name in ("hero cyborg inferno ghost titan cryo vega fox amber north enemy enemy_fast enemy_armored boss_overlord boss_crystal boss_inferno buggy hovercraft tank mech crate forest city desert ice volcano tree rock ruin cactus ice_spire lava_vent").split():
   bpy.ops.wm.open_mainfile(filepath=os.path.join(out,name+".blend"))
   scene=bpy.context.scene
   corners=[obj.matrix_world @ Vector(corner) for obj in scene.objects
@@ -298,7 +312,52 @@ def render_previews():
   bpy.ops.render.render(write_still=True)
 
 
+def render_portraits():
+ portrait_folder=os.path.abspath(os.path.join(out,"../portraits"))
+ os.makedirs(portrait_folder,exist_ok=True)
+ for name in ("hero","cyborg","inferno","ghost","titan","cryo",*human_models.OPERATORS):
+  bpy.ops.wm.open_mainfile(filepath=os.path.join(out,name+".blend"))
+  scene=bpy.context.scene
+  corners=[obj.matrix_world @ Vector(corner) for obj in scene.objects if obj.type == 'MESH' for corner in obj.bound_box]
+  high=max(point.z for point in corners)
+  low=min(point.z for point in corners)
+  span=high-low
+  human=name in human_models.OPERATORS
+  center=Vector((0,0,high-span*(.107 if human else .25)))
+  bpy.ops.object.camera_add(location=center+Vector((.32,-1,.13))*span*2)
+  cam=bpy.context.object
+  cam.rotation_euler=(center-cam.location).to_track_quat('-Z','Y').to_euler()
+  cam.data.type="ORTHO"
+  cam.data.ortho_scale=span*(.29 if human else .73)
+  scene.camera=cam
+  for offset,energy,color in [
+   ((-.6,-1.5,1.1),193,(1.,.86,.70)),
+   ((1.5,-.7,.3),104,(.62,.79,1.)),
+   ((.5,.9,.9),180,(1.,.55,.25)),
+  ]:
+   bpy.ops.object.light_add(type='AREA',location=center+Vector(offset)*span)
+   lamp=bpy.context.object
+   lamp.data.energy=energy*span*span
+   lamp.data.color=color
+   lamp.data.size=span*.8
+   lamp.rotation_euler=(center-lamp.location).to_track_quat('-Z','Y').to_euler()
+  scene.render.engine="CYCLES"
+  scene.cycles.samples=32
+  scene.cycles.use_denoising=False
+  scene.render.film_transparent=True
+  scene.view_settings.exposure=-1.45
+  scene.render.resolution_x=128
+  scene.render.resolution_y=128
+  scene.render.resolution_percentage=100
+  scene.render.image_settings.file_format="PNG"
+  scene.render.image_settings.color_mode="RGBA"
+  scene.render.filepath=os.path.join(portrait_folder,name+".png")
+  bpy.ops.render.render(write_still=True)
+
+
 if "--preview" in sys.argv:
  render_previews()
+elif "--portraits" in sys.argv:
+ render_portraits()
 else:
  generate()

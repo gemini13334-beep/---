@@ -95,6 +95,28 @@ func run_tests() -> void:
 		var replica := guest.coop.objects.get(enemy.get_instance_id()) as MeshInstance3D
 		return replica != null and replica.get_meta("model_asset") == enemy.get_meta("model_asset")
 	),"Spawned enemy appears in the guest scene with the authoritative model")
+	var source = host.enemies[0]
+	var source_id: int = source.get_instance_id()
+	var replica: Node3D = guest.coop.objects[source_id]
+	var previous_tracers: int = guest.active_tracers
+	source.set_meta("health",host.damage+1)
+	host.fire_visual(host.hero,source.position)
+	host.hit_enemy(source,host.hero)
+	exchange(host,guest,2)
+	check(guest.active_tracers > previous_tracers,"Guest renders host shot events")
+	var remote_pose = guest.actor_pose(replica)
+	if remote_pose != null:
+		check(remote_pose.hit > 0.0,"Guest applies the hit to the imported enemy rig")
+	host.hit_enemy(source,host.hero)
+	exchange(host,guest,2)
+	check(not guest.coop.objects.has(source_id),"Defeated actor is removed from the guest world")
+	guest.toggle_hud_pause()
+	check(guest.hud_panel.overlay.visible and guest.movement_input() == Vector2.ZERO,"Guest menu blocks local controls while connected")
+	var host_elapsed: float = host.elapsed
+	host._physics_process(0.1)
+	check(host.elapsed > host_elapsed,"Partner simulation runs while guest menu is open")
+	guest.toggle_hud_pause()
+
 	var old_elapsed: float = guest.elapsed
 	guest._physics_process(0.5)
 	check(guest.elapsed == old_elapsed,"Guest cannot advance the shared simulation")
@@ -105,8 +127,12 @@ func run_tests() -> void:
 	host.xp = 3
 	host._physics_process(0.016)
 	exchange(host,guest,3)
-	check(host.choosing and "ВЕДУЩИЙ" in guest.coop.partner_label.text,"Team waits while the host selects an upgrade")
+	check(host.choosing and "ВЕДУЩИЙ" in guest.coop.partner_status(),"Team waits while the host selects an upgrade")
 	host.choose_upgrade(0)
+	host.run_pickups = 13
+	exchange(host,guest,3)
+	guest.update_hud()
+	check(guest.run_pickups == 13 and guest.ranks == host.ranks and "13" in guest.hud_panel.counters[1].text,"Guest HUD mirrors team pickups and acquired upgrade ranks")
 	var record: int = guest.best
 	host.score = 876
 	host.finish_run()

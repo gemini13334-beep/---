@@ -1,6 +1,6 @@
 extends Node
 
-const PROTOCOL := 1
+const PROTOCOL := 2
 const UPDATE_INTERVAL := 0.085
 const LINK_TIMEOUT := 3.5
 const ENEMY_ART := ["enemy","enemy_fast","enemy_armored","boss_overlord","boss_crystal","boss_inferno"]
@@ -34,6 +34,8 @@ var partner_attack := 0.0
 var objects: Dictionary = {}
 var targets: Dictionary = {}
 var shot_events: Array = []
+var shot_actors: Array[int] = []
+var hit_events: Array = []
 var lobby: VBoxContainer
 var status_label: Label
 var host_button: Button
@@ -41,8 +43,7 @@ var join_button: Button
 var devices: OptionButton
 var access_button: Button
 var settings_button: Button
-var exit_button: Button
-var partner_label: Label
+var host_choosing := false
 var notice := ""
 var last_status := ""
 
@@ -75,26 +76,6 @@ func configure(owner_arena, layer: CanvasLayer) -> void:
 	arena.menu_button(lobby,"НАЗАД",leave_lobby)
 	devices.item_selected.connect(func(_i: int): refresh_lobby())
 	lobby.hide()
-	exit_button = arena.menu_button(layer_control(layer),"ВЫЙТИ",leave_match)
-	exit_button.position = Vector2(533,207)
-	exit_button.custom_minimum_size = Vector2.ZERO
-	exit_button.size = Vector2(161,53)
-	exit_button.add_theme_font_size_override("font_size",20)
-	exit_button.hide()
-	partner_label = Label.new()
-	partner_label.position = Vector2(24,213)
-	partner_label.add_theme_font_size_override("font_size",22)
-	partner_label.add_theme_color_override("font_outline_color",Color("#132731"))
-	partner_label.add_theme_constant_override("outline_size",6)
-	layer.add_child(partner_label)
-	partner_label.hide()
-
-func layer_control(layer: CanvasLayer) -> Control:
-	var parent := Control.new()
-	parent.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	layer.add_child(parent)
-	return parent
-
 func open_lobby() -> void:
 	notice = ""
 	update_devices()
@@ -170,8 +151,6 @@ func shutdown() -> void:
 	closing_time = 0.0
 	clear_world()
 	lobby.hide()
-	exit_button.hide()
-	partner_label.hide()
 
 func _process(dt: float) -> void:
 	if link == null:
@@ -225,9 +204,12 @@ func _process(dt: float) -> void:
 		else:
 			var move: Vector2 = arena.movement_input()
 			transmit({"type":"input","move":[move.x,move.y]})
-	if hosting:
-		var state_text := "НАПАРНИК  %d / %d" % [maxi(0,int(partner_hp)),int(partner_max_hp)]
-		partner_label.text = state_text if arena.hp > 0.0 else "ВЫ ВЫБЫЛИ  ·  "+state_text
+
+func partner_status() -> String:
+	if not hosting and host_choosing:
+		return "ВЕДУЩИЙ ВЫБИРАЕТ УСИЛЕНИЕ"
+	var status := "НАПАРНИК  %d / %d" % [maxi(0,int(partner_hp)),int(partner_max_hp)]
+	return status if arena.hp > 0.0 else "ВЫ ВЫБЫЛИ  ·  "+status
 
 func transmit(data: Dictionary) -> bool:
 	return link != null and link.send(JSON.stringify(data))
@@ -266,6 +248,7 @@ func number(value: Variant) -> float:
 func start_match(peer_hero: int) -> void:
 	clear_world()
 	live = true
+	host_choosing = false
 	linking = false
 	frame_time = UPDATE_INTERVAL
 	silent_time = 0.0
@@ -279,16 +262,12 @@ func start_match(peer_hero: int) -> void:
 	partner = arena.model(SphereMesh.new(),Color(arena.PALETTE[partner_hero]),Vector3(1.6,0.5,0))
 	arena.attach_art(partner,arena.HERO_ART[partner_hero])
 	arena.add_contact_shadow(partner,1.9)
-	exit_button.show()
-	partner_label.show()
 
 func end_match(reason: String) -> void:
 	live = false
 	linking = false
 	closing_time = 0.4
 	clear_world()
-	exit_button.hide()
-	partner_label.hide()
 	arena.display_coop_result(reason)
 
 func finish_host() -> void:
@@ -304,6 +283,8 @@ func clear_world() -> void:
 	objects.clear()
 	targets.clear()
 	shot_events.clear()
+	shot_actors.clear()
+	hit_events.clear()
 
 func live_partner() -> MeshInstance3D:
 	return partner if live and hosting and partner_hp > 0.0 else null
@@ -327,7 +308,7 @@ func tick_partner(dt: float) -> void:
 	if partner_attack > 0.0:
 		return
 	var nearest: MeshInstance3D
-	var range_squared: float = pow(4.0+arena.level*0.3+arena.reach,2.0)
+	var range_squared: float = pow(arena.attack_distance(),2.0)
 	for enemy in arena.enemies:
 		var distance: float = peer.position.distance_squared_to(enemy.position)
 		if distance < range_squared:
@@ -335,26 +316,37 @@ func tick_partner(dt: float) -> void:
 			nearest = enemy
 	if nearest != null:
 		partner_attack = maxf(0.15,0.7-arena.power*0.08)
-		arena.shot_tracer(arena.shot_origin(peer),nearest.position+Vector3.UP*0.2)
-		arena.hit_enemy(nearest)
+		arena.fire_visual(peer,nearest.position+Vector3.UP*0.2)
+		arena.hit_enemy(nearest,peer)
 
 func damage_partner(position: Vector3, radius: float, amount: float) -> void:
 	var peer := live_partner()
 	if peer != null and peer.position.distance_squared_to(position) < radius*radius:
 		partner_hp = maxf(0.0,partner_hp-amount)
 		peer.visible = partner_hp > 0.0
+		if amount > 0.0:
+			if partner_hp > 0.0 or not arena.play_defeat(peer):
+				arena.show_actor_hit(peer,position)
 
-func record_shot(from: Vector3,to: Vector3) -> void:
+func record_shot(from: Vector3,to: Vector3,shooter: Node3D) -> void:
 	if live and hosting and shot_events.size() < 12:
 		shot_events.append([from.x,from.y,from.z,to.x,to.y,to.z])
+		shot_actors.append(0 if shooter == arena.hero else (1 if shooter == partner else -1))
+
+func record_hit(actor: Node3D,origin: Vector3,fatal: bool) -> void:
+	if live and hosting and hit_events.size() < 24:
+		hit_events.append([actor.get_instance_id(),fatal,origin.x,origin.z])
 
 func player_row(player: Node3D,hp: float,maximum: float) -> Array:
 	return [player.position.x,player.position.z,player.rotation.y,maxf(0,hp),maximum,player.scale.x]
 
 func send_world() -> void:
 	var actors: Array = []
+	var bosses: Dictionary = {}
 	for enemy in arena.enemies:
 		actors.append([enemy.get_instance_id(),enemy.get_meta("model_asset","enemy"),enemy.position.x,enemy.position.z,enemy.rotation.y,enemy.scale.x,enemy.has_meta("warning_ring")])
+		if enemy.get_meta("boss",false):
+			bosses[str(enemy.get_instance_id())] = [enemy.get_meta("health",1),enemy.get_meta("max_health",1)]
 	for crate in arena.crates:
 		actors.append([crate.get_instance_id(),"crate",crate.position.x,crate.position.z,0,1,false])
 	var gems := 0
@@ -367,11 +359,20 @@ func send_world() -> void:
 	if is_instance_valid(arena.vehicle) and not arena.vehicle.is_queued_for_deletion() and arena.vehicle.visible:
 		var vehicle: MeshInstance3D = arena.vehicle
 		actors.append([vehicle.get_instance_id(),arena.VEHICLES[arena.vehicle_kind],vehicle.position.x,vehicle.position.z,vehicle.rotation.y,1,false])
+	var upgrade_levels: Array[int] = []
+	for id in arena.ABILITIES.size():
+		upgrade_levels.append(int(arena.ranks.get(id,0)))
+	for id in arena.COMBINATIONS:
+		upgrade_levels.append(int(arena.ranks.get(id,0)))
 	if transmit({
 		"type":"state","players":[player_row(arena.hero,arena.hp,arena.max_hp),player_row(partner,partner_hp,partner_max_hp)],
 		"actors":actors,"shots":shot_events,"round":[arena.elapsed,arena.score,arena.level,arena.xp,arena.combo,arena.kills,arena.choosing],
+		"shot_actors":shot_actors,"hits":hit_events,
+		"hud":[arena.run_pickups,arena.damage,arena.reach,upgrade_levels],"bosses":bosses,
 	}):
 		shot_events.clear()
+		shot_actors.clear()
+		hit_events.clear()
 
 func apply_world(data: Dictionary) -> bool:
 	var players: Variant = data.get("players")
@@ -384,7 +385,14 @@ func apply_world(data: Dictionary) -> bool:
 			return false
 	update_player(partner,players[0])
 	update_player(arena.hero,players[1])
-	arena.hp = clampf(number(players[1][3]),0,20000)
+	var guest_health := clampf(number(players[1][3]),0,20000)
+	var host_health := clampf(number(players[0][3]),0,20000)
+	if guest_health < arena.hp and (guest_health > 0.0 or not arena.play_defeat(arena.hero)):
+		arena.show_actor_hit(arena.hero,arena.hero.position+arena.hero.transform.basis.z)
+	if host_health < partner_hp and (host_health > 0.0 or not arena.play_defeat(partner)):
+		arena.show_actor_hit(partner,partner.position+partner.transform.basis.z)
+	arena.hp = guest_health
+	partner_hp = host_health
 	arena.max_hp = clampf(number(players[1][4]),1,20000)
 	arena.elapsed = clampf(number(round_state[0]),0,86400)
 	arena.score = clampi(int(number(round_state[1])),0,1000000000)
@@ -392,21 +400,69 @@ func apply_world(data: Dictionary) -> bool:
 	arena.xp = clampi(int(number(round_state[3])),0,3000)
 	arena.combo = clampi(int(number(round_state[4])),0,20)
 	arena.kills = clampi(int(number(round_state[5])),0,1000000)
-	var host_health := maxi(0,int(clampf(number(players[0][3]),0,20000)))
-	partner_label.text = "НАПАРНИК  %d / %d" % [host_health,int(clampf(number(players[0][4]),1,20000))]
-	if round_state[6] == true:
-		partner_label.text = "ВЕДУЩИЙ ВЫБИРАЕТ УСИЛЕНИЕ"
-	elif arena.hp <= 0:
-		partner_label.text = "ВЫ ВЫБЫЛИ  ·  " + partner_label.text
+	host_choosing = round_state[6] == true
+	apply_hud(data.get("hud"))
+	# A defeated replica still exists until the actor list below is reconciled.
+	apply_hits(data.get("hits"))
 	sync_actors(actors)
-	var shots: Variant = data.get("shots")
-	if shots is Array and shots.size() <= 12:
-		for row in shots:
-			if row is Array and row.size() == 6:
-				arena.shot_tracer(
-					Vector3(clampf(number(row[0]),-28,28),clampf(number(row[1]),0,6),clampf(number(row[2]),-28,28)),
-					Vector3(clampf(number(row[3]),-28,28),clampf(number(row[4]),0,6),clampf(number(row[5]),-28,28)))
+	apply_boss_health(data.get("bosses"))
+	play_shots(data.get("shots"),data.get("shot_actors"))
 	return true
+
+func apply_boss_health(bosses: Variant) -> void:
+	if not bosses is Dictionary or bosses.size() > 3:
+		return
+	for key in bosses:
+		if not key is String or not key.is_valid_int():
+			continue
+		var actor := objects.get(key.to_int()) as MeshInstance3D
+		var values: Variant = bosses[key]
+		if actor == null or not str(actor.get_meta("model_asset","")).begins_with("boss_") or not values is Array or values.size() != 2:
+			continue
+		actor.set_meta("max_health",clampi(int(number(values[1])),1,1000))
+		actor.set_meta("health",clampi(int(number(values[0])),0,int(actor.get_meta("max_health"))))
+
+func apply_hud(data: Variant) -> void:
+	if not data is Array or data.size() != 4 or not data[3] is Array or data[3].size() != arena.ABILITIES.size()+arena.COMBINATIONS.size():
+		return
+	arena.run_pickups = clampi(int(number(data[0])),0,1000000)
+	arena.damage = clampi(int(number(data[1])),1,1000000)
+	arena.reach = clampf(number(data[2]),0,1000)
+	# Guest contact damage is calculated by the host without the host's personal armor.
+	arena.ranks.clear()
+	var rank_ids: Array = range(arena.ABILITIES.size())+arena.COMBINATIONS.keys()
+	for i in rank_ids.size():
+		var rank := clampi(int(number(data[3][i])),0,1000)
+		if rank > 0:
+			arena.ranks[rank_ids[i]] = rank
+
+func apply_hits(hits: Variant) -> void:
+	if not hits is Array or hits.size() > 24:
+		return
+	for row in hits:
+		if not row is Array or row.size() != 4 or not row[1] is bool:
+			continue
+		var id := int(clampf(number(row[0]),1,9007199254740991.0))
+		var actor := objects.get(id) as MeshInstance3D
+		if actor != null:
+			var origin := Vector3(clampf(number(row[2]),-24,24),0.5,clampf(number(row[3]),-24,24))
+			arena.show_actor_hit(actor,origin,row[1])
+
+func play_shots(shots: Variant, shooters: Variant) -> void:
+	if not shots is Array or shots.size() > 12:
+		return
+	var has_shooters: bool = shooters is Array and shooters.size() == shots.size()
+	for index in shots.size():
+		var row: Variant = shots[index]
+		if not row is Array or row.size() != 6:
+			continue
+		var from := Vector3(clampf(number(row[0]),-28,28),clampf(number(row[1]),0,6),clampf(number(row[2]),-28,28))
+		var to := Vector3(clampf(number(row[3]),-28,28),clampf(number(row[4]),0,6),clampf(number(row[5]),-28,28))
+		var role: Variant = shooters[index] if has_shooters else null
+		if role == 0 or role == 1:
+			arena.fire_visual(partner if role == 0 else arena.hero,to,from)
+		else:
+			arena.shot_tracer(from,to)
 
 func update_player(player: MeshInstance3D,row: Array) -> void:
 	var scale_factor := clampf(number(row[5]),0.5,3.0)

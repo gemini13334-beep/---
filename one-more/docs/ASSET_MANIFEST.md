@@ -1,10 +1,11 @@
 # Procedural asset manifest
 
-`tools/generate_assets.py` builds the scenery and calls `tools/combat_models.py` for characters and equipment. Every entry has editable Blender geometry and a runtime GLB. The GLB batches the static geometry by material, while the Blender source retains the separately named parts and modifiers. Godot uses the GLB scenes at runtime. The standalone Blender workflow produces 28 model pairs and renders a preview of every asset. The screenshot workflow also renders three galleries directly from the imported Godot scenes.
+`tools/generate_assets.py` builds the scenery and calls `tools/combat_models.py` and `tools/human_models.py` for actors and equipment. The Blender workflow exports 32 editable source files and runtime GLBs, plus 32 preview renders. Godot imports the GLBs and renders four galleries. The robot and vehicle GLBs batch surfaces by material at each movable joint.
 
 | Use | Model basenames |
 | --- | --- |
-| Heroes | hero, cyborg, inferno, ghost, titan, cryo |
+| Mechanical heroes | hero, cyborg, inferno, ghost, titan, cryo |
+| Operators | vega, fox, amber, north |
 | Enemies | enemy, enemy_fast, enemy_armored |
 | Bosses | boss_overlord, boss_crystal, boss_inferno |
 | Vehicles | buggy, hovercraft, tank, mech |
@@ -25,4 +26,6 @@ Generated for ONE MORE with OpenAI ImageGen in the November 2026 art pass. The i
 
 ## Character and equipment art
 
-The six heroes, three regular enemies, three bosses, four vehicles and supply case are original Blender models made for ONE MORE. The painted finishes, steel patina and wear maps are generated in the script and packed in the Blender and GLB files. No external model packs or plugins are required. Each hero includes a `ShotOrigin` marker for the solo and co-op firing visuals. The same model IDs are used by saves and cooperative replication.
+ONE MORE uses original geometry and generated materials. The six mechanical heroes export a `ShotOrigin` marker attached to a weapon pivot. Vega, Fox, Amber and North have an armature, a textured skinned mesh, a `Muzzle` bone and five keyframed clips for idle, running, firing, impact and falling. The models face Blender −Y and stand on Z=0.
+
+`assets/portraits/` contains ten original HUD portraits rendered directly from the Blender models. Regenerate them after model export with `blender -b -P one-more/tools/generate_assets.py -- --portraits`. Character paint, steel patina and wear textures are generated and packed into the model files. The original six hero IDs remain valid in profiles and cooperative messages.

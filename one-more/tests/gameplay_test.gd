@@ -36,9 +36,37 @@ func run_tests() -> void:
 	# Physics is advanced directly below, outside the real-time audio mixer.
 	scene.audio_enabled = false
 	scene.apply_settings()
+	check(scene.selected == scene.DEFAULT_HERO and scene.owned.has(scene.DEFAULT_HERO),"New profile begins with Vega unlocked and selected")
 	scene.start()
 	check(scene.running and scene.hp == scene.max_hp and scene.level == 1,"Start initializes run")
 	check(scene.crates.size() == 22,"Arena populated")
+	var hud = scene.hud_panel
+	var ui_input := InputEventScreenTouch.new()
+	ui_input.pressed = true
+	ui_input.position = Vector2(37,37)
+	scene._input(ui_input)
+	check(scene.finger == -1 and hud.blocks_at(ui_input.position),"HUD buttons do not capture the movement finger")
+	hud.task_toggle.button_pressed = false
+	check(not hud.tasks.visible and hud.radar_frame.position.y < 292,"Task toggle collapses the list and moves the minimap")
+	hud.task_toggle.button_pressed = true
+	var radar_position: Vector2 = hud.radar.project_point(Vector3(4,0,-5),Vector3.ZERO,23.0)
+	check(radar_position.x > 71.0 and radar_position.y < 71.0,"Minimap projects real arena positions")
+	hud.zoom_button.pressed.emit()
+	check(hud.radar.zoom and hud.zoom_button.text == "−","Minimap zoom changes through its button")
+	hud.range_button.button_pressed = true
+	hud.range_button.pressed.emit()
+	check(scene.range_marker.visible and is_equal_approx(scene.range_marker.scale.x,scene.attack_distance()),"Range control displays the real attack radius")
+	var before_pause: float = scene.elapsed
+	scene.toggle_hud_pause()
+	scene._physics_process(0.2)
+	check(scene.elapsed == before_pause and hud.overlay.visible and not scene.stick_base.visible,"Solo pause freezes simulation and clears movement")
+	scene.open_hud_settings()
+	check(scene.settings_panel.visible and not hud.visible,"Settings open over the current run")
+	scene.close_settings()
+	check(hud.visible and hud.overlay.visible and scene.running and scene.elapsed == before_pause,"Returning from settings restores the same paused run")
+	scene.toggle_hud_pause()
+	check(not hud.overlay.visible and scene.running,"Continue returns to combat")
+
 	var before: Vector3 = scene.hero.position
 	var touch := InputEventScreenTouch.new()
 	touch.pressed = true
@@ -58,19 +86,37 @@ func run_tests() -> void:
 	var old_score: int = scene.score
 	scene.hit_enemy(enemy)
 	check(scene.kills == 1 and scene.score > old_score,"Enemy defeat and scoring")
+	scene.drop_gem(scene.hero.position)
+	scene._physics_process(0.016)
+	scene.update_hud()
+	check(scene.run_pickups > 0 and str(scene.run_pickups) in hud.counters[1].text and str(scene.score) in hud.counters[0].text,"Score and collected shard counters use actual run events")
 	scene.xp = 3
 	scene._physics_process(0.016)
 	check(scene.level == 2 and scene.choosing and scene.offers.size() == 3,"Level up offers")
 	check(scene.offers[0] != scene.offers[1] and scene.offers[1] != scene.offers[2] and scene.offers[0] != scene.offers[2],"Distinct upgrade offers")
 	scene.choose_upgrade(0)
 	check(not scene.choosing and scene.ranks.size() > 0,"Upgrade selection")
+	scene.update_hud()
+	check(not hud.slots[0].disabled and hud.slots[1].disabled,"Only acquired ability slots are enabled")
+	hud.slots[0].pressed.emit()
+	check(scene.ABILITIES[hud.active_abilities[0]][1] in hud.status_text.text,"Ranked slot displays its real description")
 	for id in scene.ABILITIES.size():
 		scene.ranks[id] = 2
+	scene.ranks[100] = 1
+	scene.update_hud()
+	hud.page_button.pressed.emit()
+	check(hud.ability_page == 1 and hud.active_abilities[0] == 4,"Ability pages reveal acquired upgrades beyond the first four")
+	for i in 3:
+		hud.page_button.pressed.emit()
+	hud.slots[0].pressed.emit()
+	check(hud.active_abilities.has(100) and "ФОРСИРОВАННАЯ НОВА" in hud.status_text.text,"Combined upgrades can be inspected on the HUD")
 	scene.roll_offers()
 	check(scene.offer_buttons.all(func(button: Button) -> bool: return "РАНГ 3" in button.text),"Upgrade offers show the stored rank")
 	scene.elapsed = 45.0
 	scene._physics_process(0.016)
 	check(scene.boss_spawned,"Boss spawns")
+	scene.update_hud()
+	check(hud.boss_frame.visible and hud.boss_health.value > 0,"Boss health appears from the spawned boss")
 	var boss = scene.enemies.back()
 	scene.elapsed = float(boss.get_meta("next_pulse"))-0.5
 	scene.update_boss_attack(boss)
