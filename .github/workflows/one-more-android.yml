@@ -1,12 +1,16 @@
 name: ONE MORE Android APK
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/one-more-android.yml'
 concurrency:
   group: one-more-android-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -33,12 +37,28 @@ jobs:
           mkdir -p ~/.android ~/.config/godot
           keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
           printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/java_sdk_path = "%s"\nexport/android/android_sdk_path = "%s"\nexport/android/debug_keystore = "%s"\n' "$JAVA_HOME" "$ANDROID_HOME" "$HOME/.android/debug.keystore" > ~/.config/godot/editor_settings-4.4.tres
-      - name: Import and export
+      - name: Import Godot project
+        timeout-minutes: 8
         run: |
+          set -o pipefail
+          mkdir -p build-logs
           GODOT=/tmp/godot/Godot_v4.4.1-stable_linux.x86_64
-          "$GODOT" --headless --path one-more --editor --import
-          "$GODOT" --headless --path one-more --export-debug Android "$GITHUB_WORKSPACE/one-more.apk"
+          timeout 420 "$GODOT" --headless --path one-more --editor --import --quit 2>&1 | tee build-logs/import.log
+          if grep -E 'SCRIPT ERROR|Parse Error' build-logs/import.log; then exit 1; fi
+      - name: Export Android APK
+        timeout-minutes: 15
+        run: |
+          set -o pipefail
+          GODOT=/tmp/godot/Godot_v4.4.1-stable_linux.x86_64
+          timeout 840 "$GODOT" --headless --path one-more --export-debug Android "$GITHUB_WORKSPACE/one-more.apk" 2>&1 | tee build-logs/export.log
           test -s one-more.apk
+      - name: Preserve build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ONE-MORE-build-logs
+          path: build-logs/
+          if-no-files-found: warn
       - name: Verify Android 14 compatibility
         run: |
           set -euo pipefail
