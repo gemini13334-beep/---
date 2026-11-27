@@ -37,3 +37,17 @@ OpenAI ImageGen created an original atlas for the combat kit and 16 abilities. T
 ## Arena surfaces
 
 Four 512 × 512 albedo textures from an original OpenAI ImageGen material sheet cover broken asphalt, stratified sandstone, fractured glacial ice and cooled basalt. The arena shader blends rotated samples at two scales. The source atlas SHA-256 is `d6c17f6e419b4c3226f87bcee858b91f071afef6e36601ce127867923941ef6d`.
+
+## Third-party files used in the game
+
+The game ships selected files in `assets/vendor/` and loads them from the package. It requires no service, third-party addon, telemetry, or downloads at runtime. License texts are in `assets/vendor/licenses/`. `assets/vendor/SHA256SUMS` pins the files shipped here.
+
+| Author / source | Version and permissions | Integrated files |
+| --- | --- | --- |
+| Kenney Vleugels, [City Kit Industrial](https://opengameart.org/content/city-kit-industrial) | 2.0, CC0 1.0, archive SHA-256 `5b381164e5760f3830a2dbee43b972deee38b2a695d091b56e238ab2910c96d2` | Two factory buildings, a shipping container and a water tower. Blender embedded the atlas and normalized the pivots. The city layout uses them as scenery. |
+| Amal Kumar, [Concrete Road Barrier](https://polyhaven.com/a/concrete_road_barrier) | Poly Haven 1K release, 2023-08-18, CC0 1.0. Original glTF manifest MD5 `6d6feaf068f434e8dc163a1a9d983f4a`, original geometry MD5 `f256cb4d2bd9e5623b062502605dfcf2` | 2,300 triangles and embedded 512 px textures. Used for street barricades. |
+| Dario Barresi and Charlotte Baglioni, [Concrete Wall 008](https://polyhaven.com/a/concrete_wall_008) | Poly Haven 1K release, file revision `d77307121f21d7ce51b194dcc7456117afe03dd4`, CC0 1.0 | Diffuse, normal, and roughness maps resized to 512 px for factories and existing city ruins. |
+| Kenney Vleugels, [50 RPG sound effects](https://opengameart.org/content/50-rpg-sound-effects) | Author's CC0 1.0 archive, SHA-256 `3ae398ad63e293f9c450bda22d5d81c3af69c74df66fc1400f33c012c0bbc231` | Three metal impact and two pickup variations. Trimmed, capped, and converted to mono Vorbis for rapid combat events. |
+| The Exo 2 Project Authors, [Exo 2](https://github.com/google/fonts/tree/441734fe1262150806e3b8d2410fbd85ebf541eb/ofl/exo2) | Google Fonts Git commit `441734fe1262150806e3b8d2410fbd85ebf541eb`, SIL OFL 1.1 | Unmodified variable font used for the title and the Russian combat HUD. |
+
+The Poly Haven license declaration is at [polyhaven.com/license](https://polyhaven.com/license). The original geometry and the Kenney palette were imported as glTF data using Blender with automatic script execution disabled. `tools/prepare_external_models.py` reproduces the pivot normalization, embedded resources and mesh simplification from those inputs.

@@ -117,7 +117,7 @@ func ambient_loop() -> AudioStreamWAV:
 	wav.loop_end = count
 	return wav
 
-func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamWAV:
+func tone(freq: float, duration: float, kind: String) -> AudioStreamWAV:
 	var data := PackedByteArray()
 	var count := int(22050*duration)
 	data.resize(count*2)
@@ -149,6 +149,13 @@ func tone(freq: float, duration: float, kind: String = "pickup") -> AudioStreamW
 	wav.mix_rate = 22050
 	wav.data = data
 	return wav
+
+func sampled_sounds(streams: Array[AudioStream]) -> AudioStreamRandomizer:
+	var variations := AudioStreamRandomizer.new()
+	variations.playback_mode = AudioStreamRandomizer.PLAYBACK_RANDOM_NO_REPEATS
+	for stream in streams:
+		variations.add_stream(-1,stream)
+	return variations
 
 var fx_last: Dictionary = {}
 var fx_voices: Array[AudioStreamPlayer] = []
@@ -215,6 +222,8 @@ func rebuild_scenery() -> void:
 		place_forest_landmarks()
 	else:
 		place_biome_entry()
+	if biome == 1:
+		place_industrial_district()
 	var color := Color(["#74806f","#8da3ac","#dba576","#a4c8ea","#98737f"][biome])
 	var distant := Landscape.atmosphere_geometry(biome,ground_texture(),color)
 	add_child(distant)
@@ -270,8 +279,7 @@ func place_forest_landmarks() -> void:
 func place_biome_entry() -> void:
 	var layouts := [
 		[],
-		[["ruin",-4.8,-4.7,1.48],["city",4.3,-6.3,1.8],["city",-6.4,4.6,1.6],
-		 ["city",6.7,4.9,1.6],["ruin",10.7,-9.2,2.45],["ruin",-11.4,-10.8,2.35]],
+		[["ruin",-4.5,-3.2,1.05],["city",5.9,-3.0,1.34],["ruin",10.2,-9.2,2.05]],
 		[["desert",-4.9,-6.0,1.8],["desert",5.6,-6.0,2.4],["cactus",4.6,7.3,1.28],
 		 ["desert",-7.0,6.6,2.4],["desert",12.5,-12.6,2.7]],
 		[["ice_spire",5.5,-5.3,1.67],["ice",-6.7,-6.1,2.5],["ice_spire",-5.8,6.7,1.76],
@@ -283,6 +291,28 @@ func place_biome_entry() -> void:
 		var size := float(item[3])
 		place_landmark(item[0],Vector2(item[1],item[2]),Vector3(size*1.23,size,size),float(item[1])*0.27)
 
+const INDUSTRIAL_MODELS := ["building-a","building-r","shipping-container-b","water-tower","road-barrier"]
+const FACTORY_CONCRETE := preload("res://assets/vendor/materials/concrete-color.jpg")
+
+func place_industrial_district() -> void:
+	var layout := [
+		["building-a",Vector2(-6.4,-6.75),Vector3(2.6,2.2,2.45),0.09],
+		["building-r",Vector2(8.3,4.0),Vector3(2.45,2.28,2.2),-0.16],
+		["water-tower",Vector2(5.9,-7.75),Vector3(1.3,1.54,1.3),0.12],
+		["shipping-container-b",Vector2(-4.6,5.3),Vector3(3.3,3.0,3.65),1.18],
+		["road-barrier",Vector2(-2.3,-0.4),Vector3.ONE*1.12,1.39],
+		["road-barrier",Vector2(3.7,7.7),Vector3.ONE*1.1,0.82],
+	]
+	for depth in [-39.0,-27.0,-16.0,14.0,25.0,39.0]:
+		var axis: float = -depth*0.18
+		var orientation := 0.16
+		var offset := 5.9 if depth > 0.0 else -6.5
+		layout.append(["building-a" if depth > 0.0 else "building-r",Vector2(axis+offset,depth),Vector3.ONE*2.1,orientation])
+		layout.append(["shipping-container-b",Vector2(axis-offset*0.8,depth-2.9),Vector3.ONE*3.0,orientation])
+		layout.append(["road-barrier",Vector2(axis+offset*0.48,depth-1.45),Vector3.ONE,PI*0.45])
+	for item in layout:
+		place_landmark(item[0],item[1],item[2],item[3])
+
 func place_landmark(asset: String,point: Vector2,scale_factor: Vector3,rotation_y: float) -> void:
 	var fallback := SphereMesh.new()
 	fallback.height = 0.56
@@ -292,6 +322,9 @@ func place_landmark(asset: String,point: Vector2,scale_factor: Vector3,rotation_
 	if art != null:
 		if biome == 0 and asset in ["forest","rock","ruin"]:
 			forest_understory.dress_stone(art)
+		elif asset in INDUSTRIAL_MODELS:
+			if asset != "road-barrier":
+				dress_industrial_paint(art,asset)
 		elif biome > 0 and asset != "cactus":
 			dress_biome_stone(art)
 	prop.rotation.y = rotation_y
@@ -302,8 +335,33 @@ func place_landmark(asset: String,point: Vector2,scale_factor: Vector3,rotation_
 
 var landmark_materials: Dictionary = {}
 
+func dress_industrial_paint(art: Node3D,asset: String) -> void:
+	var geometries := art.find_children("*","MeshInstance3D",true,false)
+	if art is MeshInstance3D:
+		geometries.append(art)
+	for node in geometries:
+		var shape := node as MeshInstance3D
+		if shape.mesh == null:
+			continue
+		for index in shape.mesh.get_surface_count():
+			var source := shape.get_active_material(index) as StandardMaterial3D
+			if source == null or source.albedo_texture == null:
+				continue
+			var key := "%s:%s" % [asset,source.resource_name]
+			if not landmark_materials.has(key):
+				var finish := ShaderMaterial.new()
+				finish.shader = preload("res://shaders/industrial_finish.gdshader")
+				finish.set_shader_parameter("worn_concrete",FACTORY_CONCRETE)
+				finish.set_shader_parameter("palette",source.albedo_texture)
+				finish.set_shader_parameter("wear_amount",0.47 if asset == "shipping-container-b" else 0.63)
+				landmark_materials[key] = finish
+			shape.set_surface_override_material(index,landmark_materials[key])
+
 func dress_biome_stone(art: Node3D) -> void:
-	for node in art.find_children("*","MeshInstance3D",true,false):
+	var geometries := art.find_children("*","MeshInstance3D",true,false)
+	if art is MeshInstance3D:
+		geometries.append(art)
+	for node in geometries:
 		var shape := node as MeshInstance3D
 		if shape.mesh == null:
 			continue
@@ -313,11 +371,26 @@ func dress_biome_stone(art: Node3D) -> void:
 				continue
 			var key := "%d:%s" % [biome,original.resource_name]
 			if not landmark_materials.has(key):
-				var stone := ShaderMaterial.new()
-				stone.shader = preload("res://shaders/forest_stone.gdshader")
-				stone.set_shader_parameter("stone_surface",ground_texture())
-				stone.set_shader_parameter("tint",original.albedo_color.lerp(Color.WHITE,0.46))
-				landmark_materials[key] = stone
+				var tint := original.albedo_color.lerp(Color.WHITE,0.46)
+				if biome == 1:
+					var concrete := StandardMaterial3D.new()
+					concrete.albedo_color = tint
+					concrete.albedo_texture = FACTORY_CONCRETE
+					concrete.normal_enabled = true
+					concrete.normal_scale = 0.76
+					concrete.normal_texture = preload("res://assets/vendor/materials/concrete-normal.jpg")
+					concrete.roughness_texture = preload("res://assets/vendor/materials/concrete-roughness.jpg")
+					concrete.roughness_texture_channel = BaseMaterial3D.TEXTURE_CHANNEL_RED
+					concrete.uv1_triplanar = true
+					concrete.uv1_world_triplanar = true
+					concrete.uv1_scale = Vector3.ONE*0.44
+					landmark_materials[key] = concrete
+				else:
+					var stone := ShaderMaterial.new()
+					stone.shader = preload("res://shaders/forest_stone.gdshader")
+					stone.set_shader_parameter("stone_surface",ground_texture())
+					stone.set_shader_parameter("tint",tint)
+					landmark_materials[key] = stone
 			shape.set_surface_override_material(index,landmark_materials[key])
 
 
@@ -1373,7 +1446,8 @@ func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
 	if host.has_meta("actor_pose"):
 		host.remove_meta("actor_pose")
 	if not art_cache.has(asset):
-		var path := "res://assets/models/" + asset + ".glb"
+		var folder := "res://assets/vendor/models/" if asset in INDUSTRIAL_MODELS else "res://assets/models/"
+		var path := folder + asset + ".glb"
 		art_cache[asset] = load(path) as PackedScene if ResourceLoader.exists(path) else null
 	var packed := art_cache[asset] as PackedScene
 	if packed == null:
@@ -1594,7 +1668,19 @@ func _ready() -> void:
 		add_child(voice)
 		voice.volume_db = -12
 		fx_voices.append(voice)
-	sounds = {"hit":tone(180,0.09,"hit"),"pickup":tone(880,0.12,"pickup"),"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost"),"shot":tone(620,0.11,"shot"),"destroy":tone(95,0.32,"destroy"),"boss":tone(55,0.85,"boss")}
+	sounds = {
+		"hit":sampled_sounds([
+			preload("res://assets/vendor/audio/metalPot1.ogg"),
+			preload("res://assets/vendor/audio/metalPot2.ogg"),
+			preload("res://assets/vendor/audio/metalPot3.ogg"),
+		]),
+		"pickup":sampled_sounds([
+			preload("res://assets/vendor/audio/handleCoins.ogg"),
+			preload("res://assets/vendor/audio/handleCoins2.ogg"),
+		]),
+		"level":tone(520,0.35,"level"),"boost":tone(320,0.3,"boost"),
+		"shot":tone(620,0.11,"shot"),"destroy":tone(95,0.32,"destroy"),"boss":tone(55,0.85,"boss"),
+	}
 	ambient_player = AudioStreamPlayer.new()
 	add_child(ambient_player)
 	ambient_player.volume_db = -26.0

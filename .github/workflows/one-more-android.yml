@@ -66,7 +66,7 @@ jobs:
           GODOT=/tmp/godot/Godot_v4.4.1-stable_linux.x86_64
           timeout 420 "$GODOT" --headless --path one-more --editor --import --quit 2>&1 | tee build-logs/import.log
           if grep -E 'SCRIPT ERROR|Parse Error|Failed to load|Error importing' build-logs/import.log; then exit 1; fi
-          test "$(find one-more/.godot/imported -name '*.glb-*.scn' | wc -l)" -eq 32
+          test "$(find one-more/.godot/imported -name '*.glb-*.scn' | wc -l)" -eq 37
       - name: Export Android APK
         timeout-minutes: 15
         run: |

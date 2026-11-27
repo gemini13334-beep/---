@@ -224,6 +224,12 @@ var touch_blocks: Array[Control] = []
 func configure(owner_arena) -> void:
 	arena = owner_arena
 	size = Vector2(720,1280)
+	var typeface := FontVariation.new()
+	typeface.base_font = preload("res://assets/vendor/fonts/Exo2-Variable.ttf")
+	typeface.fallbacks = [ThemeDB.fallback_font]
+	var hud_colors := Theme.new()
+	hud_colors.default_font = typeface
+	theme = hud_colors
 	mouse_filter = MOUSE_FILTER_IGNORE
 	var top := plate(self,Rect2(12,12,696,52),STEEL,13)
 	button(top,Rect2(2,2,58,48),"Ⅱ","Меню забега",arena.toggle_hud_pause)

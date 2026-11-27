@@ -323,6 +323,13 @@ func capture() -> void:
 		var task_panel: Rect2 = arena.hud_panel.tasks.get_global_rect()
 		check_animation(not notice.intersects(score_panel) and not notice.intersects(task_panel),"A run notification overlaps another HUD readout")
 		await shot(str(arena.BIOMES[map_id]).to_lower(),arena.hud_panel)
+		if map_id == 1:
+			arena.hero.position = arena.grounded(Vector3(-1.5,0,-5.0))
+			arena.camera.position = arena.hero.position+arena.COMBAT_CAMERA_OFFSET
+			arena.camera.look_at(arena.hero.position)
+			arena.camera.size = 21.5
+			arena.update_hud()
+			await shot("city-district",arena.hud_panel)
 		if map_id == 3:
 			await record_boss_motion(boss)
 		arena.clear_touch()

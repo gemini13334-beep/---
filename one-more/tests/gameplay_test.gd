@@ -34,6 +34,13 @@ func run_tests() -> void:
 	scene.load_settings()
 	check(is_equal_approx(float(scene.advanced["sensitivity"]),1.5),"Sensitivity persistence")
 	check(scene.fx_volume("shot") <= -79.0,"Weapon channel mute")
+	var hits := scene.sounds["hit"] as AudioStreamRandomizer
+	var pickups := scene.sounds["pickup"] as AudioStreamRandomizer
+	check(hits != null and hits.get_streams_count() == 3 and pickups != null and pickups.get_streams_count() == 2,
+		"The live sound table selects bundled hit and pickup variations")
+	var interface_font: Font = scene.hud_panel.theme.default_font
+	check(interface_font.has_char("Я".unicode_at(0)) and interface_font.has_char("Ё".unicode_at(0)),
+		"The bundled interface font supports Russian glyphs")
 	scene.reset_settings()
 	# Physics is advanced directly below, outside the real-time audio mixer.
 	scene.audio_enabled = false
@@ -194,6 +201,20 @@ func run_tests() -> void:
 	scene.load_profile()
 	check(scene.best == 777 and scene.gate_wins[0] == 0 and scene.hunter_stats[1] == 0 and scene.selected == 0,"Legacy profile keeps its score and defaults missing sections")
 	check_boundaries(scene)
+	scene.set_biome(1)
+	var scenery_ids := {}
+	var weathered_factory := false
+	for prop in scene.scenery:
+		if prop.has_meta("model_asset") and prop is MeshInstance3D and prop.mesh == null:
+			var asset: String = prop.get_meta("model_asset")
+			scenery_ids[asset] = true
+			if asset == "building-a":
+				for shape in prop.find_children("*","MeshInstance3D",true,false):
+					var finish := shape.get_active_material(0) as ShaderMaterial
+					weathered_factory = weathered_factory or (finish != null and finish.get_shader_parameter("worn_concrete") != null)
+	check(weathered_factory,"The city factories use the bundled concrete texture in the weathering shader")
+	check(scene.INDUSTRIAL_MODELS.all(func(asset: String) -> bool: return scenery_ids.has(asset)),
+		"The city displays all five imported industrial models")
 	scene.queue_free()
 	await process_frame
 	print("Gameplay tests: ",failures.size()," failures")

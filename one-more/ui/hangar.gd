@@ -19,7 +19,8 @@ func _ready() -> void:
 	size = PORTRAIT
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	display_font = FontVariation.new()
-	display_font.base_font = ThemeDB.fallback_font
+	display_font.base_font = preload("res://assets/vendor/fonts/Exo2-Variable.ttf")
+	display_font.fallbacks = [ThemeDB.fallback_font]
 	display_font.variation_embolden = 0.45
 	display_font.variation_transform = Transform2D(Vector2(1,0),Vector2(-0.12,1),Vector2.ZERO)
 	var artwork := TextureRect.new()
