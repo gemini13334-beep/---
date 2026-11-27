@@ -312,6 +312,17 @@ func capture() -> void:
 	arena.open_fusion()
 	arena.hud_panel.select_fusion(110)
 	await shot("fusion",arena.hud_panel.fusion_overlay)
+	arena.hud_panel.select_fusion(119)
+	var catalog: ScrollContainer = arena.hud_panel.fusion_list
+	var last_card: Control = arena.hud_panel.fusion_cards[119]["plate"]
+	for page in 3:
+		click(arena.hud_panel.fusion_modal.get_global_rect().position+Vector2(449,543))
+		await process_frame
+	await shot("fusion-catalog",arena.hud_panel.fusion_overlay)
+	check_animation(catalog.scroll_vertical > 0 and catalog.get_global_rect().encloses(last_card.get_global_rect()),
+		"The tenth recipe fits inside the scroll viewport")
+	catalog.scroll_vertical = 0
+	arena.hud_panel.select_fusion(110)
 	arena.hud_panel.fusion_confirm.pressed.emit()
 	check_animation(arena.ranks.has(110) and arena.credits == 350,"The synthesis menu did not complete the on-screen recipe")
 	await shot("fusion-result",arena.hud_panel)

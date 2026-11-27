@@ -333,9 +333,22 @@ func check_fusion(scene) -> void:
 	scene.open_fusion()
 	scene.hud_panel.select_fusion(110)
 	check(scene.hud_panel.fusion_confirm.disabled and not scene.buy_fusion(110).is_empty() and scene.credits == 450,
-		"A finished recipe cannot be purchased twice in one run")
+		"A repeat purchase requires fresh component ranks")
 	scene.close_fusion()
+	scene.roll_offers()
+	check(scene.offers[0] == 13,"Missing components of owned fusions are still offered")
+	scene.choosing = true
+	scene.choose_upgrade(0)
+	scene.open_fusion()
+	check(scene.hud_panel.selected_recipe == 110 and "ПОВЫСИТЬ РАНГ" in scene.hud_panel.fusion_confirm.text,
+		"The selected fusion can be upgraded in the HUD")
+	scene.hud_panel.fusion_confirm.pressed.emit()
+	check(scene.ranks.get(110) == 2 and scene.credits == 150 and not scene.ranks.has(10) and not scene.ranks.has(13),
+		"A repeat purchase charges once and consumes one rank of each component")
+	check(scene.damage == before_damage+10 and scene.blast == 6 and scene.power == 4,
+		"The second rank stacks its bonuses on top of the first")
 
+	scene.credits = 450
 	for id in [11,14,15]:
 		scene.choosing = true
 		scene.offers.assign([id])
@@ -349,6 +362,16 @@ func check_fusion(scene) -> void:
 		"The defensive result increases health and regeneration without breaking the health cap")
 	scene.start(false)
 	check(not scene.hud_fusing and scene.ranks.is_empty() and scene.credits == 0,"A fresh run clears fused abilities and keeps the wallet balance")
+	check(scene.FUSION_RECIPES.size() == 10 and scene.hud_panel.fusion_cards.size() == 10
+		and scene.hud_panel.fusion_list is ScrollContainer,"Ten recipes fit in the scrolling synthesis catalog")
+	var first_max: float = scene.max_hp
+	scene.credits = 980
+	for id in [10,14,15]:
+		scene.ranks[id] = 2
+	scene.open_fusion()
+	check(scene.buy_fusion(119).is_empty() and scene.buy_fusion(119).is_empty()
+		and scene.ranks.get(119) == 2 and scene.credits == 0 and scene.max_hp == first_max+120.0,
+		"The final three-component recipe stacks two ranks and their health bonuses")
 
 
 func check_enemy_escalation(scene) -> void:

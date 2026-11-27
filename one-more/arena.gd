@@ -71,15 +71,53 @@ const COMBINATIONS := {
 const FUSION_RECIPES := {
 	110: {
 		"name":"БУРЯ ЯДРА", "ingredients":[10,13], "credits":300, "art":10,
-		"bonus":"+3 урона, сильнее взрыв, быстрее автоогонь",
+		"bonus":"+3 урона, +2 к взрыву, +1 к автоогню",
+		"stats":{"damage":3,"blast":2,"power":1},
 	},
 	111: {
 		"name":"СИНГУЛЯРНОСТЬ", "ingredients":[11,12], "credits":350, "art":12,
 		"bonus":"+2,4 дальности, +2,1 магнит, +1,25 скорости",
+		"stats":{"reach":2.4,"magnet":2.1,"speed":1.25},
 	},
 	112: {
 		"name":"ЯДРО ВОЗРОЖДЕНИЯ", "ingredients":[14,15,11], "credits":450, "art":15,
 		"bonus":"+65 здоровья, +2 ОЗ/с, до +16 п.п. брони",
+		"stats":{"health":65.0,"regen":2.0,"armor":0.16},
+	},
+	113: {
+		"name":"ГРОМОВОЙ ФЕНИКС", "ingredients":[10,14], "credits":320, "art":14,
+		"bonus":"+2 урона, +1 к взрыву, +1,5 ОЗ/с",
+		"stats":{"damage":2,"blast":1,"regen":1.5},
+	},
+	114: {
+		"name":"НЕПРОБИВАЕМЫЙ ФАНТОМ", "ingredients":[11,15], "credits":330, "art":11,
+		"bonus":"+40 здоровья, +1 скорости, до +12 п.п. брони",
+		"stats":{"health":40.0,"speed":1.0,"armor":0.12},
+	},
+	115: {
+		"name":"ГРАВИТАЦИОННЫЙ ШТОРМ", "ingredients":[10,12], "credits":340, "art":2,
+		"bonus":"+2 урона, +2 к взрыву, +1,8 к магниту",
+		"stats":{"damage":2,"blast":2,"magnet":1.8},
+	},
+	116: {
+		"name":"КРОВАВЫЙ ФОРСАЖ", "ingredients":[13,14], "credits":340, "art":13,
+		"bonus":"+2 урона, +2 к автоогню, +1 ОЗ/с",
+		"stats":{"damage":2,"power":2,"regen":1.0},
+	},
+	117: {
+		"name":"ВЕКТОР ТИТАНА", "ingredients":[12,15], "credits":360, "art":8,
+		"bonus":"+45 здоровья, +2 дальности, +1,5 к магниту",
+		"stats":{"health":45.0,"reach":2.0,"magnet":1.5},
+	},
+	118: {
+		"name":"ТЕНЬ АВАНГАРДА", "ingredients":[11,12,13], "credits":470, "art":1,
+		"bonus":"+2 урона, +2 дальности, +1,7 скорости",
+		"stats":{"damage":2,"reach":2.0,"speed":1.7},
+	},
+	119: {
+		"name":"КОЛОСС ПЛАМЕНИ", "ingredients":[10,14,15], "credits":490, "art":3,
+		"bonus":"+60 здоровья, +3 к взрыву, +1,25 ОЗ/с",
+		"stats":{"health":60.0,"blast":3,"regen":1.25},
 	},
 }
 var fusion_target := -1
@@ -98,7 +136,7 @@ func can_open_fusion() -> bool:
 
 func missing_fusion_ingredients(id: int) -> Array[int]:
 	var missing: Array[int] = []
-	if FUSION_RECIPES.has(id) and not ranks.has(id):
+	if FUSION_RECIPES.has(id):
 		for ingredient in FUSION_RECIPES[id]["ingredients"]:
 			if int(ranks.get(ingredient,0)) <= 0:
 				missing.append(ingredient)
@@ -107,8 +145,6 @@ func missing_fusion_ingredients(id: int) -> Array[int]:
 func fusion_issue(id: int) -> String:
 	if not FUSION_RECIPES.has(id):
 		return "Рецепт недоступен"
-	if ranks.has(id):
-		return "Уже создано в этом забеге"
 	var recipe: Dictionary = FUSION_RECIPES[id]
 	var missing := PackedStringArray()
 	for ingredient in missing_fusion_ingredients(id):
@@ -131,29 +167,27 @@ func buy_fusion(id: int) -> String:
 		return "Не удалось сохранить покупку"
 	credits = remaining
 	# The new ability inherits the effects already applied by the spent ranks.
-	# Apply the extra power once, without replaying healing or losing capped stats.
+	# Add the synthesis bonus once per purchased rank.
 	for ingredient in recipe["ingredients"]:
 		var count := int(ranks[ingredient])-1
 		if count == 0:
 			ranks.erase(ingredient)
 		else:
 			ranks[ingredient] = count
-	ranks[id] = 1
-	match id:
-		110:
-			damage += 3
-			blast += 2
-			power += 1
-		111:
-			reach += 2.4
-			magnet += 2.1
-			speed_bonus += 1.25
-		112:
-			max_hp += 65.0
-			hp = minf(max_hp,hp+65.0)
-			regen += 2.0
-			armor = minf(0.65,armor+0.16)
-	event_label.text = "СИНТЕЗ · "+recipe["name"]
+	ranks[id] = int(ranks.get(id,0))+1
+	var stats: Dictionary = recipe["stats"]
+	damage += int(stats.get("damage",0))
+	blast += int(stats.get("blast",0))
+	power += int(stats.get("power",0))
+	reach += float(stats.get("reach",0))
+	magnet += float(stats.get("magnet",0))
+	speed_bonus += float(stats.get("speed",0))
+	regen += float(stats.get("regen",0))
+	armor = minf(0.65,armor+float(stats.get("armor",0)))
+	var health_bonus := float(stats.get("health",0))
+	max_hp += health_bonus
+	hp = minf(max_hp,hp+health_bonus)
+	event_label.text = "%s · РАНГ %d" % [recipe["name"],ranks[id]]
 	play_fx("level")
 	var glow := Color(ShotStyles.STYLES[id][ShotStyles.HALO])
 	pulse(hero.position,3.0,glow)

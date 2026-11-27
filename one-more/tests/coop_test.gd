@@ -158,6 +158,16 @@ func run_tests() -> void:
 	exchange(host,guest,3)
 	check(host.credits == 0 and guest.credits == guest_credits and guest.ranks.has(111) and not guest.ranks.has(11) and not guest.ranks.has(12) and is_equal_approx(guest.reach,host.reach),
 		"The guest receives the fused ability and its actual range without a charge")
+	var host_reach: float = host.reach
+	host.credits = 350
+	host.ranks[11] = 1
+	host.ranks[12] = 1
+	host.open_fusion()
+	check(host.buy_fusion(111).is_empty(),"The host can upgrade an owned synthesis")
+	host.close_fusion()
+	exchange(host,guest,3)
+	check(guest.ranks.get(111) == 2 and is_equal_approx(guest.reach,host_reach+2.4) and guest.credits == guest_credits,
+		"The guest receives the second synthesis rank and the stacked range")
 	host.level = 4
 	exchange(host,guest,3)
 	guest.update_hud()

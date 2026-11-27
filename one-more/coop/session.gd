@@ -2,7 +2,7 @@ extends Node
 
 const Landscape = preload("res://landscape.gd")
 const ShotStyles = preload("res://shot_styles.gd")
-const PROTOCOL := 5
+const PROTOCOL := 6
 const UPDATE_INTERVAL := 0.085
 const LINK_TIMEOUT := 3.5
 const ENEMY_ART := ["enemy","enemy_fast","enemy_armored","boss_overlord","boss_crystal","boss_inferno"]

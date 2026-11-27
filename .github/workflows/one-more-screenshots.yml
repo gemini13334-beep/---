@@ -53,7 +53,7 @@ jobs:
           if grep -E 'SCRIPT ERROR|Parse Error|Failed to load|Error importing|Shader compilation failed' screenshot-import.log; then exit 1; fi
           if grep -E 'SCRIPT ERROR|Parse Error|^ERROR:' screenshot-capture.log screenshot-phone.log screenshot-animated-coop.log; then exit 1; fi
           python3 one-more/tools/make_animation_previews.py "$RUNNER_TEMP/screenshots"
-          for frame in menu coop-lobby gameplay hud-minimap hud-pause forest-ruins upgrade fusion fusion-result collection hero-slime hero-cyborg hero-inferno hero-ghost hero-titan hero-cryo hero-vega hero-fox hero-amber hero-north awakening quests gates settings settings-video settings-audio city city-district city-edge desert desert-edge ice ice-edge volcano volcano-edge models-heroes models-enemies models-equipment models-operators forest-outer city-outer desert-outer ice-outer volcano-outer weapon-10 weapon-110 weapon-111 weapon-112 phone-menu phone-fullscreen; do
+          for frame in menu coop-lobby gameplay hud-minimap hud-pause forest-ruins upgrade fusion fusion-catalog fusion-result collection hero-slime hero-cyborg hero-inferno hero-ghost hero-titan hero-cryo hero-vega hero-fox hero-amber hero-north awakening quests gates settings settings-video settings-audio city city-district city-edge desert desert-edge ice ice-edge volcano volcano-edge models-heroes models-enemies models-equipment models-operators forest-outer city-outer desert-outer ice-outer volcano-outer weapon-10 weapon-110 weapon-111 weapon-112 phone-menu phone-fullscreen; do
             test -s "$RUNNER_TEMP/screenshots/$frame.png"
           done
       - uses: actions/upload-artifact@v4

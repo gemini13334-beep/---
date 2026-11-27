@@ -28,6 +28,13 @@ const STYLES := {
 	110: ["#fff4b9","#ff651f",Form.BURST,1.45],
 	111: ["#f0ddff","#a23fff",Form.HELIX,1.16],
 	112: ["#c4ffe5","#53cbc3",Form.NOVA,0.93],
+	113: ["#ffedb6","#ad73ff",Form.FORK,1.28],
+	114: ["#f1e7ff","#8065e2",Form.NOVA,0.98],
+	115: ["#c2f0ff","#485ae8",Form.HELIX,1.24],
+	116: ["#ffd6bc","#e73c30",Form.BURST,1.02],
+	117: ["#d4ffd1","#779f50",Form.LANCE,1.35],
+	118: ["#cfedf4","#897be4",Form.PAIR,0.80],
+	119: ["#fff2c1","#fe8831",Form.NOVA,1.42],
 }
 
 static func validated(id: int) -> int:
