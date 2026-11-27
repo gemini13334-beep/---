@@ -342,12 +342,12 @@ def render_portraits():
    lamp.data.size=span*.8
    lamp.rotation_euler=(center-lamp.location).to_track_quat('-Z','Y').to_euler()
   scene.render.engine="CYCLES"
-  scene.cycles.samples=32
+  scene.cycles.samples=64 if human else 32
   scene.cycles.use_denoising=False
   scene.render.film_transparent=True
   scene.view_settings.exposure=-1.45
-  scene.render.resolution_x=128
-  scene.render.resolution_y=128
+  scene.render.resolution_x=192 if human else 128
+  scene.render.resolution_y=scene.render.resolution_x
   scene.render.resolution_percentage=100
   scene.render.image_settings.file_format="PNG"
   scene.render.image_settings.color_mode="RGBA"

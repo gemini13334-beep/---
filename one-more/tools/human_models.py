@@ -1,5 +1,6 @@
 """Original reference-inspired operators and their mobile rigs."""
-from math import atan2, cos, pi, sin, sqrt, tau
+from functools import lru_cache
+from math import atan2, cos, exp, pi, sin, sqrt, tau
 from pathlib import Path
 
 import bpy
@@ -9,7 +10,7 @@ from combat_models import lens, material, mesh, shaft, shell, slab
 
 
 OPERATORS = {
-    "vega": ("Vega", (.72, .73, .77), (.71, .23, .047), (.059, .077, .108), 1.0, True),
+    "vega": ("Vega", (.38, .42, .49), (.62, .213, .067), (.072, .093, .127), 1.0, True),
     "fox": ("Fox", (.115, .043, .023), (.48, .12, .056), (.106, .091, .054), 1.0, True),
     "amber": ("Amber", (.079, .047, .034), (.73, .29, .038), (.067, .080, .083), 1.12, False),
     "north": ("North", (.108, .054, .028), (.27, .039, .048), (.109, .116, .080), 1.10, False),
@@ -22,6 +23,41 @@ def taper(name, rings, paint):
     for face in list(obj.data.polygons)[1:-1]:
         face.use_smooth = True
     return obj
+
+
+def sleeve(name, start, end, profile, paint):
+    """Smooth cross-sections perpendicular to the arm, with elbow and cuff folds."""
+    start, end = Vector(start), Vector(end)
+    axis = (end-start).normalized()
+    width = axis.cross(Vector((1,0,0))).normalized()
+    depth = axis.cross(width)
+    vertices = [start.lerp(end,t)+rx*u*width+ry*v*depth for t,rx,ry in profile for u,v in ROUND]
+    sides = len(ROUND)
+    faces = [tuple(reversed(range(sides)))]
+    for offset in range(0,len(vertices)-sides,sides):
+        for i in range(sides):
+            a, b = offset+i, offset+(i+1)%sides
+            faces.append((a,b,b+sides,a+sides))
+    faces.append(tuple(range(len(vertices)-sides,len(vertices))))
+    obj = mesh(name,vertices,faces,paint)
+    for face in list(obj.data.polygons)[1:-1]:
+        face.use_smooth = True
+    return obj
+
+
+@lru_cache(maxsize=1)
+def face_topology():
+    points, texcoords, faces = [], [], []
+    source = Path(__file__).parent / "model_source" / "operator_head.obj"
+    for line in source.read_text().splitlines():
+        kind, *values = line.split()
+        if kind == "v":
+            points.append(tuple(map(float,values)))
+        elif kind == "vt":
+            texcoords.append(tuple(map(float,values)))
+        elif kind == "f":
+            faces.append(tuple(tuple(int(index)-1 for index in corner.split("/")) for corner in values))
+    return points, texcoords, faces
 
 
 def strand(name, points, paint):
@@ -61,20 +97,22 @@ def strand(name, points, paint):
 
 
 def paint_set(key, hair, accent, uniform):
-    tint = (.51, .27, .17) if key == "north" else (.69, .38, .26)
+    tint = {"vega": (.57,.32,.235), "fox": (.62,.337,.215),
+            "amber": (.48,.267,.163), "north": (.39,.21,.128)}[key]
     return {
         "fabric": material("Ripstop jumpsuit", uniform, 0, .90),
         "elastic": material("Graphite webbing", (.036,.043,.048), 0, .78),
-        "armor": material("Satin titanium", (.19,.215,.242), .68, .36),
+        "armor": material("Matte composite inserts", (.108,.130,.148), .28, .63),
         "edge": material("Brushed buckles", (.36,.40,.42), .62, .32),
         "accent": material("Dyed scarf and ceramic accents", accent, .08, .64),
         "signal": material("Status lamps", (1.0,.37,.056), .12, .32, 1.5),
-        "skin": material("Warm skin", tint, 0.0, .57),
-        "lips": material("Lip and ear tint", (.39,.133,.102), 0, .72),
+        "skin": material("Warm skin", tint, 0.0, .65),
+        "lips": material("Lip tint", (tint[0]*.74,tint[1]*.57,tint[2]*.65), 0, .68),
+        "beard": material("Dark beard stubble", (.12,.071,.051), 0, .82),
         "hair": material("Hair base", hair, .04, .60),
-        "strands": material("Hair strands", tuple(min(.92,c*1.27+.017) for c in hair), 0, .47),
-        "eyes": material("Cool blue iris", (.10,.29,.46), .04, .32),
-        "white": material("Eye whites", (.76,.74,.68), 0, .61),
+        "strands": material("Hair strands", tuple(min(.92,c*1.14+.011) for c in hair), 0, .59),
+        "eyes": material("Iris", (.084,.182,.22) if key in ("vega","amber") else (.095,.103,.039), 0, .32),
+        "white": material("Sclera", (.52,.49,.45), 0, .51),
         "black": material("Pupils and lining", (.011,.018,.025), 0, .7),
     }
 
@@ -85,10 +123,14 @@ class Operator:
         self.name,hair,accent,uniform,self.width,self.ponytail = OPERATORS[key]
         self.paint = paint_set(key,hair,accent,uniform)
         self.pieces = []
+        self.blends = {}
 
     def add(self, bone, obj):
         self.pieces.append((bone,obj))
         return obj
+
+    def blend(self, obj, secondary, center, axis, half_width):
+        self.blends[obj] = (secondary,Vector(center),Vector(axis).normalized(),half_width)
 
     def make_rig(self):
         data = bpy.data.armatures.new(self.name+" joints")
@@ -138,22 +180,28 @@ class Operator:
     def gear(self):
         p = self.paint
         w = self.width
-        for name,bone,rings,tint in [
-            ("Fitted utility trousers","Hips",[(.79,.136*w,.100,0,.004),(.89,.179*w,.124,0,.014),(1.01,.150*w,.102,0,0)],"fabric"),
-            ("Woven underlayer","Torso",[(.97,.141*w,.097,0,0),(1.07,.139*w,.094,0,.005),(1.22,.181*w,.112,0,.009),(1.37,.215*w,.108,0,.015),(1.439,.106*w,.080,0,.019)],"fabric"),
-            ("Collar scarf low fold","Torso",[(1.383,.117*w,.100,0,.004),(1.413,.141*w,.112,0,.001),(1.46,.119*w,.092,0,.010)],"accent"),
-            ("Utility webbing","Hips",[(.945,.161*w,.113,0,.006),(.999,.154*w,.109,0,.005)],"elastic"),
-        ]:
-            self.add(bone,taper(name,rings,p[tint]))
-        self.add("Head",shaft("Neck",(0,.012,1.42),(0,.009,1.519),.057,p["skin"],.054,16))
-        self.add("Torso",taper("Armored sternum",[(1.12,.081,.021,0,-.105),(1.20,.146*w,.033,0,-.101),(1.33,.172*w,.041,0,-.098),(1.378,.121*w,.025,0,-.086)],p["armor"]))
-        for z,width in [(1.078,.074),(1.108,.087),(1.140,.082)]:
-            self.add("Torso",taper("Quilted chest liner",[(z-.017,width*w,.015,0,-.107),(z+.012,width*w,.016,0,-.106)],p["elastic"]))
-        self.add("Torso",slab("Shoulder-tape ID",(0,-.142,1.297),(.027,.006,.007),p["accent"],.003))
-        self.add("Hips",slab("Adjustable buckle",(0,-.119,.971),(.044,.015,.026),p["edge"],.005))
-        self.add("Hips",slab("Buckle center",(0,-.135,.971),(.026,.004,.013),p["elastic"],.003))
-        self.add("Torso",strand("Draped scarf corner",[
-            ((.076,-.083,1.437),.049),((.101,-.121,1.379),.059),((.063,-.148,1.326),.026),
+        waist = .132 if self.ponytail else .147
+        jacket = self.add("Hips",taper("Fitted field jacket and seat",[
+            (.798,.147*w,.108,0,.012),(.850,.171*w,.116,0,.017),(.917,.168*w,.111,0,.014),
+            (.965,.157*w,.109,0,.010),(1.014,(waist+.01)*w,.104,0,.009),
+            (1.060,waist*w,.097,0,.011),(1.101,(waist+.006)*w,.099,0,.008),
+            (1.151,.164*w,.111,0,.005),(1.218,.179*w,.127,0,.003),(1.290,.191*w,.123,0,.008),
+            (1.347,.207*w,.105,0,.014),(1.382,.187*w,.093,0,.017),
+            (1.410,.136*w,.078,0,.015),(1.435,.081*w,.058,0,.022),
+        ],p["fabric"]))
+        self.blend(jacket,"Torso",(0,0,1.061),(0,0,1),.073)
+        self.add("Torso",taper("Folded scarf wrap",[
+            (1.374,.097*w,.086,.007,-.009),(1.396,.107*w,.093,.005,-.010),
+            (1.410,.093*w,.085,.002,-.003),(1.424,.104*w,.085,0,.001),
+            (1.445,.089*w,.073,-.001,.009),(1.457,.080*w,.067,-.003,.015),
+        ],p["accent"]))
+        self.add("Hips",taper("Webbing belt",[
+            (.947,.160*w,.112,0,.008),(.956,.162*w,.116,0,.008),(.988,.157*w,.114,0,.008),(.995,.155*w,.109,0,.008),
+        ],p["elastic"]))
+        self.add("Hips",slab("Adjustable buckle",(.008,-.111,.970),(.033,.012,.018),p["edge"],.007))
+        self.add("Torso",strand("Scarf tail",[
+            ((.056,-.070,1.434),.030),((.094,-.092,1.395),.036),((.102,-.125,1.350),.028),
+            ((.076,-.136,1.310 if self.key == "north" else 1.330),.008),
         ],p["accent"]))
         if self.key in ("amber","north"):
             self.add("Torso",slab("Field pack",(0,.139,1.221),(.152*w,.063,.178),p["fabric"],.024))
@@ -166,85 +214,137 @@ class Operator:
             knee = sign*.122*w
             foot = sign*.137*w
             wrist = sign*.238*w
-            self.add("Torso",slab("Shoulder harness",(sign*.118*w,-.103,1.274),(.026,.024,.132),p["elastic"],.008))
-            self.add("Torso",slab("Harness cam buckle",(sign*.119*w,-.134,1.313),(.026,.009,.020),p["edge"],.004))
-            self.add("Hips",slab("Field utility pouch",(sign*.162*w,-.016,.94),(.046,.071,.075),p["fabric"],.012))
-            self.add("Hips",slab("Pouch flap",(sign*.168*w,-.080,.966),(.043,.013,.039),p["elastic"],.009))
-            self.add("Hips",slab("Pouch stud",(sign*.169*w,-.096,.945),(.013,.005,.010),p["edge"],.003))
-            self.add("Upper"+side,shaft("Bound sleeve",(shoulder,0,1.375),(sign*.285*w,-.045,1.157),.069,p["fabric"],.046,16))
-            shoulder_pad = .84 if self.key == "vega" else .93
-            pauldron = self.add("Upper"+side,shell("Beveled shoulder armor",[
-                (1.354,.076*shoulder_pad,.087,shoulder,.003),(1.392,.084*shoulder_pad,.084,shoulder,.007),
-                (1.421,.051*shoulder_pad,.052,shoulder*.94,.019),
-            ],p["armor"],.013))
-            pauldron.data.materials.append(p["edge"])
-            pauldron.data.polygons[-1].material_index = 1
-            self.add("Upper"+side,slab("Ceramic shoulder stripe",(shoulder,-.093,1.361),(.048,.010,.011),p["accent"],.005))
-            self.add("Lower"+side,lens("Elbow pad",(sign*.282*w,-.046,1.152),(.052,.054,.050),p["elastic"]))
-            self.add("Lower"+side,shaft("Forearm liner",(sign*.282*w,-.050,1.151),(wrist,-.254,1.181),.049,p["skin"],.031,16))
-            self.add("Lower"+side,shaft("Wrist guard",(sign*.260*w,-.158,1.168),(wrist,-.253,1.180),.051,p["armor"],.043,8))
-            self.add("Lower"+side,shaft("Wrist guard collar",(wrist,-.235,1.178),(wrist,-.253,1.179),.045,p["accent"],.043,12))
-            self.add("Hand"+side,lens("Padded glove",(wrist,-.274,1.174),(.042,.055,.037),p["elastic"]))
-            for i in range(4):
-                self.add("Hand"+side,lens("Glove knuckle",(wrist-.027+i*.017,-.303,1.164),(.010,.025,.014),p["armor"]))
-            self.add("Thigh"+side,taper("Continuous cloth trousers",[
-                (.093,.061,.065,foot,.013),(.203,.070,.072,foot,.009),(.344,.078,.075,knee,.014),
-                (.414,.068,.070,knee,-.011),(.451,.072,.073,knee,-.025),(.490,.075,.079,knee,-.017),
-                (.553,.083,.086,knee,-.002),(.688,.090*w,.094,hip,.010),(.881,.100*w,.103,hip,.016),
+            self.add("Torso",strand("Contoured harness",[
+                ((sign*.157*w,.058,1.405),.022),((sign*.154*w,-.044,1.380),.024),
+                ((sign*.120*w,-.111,1.298),.023),((sign*.108*w,-.107,1.202),.021),
+                ((sign*.137*w,-.078,1.126),.018),
+            ],p["elastic"]))
+            self.add("Torso",slab("Harness buckle",(sign*.120*w,-.126,1.300),(.021,.008,.014),p["edge"],.004))
+            if side == "L" or not self.ponytail:
+                self.add("Hips",taper("Rounded canvas belt pouch",[
+                    (.865,.025,.044,sign*.165*w,-.019),(.886,.043,.060,sign*.174*w,-.022),
+                    (.950,.043,.064,sign*.174*w,-.023),(.978,.033,.052,sign*.168*w,-.023),
+                ],p["elastic"]))
+
+            shoulder_center = (shoulder*.89,.002,1.377)
+            elbow = (sign*.285*w,-.050,1.153)
+            forearm_end = (wrist,-.255,1.179)
+            arm = self.add("Upper"+side,sleeve("Folded fabric sleeve",shoulder_center,elbow,[
+                (-.12,.034,.046),(.08,.057,.066),(.24,.064,.061),(.53,.053,.055),(.74,.045,.048),
+                (.83,.048,.052),(.91,.044,.046),(1.00,.047,.047),(1.08,.041,.042),
             ],p["fabric"]))
-            self.add("Thigh"+side,slab("Cargo pocket",(sign*.162*w,-.019,.699),(.036,.073,.070),p["elastic"],.015))
-            self.add("Thigh"+side,slab("Cargo seam",(sign*.163*w,-.089,.724),(.026,.011,.009),p["accent"],.005))
+            self.blend(arm,"Lower"+side,elbow,Vector(elbow)-Vector(shoulder_center),.065)
+            if side == "L" and self.key != "fox":
+                self.add("Upper"+side,lens("Curved shoulder insert",(shoulder*1.025,-.007,1.385),(.060,.065,.027),p["armor"]))
+            self.add("Upper"+side,strand("Sleeve identification tape",[
+                ((shoulder*.94,-.052,1.355),.010),((shoulder*1.05,-.061,1.345),.012),
+                ((shoulder*1.16,-.046,1.330),.010),
+            ],p["accent"]))
+            self.add("Lower"+side,sleeve("Tapered forearm",elbow,forearm_end,[
+                (-.10,.040,.039),(.13,.046,.042),(.32,.043,.038),(.58,.037,.035),(1.0,.029,.029),
+            ],p["skin"]))
+            self.add("Lower"+side,sleeve("Fabric gauntlet",elbow,forearm_end,[
+                (.60,.040,.037),(.69,.040,.037),(.90,.034,.034),(1.00,.034,.034),
+            ],p["elastic"]))
+            self.add("Hand"+side,lens("Gloved palm",(wrist,-.274,1.171),(.037,.048,.028),p["elastic"]))
+            self.add("Hand"+side,lens("Thumb grip",(wrist-sign*.026,-.274,1.158),(.014,.025,.016),p["elastic"],segments=10,rings=6))
+            for i in range(4):
+                self.add("Hand"+side,lens("Curled finger",(wrist-.024+i*.0155,-.299,1.157+abs(i-1.7)*.003),(.008,.020,.013),p["elastic"],segments=10,rings=6))
+
+            trousers = self.add("Thigh"+side,taper("Continuous cloth trousers",[
+                (.090,.053,.058,foot,.013),(.194,.063,.063,foot,.012),(.238,.064,.067,foot,.015),
+                (.318,.073,.077,knee,.020),(.375,.075,.071,knee,.012),(.413,.070,.074,knee,-.010),
+                (.448,.073,.075,knee,-.024),(.480,.074,.077,knee,-.021),(.519,.078,.084,knee,-.003),
+                (.571,.087,.091,knee,.010),(.654,.094*w,.102,hip,.014),(.754,.099*w,.106,hip,.024),
+                (.828,.101*w,.104,hip,.022),(.877,.093*w,.096,hip,.015),
+            ],p["fabric"]))
+            self.blend(trousers,"Shin"+side,(0,0,.455),(0,0,-1),.068)
+            if side == "R" or self.key == "fox":
+                self.add("Thigh"+side,taper("Contoured cargo pocket",[
+                    (.631,.020,.038,sign*.168*w,-.021),(.652,.033,.056,sign*.179*w,-.025),
+                    (.726,.032,.062,sign*.176*w,-.027),(.747,.023,.053,sign*.168*w,-.025),
+                ],p["elastic"]))
             for z,center in ((.761,hip),(.648,knee),(.566,knee)):
                 self.add("Thigh"+side,strand("Tailored seam",[
                     ((center+sign*.071*w,-.039,z+.034),.0025),
                     ((center+sign*.086*w,-.041,z),.004),
                     ((center+sign*.075*w,-.035,z-.019),.0025),
                 ],p["elastic"]))
-            self.add("Shin"+side,shell("Floating armor knee",[
-                (.388,.047,.016,knee,-.068),(.431,.063,.025,knee,-.083),(.477,.052,.018,knee,-.072),
-            ],p["armor"],.009))
-            self.add("Shin"+side,slab("Knee accent",(knee,-.112,.428),(.045,.010,.012),p["accent"],.006))
-            self.add("Shin"+side,slab("Shin greave",(foot,-.061,.268),(.035,.017,.079),p["armor"],.010))
-            self.add("Foot"+side,slab("Boot traction sole",(foot,-.055,.032),(.069,.124,.021),p["elastic"],.010))
-            self.add("Foot"+side,taper("Boot body",[(.051,.071,.123,foot,-.049),(.088,.068,.118,foot,-.048),(.141,.057,.081,foot,-.008),(.187,.053,.062,foot,.011)],p["fabric"]))
-            self.add("Foot"+side,slab("Reinforced toe",(foot,-.152,.086),(.055,.037,.024),p["armor"],.013))
-            self.add("Foot"+side,slab("Toe signal",(foot,-.183,.071),(.023,.005,.005),p["accent"],.003))
+            knee_pad = self.add("Thigh"+side,lens("Soft-shell knee reinforcement",(knee,-.082,.437),(.046,.026,.061),p["armor"]))
+            self.blend(knee_pad,"Shin"+side,(0,0,.455),(0,0,-1),.068)
+            self.add("Foot"+side,taper("Boot traction sole",[
+                (.012,.053,.110,foot,-.039),(.021,.059,.118,foot,-.044),(.044,.060,.119,foot,-.045),(.050,.058,.114,foot,-.042),
+            ],p["elastic"]))
+            self.add("Foot"+side,taper("Leather boot upper",[
+                (.045,.058,.116,foot,-.043),(.069,.057,.115,foot,-.042),(.093,.054,.100,foot,-.029),
+                (.123,.049,.078,foot,-.012),(.163,.049,.061,foot,.006),(.182,.050,.058,foot,.010),
+            ],p["fabric"]))
+            for z in (.107,.124,.142):
+                self.add("Foot"+side,strand("Boot lacing",[
+                    ((foot-.021,-.092+(z-.107)*.50,z-.007),.0038),
+                    ((foot+.001,-.107+(z-.107)*.53,z),.0042),
+                    ((foot+.021,-.092+(z-.107)*.50,z+.008),.0038),
+                ],p["accent"]))
 
     def face(self):
         p = self.paint
-        w = self.width
-        self.add("Head",taper("Sculpted facial planes",[
-            (1.482,.028,.024,0,-.044),(1.510,.055*w,.055,0,-.031),(1.548,.075*w,.077,0,-.006),
-            (1.598,.079*w,.082,0,0),(1.654,.078*w,.084,0,.009),(1.698,.062*w,.068,0,.019),(1.720,.024,.031,0,.023),
-        ],p["skin"]))
-        self.add("Head",taper("Nose profile",[
-            (1.546,.010,.010,0,-.089),(1.555,.015,.016,0,-.093),
-            (1.579,.010,.016,0,-.081),(1.612,.007,.010,0,-.073),
-        ],p["skin"]))
-        self.add("Head",lens("Lower lip",(0,-.082,1.525),(.028,.012,.006),p["lips"]))
-        self.add("Head",lens("Mouth line",(0,-.091,1.529),(.025,.005,.0024),p["lips"]))
+        points, texcoords, faces = face_topology()
+        width, jaw, nose = {
+            "vega": (.99,-.10,-.045), "fox": (.965,-.045,.025),
+            "amber": (1.035,.085,.055), "north": (1.07,.13,.090),
+        }[self.key]
+
+        def head_shape(point):
+            x, y, z = point
+            jaw_shape = exp(-((y-6.54)/.43)**2) * min(1,max(0,z-.50))
+            bridge = exp(-(x/.19)**2-((y-7.00)/.35)**2) * min(1,max(0,z-1.05))
+            lid = exp(-((abs(x)-.31)/.13)**2-((y-7.29)/.11)**2-((z-1.40)/.13)**2)
+            height = 1.719+(y-8.491)*.102 - max(0,6.22-y)*.095 + .038*(y-7.29)*lid
+            return (x*.101*width*(1+jaw*jaw_shape),-(z-.48+nose*bridge)*.100,height)
+
+        head = self.add("Head",mesh("Anatomical head and neck",
+            [head_shape(point) for point in points], [tuple(index for index,_ in face) for face in faces],p["skin"]))
+        for paint in (p["lips"],p["beard"],p["hair"]):
+            head.data.materials.append(paint)
+        uv = head.data.uv_layers.active
+        for face, source_face in zip(head.data.polygons,faces):
+            face.use_smooth = True
+            for loop, (_, uv_index) in zip(face.loop_indices,source_face):
+                uv.data[loop].uv = texcoords[uv_index]
+            x, y, z = (sum(points[index][axis] for index,_ in source_face)/len(source_face) for axis in range(3))
+            if abs(x) < .252 and ((y-6.615)/.12)**2+(x/.29)**2 < 1 and z > 1.45:
+                face.material_index = 1
+            elif self.key == "north" and 6.18+(1.2-z)*.25 < y < 6.465+abs(x)*.80 and z > .59:
+                face.material_index = 2
+            elif y > 7.83+max(0,z-.85)*.33-max(0,.44-z)*1.10:
+                face.material_index = 3
+
         for sign in (-1,1):
-            x = sign*.037
-            self.add("Head",lens("Outer ear",(sign*.077*w,.015,1.583),(.013,.024,.032),p["skin"]))
-            self.add("Head",lens("Upper eye lining",(x,-.073,1.592),(.023,.009,.010),p["black"]))
-            self.add("Head",lens("Eye white",(x,-.080,1.591),(.020,.006,.007),p["white"]))
-            self.add("Head",lens("Iris",(x,-.086,1.591),(.008,.004,.007),p["eyes"]))
-            self.add("Head",lens("Pupil",(x,-.089,1.592),(.0035,.0015,.0045),p["black"]))
-            self.add("Head",strand("Sculpted brow",[
-                ((x-sign*.018,-.077,1.613),.004),((x,-.084,1.620),.006),((x+sign*.018,-.071,1.613),.003),
+            x, y, z = head_shape((sign*.322,7.29,1.249))
+            self.add("Head",lens("Eyeball",(x,y,z),(.0144,.0139,.0130),p["white"],segments=16,rings=8))
+            self.add("Head",lens("Iris",(x-sign*.001,y-.0133,z),(.0053,.0014,.0050),p["eyes"],segments=12,rings=6))
+            self.add("Head",lens("Pupil",(x-sign*.001,y-.0146,z),(.0024,.0006,.0025),p["black"],segments=10,rings=6))
+            self.add("Head",strand("Eyebrow",[
+                (head_shape((sign*.147,7.455,1.510)),.0029),
+                (head_shape((sign*.303,7.500,1.458)),.0040 if not self.ponytail else .0032),
+                (head_shape((sign*.496,7.427,1.323)),.0014),
             ],p["hair"]))
-        if self.key == "north":
-            self.add("Head",taper("Short beard",[(1.479,.025,.024,0,-.045),(1.502,.056,.051,0,-.037),(1.528,.066,.029,0,-.029)],p["hair"]))
-            self.add("Head",lens("Mustache",(0,-.082,1.539),(.039,.011,.006),p["hair"]))
-        self.add("Head",lens("Hair cap",(0,.032,1.665),(.084*w,.088,.067),p["hair"]))
+        self.add("Head",lens("Shaped roots",(0,.032,1.670),(.078*width,.090,.064),p["hair"]))
+        side_part = {"vega": .037,"fox": -.015,"amber": -.053,"north": .047}[self.key]
         for i in range(11):
-            x = -.076+i*.0153
-            left = x < .010
+            x = -.074+i*.0147
+            sweep = (-.051 if self.ponytail else -.039) if x < side_part else .035
+            sway = sin(i*2.19)*.008
+            height = 1.738-abs(x)*.31+sin(i*.82)*.009
+            temple = x*.76+sweep+sway
+            tail = 1.655-max(0,abs(temple)-.03)*(.78 if self.ponytail else .34)
             self.add("Head",strand("Swept lock",[
-                ((x,.071,1.684),.012),((x+.024,.023,1.736-abs(x)*.21),.020),
-                ((x-.027 if left else x+.014,-.059,1.701),.015),
-                ((x-.019 if left else x+.011,-.079,1.611+abs(x)*.85),.0018),
-            ],p["strands"] if i%3==0 else p["hair"]))
+                ((x*.63,.067,1.698-abs(x)*.28),.014),
+                ((x*.78+.23*sweep,.018,height),.021+sway*.38),
+                ((x*.84+.53*sweep,-.036,height-.015),.018),
+                ((temple+.013*sin(i),-.066+abs(temple)*.19,tail+.017),.010),
+                ((temple,-.072+abs(temple)*.28,tail),.0011),
+            ],p["strands"] if i%4==0 else p["hair"]))
         if self.ponytail:
             self.add("Head",lens("Ponytail strap",(.022,.126,1.686),(.038,.037,.029),p["accent"]))
             for i in range(6):
@@ -282,15 +382,17 @@ class Operator:
             source.modifiers.clear()
             source.matrix_world.identity()
             group = source.vertex_groups.new(name=joint)
-            if source.name.startswith("Continuous cloth trousers"):
-                shin = source.vertex_groups.new(name="Shin"+joint[-1])
+            if source in self.blends:
+                secondary, midpoint, axis, falloff = self.blends[source]
+                other = source.vertex_groups.new(name=secondary)
                 for vertex in baked.vertices:
-                    bend = max(0.0,min(1.0,(.507-vertex.co.z)/.104))
+                    distance = (vertex.co-midpoint).dot(axis)
+                    bend = max(0.0,min(1.0,.5+distance/(2*falloff)))
                     bend = bend*bend*(3-2*bend)
                     if bend < 1:
                         group.add([vertex.index],1-bend,"REPLACE")
                     if bend > 0:
-                        shin.add([vertex.index],bend,"REPLACE")
+                        other.add([vertex.index],bend,"REPLACE")
             else:
                 group.add(list(range(len(baked.vertices))),1.0,"REPLACE")
             source.select_set(True)
@@ -326,9 +428,12 @@ class Operator:
         self.rig.animation_data_create()
 
         def idle(t):
-            return {"Torso":(.021*sin(t),.024*sin(t),-.012*cos(t)),
-                    "Head":(-.015*sin(t),-.038*sin(t),.013*cos(t)),
-                    "LowerR":(-.018*sin(t),0,0),"Tail":(.033*sin(t),0,.04*cos(t))},(0,.009*sin(t),0)
+            breath = sin(t)
+            return {"Hips":(0,.06,-.032),"Torso":(.015+.028*breath,-.11+.030*breath,-.016*cos(t)),
+                    "Head":(-.013-.019*breath,.025-.052*breath,.019*cos(t)),
+                    "UpperL":(-.09,.095,.07),"LowerL":(.44+.018*breath,0,-.04),
+                    "UpperR":(.012+.02*breath,0,-.02),"LowerR":(-.018*breath,0,0),
+                    "Tail":(.047*breath,0,.045*cos(t))},(0,.006*breath,0)
 
         def stride(t,running):
             phase = t/tau
@@ -336,10 +441,10 @@ class Operator:
             chest = .107 if running else .040
             pelvis = (-.074 if running else -.029)+(.018 if running else .010)*cos(t*2)
             rotation = {
-                "Torso":(chest,.052*wave,.048*cos(t)), "Head":(-chest*.76,-.046*wave,-.025*cos(t)),
-                "UpperL":(-(.30 if running else .17)*wave,-.08,.075), "UpperR":(.065*wave,0,-.032),
-                "LowerL":(.105+.12*wave,0,0), "LowerR":(-.023*wave,0,0),
-                "Tail":(.092+.16*cos(t),0,.115*wave),
+                "Torso":(chest,-.055+.086*wave,.042*cos(t)), "Head":(-chest*.76,.038-.065*wave,-.030*cos(t)),
+                "UpperL":(-.08-(.40 if running else .22)*wave,-.045,.056), "UpperR":(.044*wave,0,-.025),
+                "LowerL":(.34+.23*sin(t+.40),0,-.025), "LowerR":(-.035*wave,0,0),
+                "Tail":(.102+.22*cos(t-.30),0,.112*sin(t-.44)),
             }
             for side,start in [("L",phase),("R",phase+.5)]:
                 thigh,shin,foot = self.leg_pose(side,start%1.0,pelvis,running)
@@ -455,4 +560,7 @@ class Operator:
 def generate(reset, directory):
     for key in OPERATORS:
         reset()
+        for action in list(bpy.data.actions):
+            if action.users == 0:
+                bpy.data.actions.remove(action)
         Operator(key).export(Path(directory))

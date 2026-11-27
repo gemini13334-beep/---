@@ -22,8 +22,12 @@ func run_tests() -> void:
 	scene.reset_settings()
 	check(scene.fps_limit == 60 and scene.advanced["sensitivity"] == 1.0,"Settings defaults")
 	check(scene.graphics_preset_name() == "MEDIUM","Default settings match the visible medium preset")
+	check(scene.world_light.shadow_enabled and scene.world_light.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS,
+		"Medium uses two sun-shadow splits by default")
 	scene.cycle_preset()
 	check(scene.graphics_preset_name() == "HIGH" and root.msaa_3d == Viewport.MSAA_2X and scene.world_light.shadow_enabled,"High preset applies MSAA and shadows")
+	check(scene.world_light.directional_shadow_mode == DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS,
+		"High extends sun shadows with four splits")
 	scene.advanced_sliders["particles"].value = 0.55
 	check(scene.graphics_preset_name() == "CUSTOM","Edited preset reports custom graphics")
 	scene.reset_settings()
@@ -50,13 +54,18 @@ func run_tests() -> void:
 	check(scene.running and scene.hp == scene.max_hp and scene.level == 1,"Start initializes run")
 	check(scene.crates.size() == Landscape.STARTING_CRATES,"Arena populated")
 	var hud = scene.hud_panel
+	var portrait_phone := Vector2(720,1600)
+	scene.resize_interface(portrait_phone)
+	check(hud.footer_art.get_global_rect().end.y == portrait_phone.y and scene.menu.artwork.size == portrait_phone
+		and scene.stick_base.position.y > 1000.0,"Tall phones keep the HUD, joystick and menu aligned to their full screen")
+	scene.resize_interface()
 	var ui_input := InputEventScreenTouch.new()
 	ui_input.pressed = true
-	ui_input.position = Vector2(37,37)
+	ui_input.position = hud.pause_button.get_global_rect().get_center()
 	scene._input(ui_input)
 	check(scene.finger == -1 and hud.blocks_at(ui_input.position),"HUD buttons do not capture the movement finger")
 	hud.task_toggle.button_pressed = false
-	check(not hud.tasks.visible and hud.radar_frame.position.y < 292,"Task toggle collapses the list and moves the minimap")
+	check(not hud.tasks.visible and hud.radar_frame.position.y < hud.MAP_OPEN_TOP,"Task toggle collapses the list and moves the minimap")
 	hud.task_toggle.button_pressed = true
 	var radar_position: Vector2 = hud.radar.project_point(Vector3(4,0,-5),Vector3.ZERO,23.0)
 	check(radar_position.x > 71.0 and radar_position.y < 71.0,"Minimap projects real arena positions")
@@ -136,16 +145,16 @@ func run_tests() -> void:
 	check(hud.boss_frame.visible and hud.boss_health.value > 0,"Boss health appears from the spawned boss")
 	var boss = scene.enemies.back()
 	scene.elapsed = float(boss.get_meta("next_pulse"))-0.5
-	scene.update_boss_attack(boss)
+	scene.update_boss_attack(boss,1.0)
 	check(boss.has_meta("warning_ring") and is_instance_valid(boss.get_meta("warning_ring")),"Boss telegraphs attack")
 	scene.hero.position = boss.position + Vector3(8,0,0)
 	var safe_hp: float = scene.hp
 	scene.elapsed += 0.6
-	scene.update_boss_attack(boss)
+	scene.update_boss_attack(boss,1.0)
 	check(scene.hp == safe_hp,"Boss attack can be dodged")
 	scene.hero.position = boss.position
 	scene.elapsed = float(boss.get_meta("next_pulse"))
-	scene.update_boss_attack(boss)
+	scene.update_boss_attack(boss,1.0)
 	check(scene.hp < safe_hp,"Boss attack damages within radius")
 	scene.hp = 0
 	scene._physics_process(0.016)
@@ -216,6 +225,8 @@ func run_tests() -> void:
 	check(scene.INDUSTRIAL_MODELS.all(func(asset: String) -> bool: return scenery_ids.has(asset)),
 		"The city displays all five imported industrial models")
 	check_fusion(scene)
+	check_enemy_escalation(scene)
+	check_shot_styles(scene)
 	scene.queue_free()
 	await process_frame
 	print("Gameplay tests: ",failures.size()," failures")
@@ -225,7 +236,8 @@ func run_tests() -> void:
 func check_boundaries(scene) -> void:
 	scene.set_biome(2)
 	scene.start(false)
-	scene.hero.position = scene.grounded(Vector3(46,0,-46))
+	var before_edge := Landscape.PLAY_HALF-2.0
+	scene.hero.position = scene.grounded(Vector3(before_edge,0,-before_edge))
 	scene.finger = 0
 	scene.direction = Vector2(1,-1).normalized()
 	scene.spawn_timer = 30.0
@@ -235,20 +247,35 @@ func check_boundaries(scene) -> void:
 	check(is_equal_approx(scene.hero.position.y,scene.grounded(scene.hero.position).y),
 		"The player follows the new terrain height")
 	var footprint: Vector3 = scene.ground.mesh.get_aabb().size
-	check(footprint.x > 160.0 and footprint.y > 4.0,"Terrain mesh provides relief and extends past the playable camera bounds")
+	check(Landscape.PLAY_HALF*2.0 == 144.0 and footprint.x > 215.0 and footprint.y > 4.0,
+		"The 144-unit arena has terrain relief and space past the playable camera bounds")
 	scene.camera.size = 28.0
 	var display_size := root.get_visible_rect().size
 	var stays_inside := true
-	for corner in [Vector3(48,0,-48),Vector3(48,0,48),Vector3(-48,0,-48),Vector3(-48,0,48)]:
-		scene.hero.position = scene.grounded(corner)
-		scene.camera.position = scene.hero.position+scene.COMBAT_CAMERA_OFFSET
-		scene.camera.look_at(scene.hero.position)
-		for pixel in [Vector2.ZERO,Vector2(display_size.x,0),Vector2(0,display_size.y),display_size]:
-			var origin: Vector3 = scene.camera.project_ray_origin(pixel)
-			var direction: Vector3 = scene.camera.project_ray_normal(pixel)
-			var lowest := origin+direction*((-2.0-origin.y)/direction.y)
-			stays_inside = stays_inside and maxf(absf(lowest.x),absf(lowest.z)) < Landscape.FLOOR_HALF
-	check(stays_inside,"All camera corners at maximum zoom remain over terrain at the four world corners")
+	for biome in scene.BIOME_NAMES.size():
+		scene.set_biome(biome)
+		for site in scene.OUTER_SITES[biome]:
+			var site_position: Vector2 = site[0]
+			var dressed: bool = scene.scenery.any(func(prop: GeometryInstance3D) -> bool:
+				return prop.has_meta("model_asset") and Landscape.xz(prop.position).distance_to(site_position) < 11.0
+			)
+			check(dressed,"%s has scenery in its outer district at %s" % [scene.BIOME_NAMES[biome],site_position])
+		for quadrant in [Vector2(-1,-1),Vector2(1,-1),Vector2(1,1),Vector2(-1,1)]:
+			scene.hero.position = scene.grounded(Vector3(quadrant.x*Landscape.PLAY_HALF,0,quadrant.y*Landscape.PLAY_HALF))
+			scene.camera.position = scene.hero.position+scene.COMBAT_CAMERA_OFFSET
+			scene.camera.look_at(scene.hero.position)
+			for pixel in [Vector2.ZERO,Vector2(display_size.x,0),Vector2(0,display_size.y),display_size]:
+				var origin: Vector3 = scene.camera.project_ray_origin(pixel)
+				var direction: Vector3 = scene.camera.project_ray_normal(pixel)
+				var lowest := origin+direction*((-4.0-origin.y)/direction.y)
+				stays_inside = stays_inside and maxf(absf(lowest.x),absf(lowest.z)) < Landscape.FLOOR_HALF
+	check(stays_inside,"Every biome covers all camera corners at maximum zoom")
+	scene.start()
+	for site in scene.OUTER_SITES[scene.biome]:
+		var supplied: bool = scene.crates.any(func(crate: MeshInstance3D) -> bool:
+			return Landscape.xz(crate.position).distance_to(site[0]) < 6.0
+		)
+		check(supplied,"Outer area %s contains real destructible supplies" % site[0])
 
 
 func check_fusion(scene) -> void:
@@ -305,3 +332,72 @@ func check_fusion(scene) -> void:
 		"The defensive result increases health and regeneration without breaking the health cap")
 	scene.start(false)
 	check(not scene.hud_fusing and scene.ranks.is_empty() and scene.credits == 0,"A fresh run clears fused abilities and keeps the wallet balance")
+
+
+func check_enemy_escalation(scene) -> void:
+	scene.start(false)
+	scene.next_event = 200.0
+	scene.attack_timer = 200.0
+	scene.elapsed = 45.0
+	scene.level = 4
+	scene._physics_process(0.016)
+	var enemy: MeshInstance3D = scene.enemies[0]
+	var boss: MeshInstance3D = scene.enemies[1]
+	var normal_health: int = enemy.get_meta("health")
+	var boss_max: int = boss.get_meta("max_health")
+	boss.set_meta("health",boss_max-6)
+	var close_position: Vector3 = scene.hero.position+Vector3(0.25,0,0)
+	enemy.position = scene.grounded(close_position)
+	var hp_before: float = scene.hp
+	scene.xp = scene.level*3
+	scene.update_hud()
+	scene._physics_process(0.016)
+	var damage_before: float = hp_before-scene.hp
+	scene.update_hud()
+	check(scene.level == 5 and enemy.get_meta("health") == normal_health+1 and boss.get_meta("max_health") == boss_max+4,
+		"Level five strengthens enemies already on the field, including the boss")
+	check(boss.get_meta("health") == boss_max-2 and "ВРАГИ УСИЛЕНЫ" in scene.hud_panel.badge.text,
+		"Escalation preserves boss damage and announces the new threat")
+	scene.offers.assign([0])
+	scene.choose_upgrade(0)
+	enemy.position = scene.grounded(close_position)
+	hp_before = scene.hp
+	scene.spawn_timer = 0.0
+	scene._physics_process(0.016)
+	check(is_equal_approx(hp_before-scene.hp,damage_before*1.16),"First-stage contact damage is 16 percent higher")
+	check(scene.enemies.size() == 4 and scene.enemies[2].get_meta("model_asset") == "enemy_armored"
+		and scene.enemies[2].get_meta("health") == 4 and scene.enemies[3].get_meta("model_asset") == "enemy_fast",
+		"The first escalation deploys a reinforced armored enemy and a fast flanker together")
+	scene.level = 9
+	scene.xp = scene.level*3
+	scene._physics_process(0.016)
+	check(scene.level == 10 and boss.get_meta("max_health") == boss_max+8,"The second milestone strengthens the boss again")
+	scene.offers.assign([0])
+	scene.choose_upgrade(0)
+	scene.spawn_timer = 0.0
+	scene._physics_process(0.016)
+	check(scene.enemies.size() == 6 and scene.enemies[4].get_meta("model_asset") == "enemy_fast"
+		and scene.enemies[5].get_meta("model_asset") == "enemy_fast" and scene.enemies[5].get_meta("health") == 3,
+		"The second milestone switches to a pair of fast enemies with more health")
+	scene.start(false)
+	check(scene.level == 1 and scene.enemy_wave == 0 and scene.enemy_stage(scene.level) == 0,"A fresh run resets enemy difficulty")
+
+
+func check_shot_styles(scene) -> void:
+	scene.start(false)
+	var styles = scene.ShotStyles
+	check(scene.ability_rank_ids().all(func(id: int) -> bool: return styles.STYLES.has(id)),
+		"Every ability, combination and synthesis selects a shot effect")
+	check(styles.choose({110:1,6:1},0) == 110 and styles.choose({110:1,6:1},1) == 6,
+		"Synthesis remains visible while the rest of the loadout still changes shots")
+	var target: Vector3 = scene.hero.position+Vector3(4,0,-3)
+	var pose = scene.actor_pose(scene.hero)
+	var impulses := {}
+	for id in [110,111,112]:
+		scene.fire_visual(scene.hero,target,Vector3.INF,id)
+		if pose != null:
+			impulses[pose.recoil] = true
+		check(scene.get_children().any(func(node: Node) -> bool: return node.get_meta("shot_style",-2) == id),
+			"The arena renders the tracer selected by synthesis %d" % id)
+	if pose != null:
+		check(impulses.size() == 3,"The three synthesis shots use different recoil impulses")

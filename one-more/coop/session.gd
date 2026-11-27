@@ -1,7 +1,8 @@
 extends Node
 
 const Landscape = preload("res://landscape.gd")
-const PROTOCOL := 4
+const ShotStyles = preload("res://shot_styles.gd")
+const PROTOCOL := 5
 const UPDATE_INTERVAL := 0.085
 const LINK_TIMEOUT := 3.5
 const ENEMY_ART := ["enemy","enemy_fast","enemy_armored","boss_overlord","boss_crystal","boss_inferno"]
@@ -331,9 +332,9 @@ func damage_partner(position: Vector3, radius: float, amount: float) -> void:
 			if partner_hp > 0.0 or not arena.play_defeat(peer):
 				arena.show_actor_hit(peer,position)
 
-func record_shot(from: Vector3,to: Vector3,shooter: Node3D) -> void:
+func record_shot(from: Vector3,to: Vector3,shooter: Node3D,style: int) -> void:
 	if live and hosting and shot_events.size() < 12:
-		shot_events.append([from.x,from.y,from.z,to.x,to.y,to.z])
+		shot_events.append([from.x,from.y,from.z,to.x,to.y,to.z,style])
 		shot_actors.append(0 if shooter == arena.hero else (1 if shooter == partner else -1))
 
 func record_hit(actor: Node3D,origin: Vector3,fatal: bool) -> void:
@@ -458,15 +459,16 @@ func play_shots(shots: Variant, shooters: Variant) -> void:
 	var has_shooters: bool = shooters is Array and shooters.size() == shots.size()
 	for index in shots.size():
 		var row: Variant = shots[index]
-		if not row is Array or row.size() != 6:
+		if not row is Array or row.size() != 7:
 			continue
-		var from := Vector3(clampf(number(row[0]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF),clampf(number(row[1]),-2,12),clampf(number(row[2]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF))
-		var to := Vector3(clampf(number(row[3]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF),clampf(number(row[4]),-2,12),clampf(number(row[5]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF))
+		var from := Vector3(clampf(number(row[0]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF),clampf(number(row[1]),-5,12),clampf(number(row[2]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF))
+		var to := Vector3(clampf(number(row[3]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF),clampf(number(row[4]),-5,12),clampf(number(row[5]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF))
+		var style := ShotStyles.validated(int(number(row[6])))
 		var role: Variant = shooters[index] if has_shooters else null
 		if role == 0 or role == 1:
-			arena.fire_visual(partner if role == 0 else arena.hero,to,from)
+			arena.fire_visual(partner if role == 0 else arena.hero,to,from,style)
 		else:
-			arena.shot_tracer(from,to)
+			arena.shot_tracer(from,to,null,style)
 
 func update_player(player: MeshInstance3D,row: Array) -> void:
 	var scale_factor := clampf(number(row[5]),0.5,3.0)

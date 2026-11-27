@@ -91,26 +91,27 @@ func configure(actor: Node3D, model: Node3D, model_name: String) -> void:
 				animation.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 		reset_clips()
 
-func fire(target: Vector3) -> void:
+func fire(target: Vector3, impulse := 1.0) -> void:
 	var local_target := host.to_local(target)
 	if Vector2(local_target.x,local_target.z).length_squared() > 0.01:
 		aim_yaw = atan2(local_target.x,local_target.z)
 	aiming = 0.15
-	recoil = 1.0
+	recoil = impulse
 	art.rotation.y = base_rotation.y+aim_yaw
 	apply_weapon()
 	if not defeated and one_shot <= 0.10 and (animation == null or measured_speed < 0.9):
-		play_event("Fire",0.20)
+		var timing := sqrt(impulse)
+		play_event("Fire",0.20*timing,1.0/timing)
 
 func muzzle_position() -> Vector3:
 	if muzzle_bone == -1:
 		return Vector3.INF
 	return skeleton.to_global(skeleton.get_bone_global_pose(muzzle_bone).origin)
 
-func play_event(clip: StringName, hold: float) -> void:
+func play_event(clip: StringName, hold: float, playback := 1.0) -> void:
 	if animation == null or not animation.has_animation(clip):
 		return
-	animation.speed_scale = 1.0
+	animation.speed_scale = playback
 	animation.play(clip,0.06)
 	one_shot = hold
 
@@ -195,7 +196,7 @@ func _process(dt: float) -> void:
 			windup_pitch = -windup*0.24
 	art.position = base_position+hit_direction*(hit*hit*0.10)
 	art.position.y += lift+windup_lift+strike*0.052
-	art.rotation.x = base_rotation.x+local_motion.z*gait.z+windup_pitch+strike*0.22+hit_direction.z*hit*0.12
+	art.rotation.x = base_rotation.x+local_motion.z*gait.z+windup_pitch+strike*0.22+hit_direction.z*hit*0.12-recoil*0.034
 	art.rotation.y = lerp_angle(art.rotation.y,base_rotation.y+(aim_yaw if aiming > 0.0 else 0.0),smoothing)
 	art.rotation.z = base_rotation.z-local_motion.x*gait.z+sin(phase)*stride*gait.z*0.4-hit_direction.x*hit*0.15
 	var camera := host.get_viewport().get_camera_3d()

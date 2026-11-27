@@ -44,6 +44,32 @@ func motion_folder(name: String) -> bool:
 	check_animation(created == OK,"Could not create the motion capture directory: "+name)
 	return created == OK
 
+func capture_outer_site() -> void:
+	var site_index := 1 if arena.biome == 3 else 0
+	var point: Vector2 = arena.OUTER_SITES[arena.biome][site_index][0]
+	arena.hero.position = arena.grounded(Vector3(point.x,0,point.y))
+	arena.camera.position = arena.hero.position+arena.COMBAT_CAMERA_OFFSET
+	arena.camera.look_at(arena.hero.position)
+	arena.camera.size = 23.0
+	arena.update_hud()
+	await shot(str(arena.BIOMES[arena.biome]).to_lower()+"-outer",arena.hud_panel)
+
+func capture_shot_styles() -> void:
+	arena.select_hero(arena.DEFAULT_HERO)
+	arena.start(false)
+	var target: Vector3 = arena.grounded(arena.hero.position+Vector3(5.2,0,-3.2),1.1)
+	var target_actor: MeshInstance3D = arena.create_coop_visual("enemy_armored",target)
+	arena.enemies.append(target_actor)
+	for id in [10,110,111,112]:
+		arena.ranks.clear()
+		arena.ranks[id] = 1
+		arena.update_hud()
+		arena.fire_visual(arena.hero,target)
+		await shot("weapon-%d" % id,arena.hud_panel)
+		for frame in 5:
+			await process_frame
+	arena.finish_run()
+
 func record_combat_motion() -> void:
 	if not motion_folder("motion-combat"):
 		return
@@ -175,7 +201,7 @@ func record_hud_motion() -> void:
 		elif frame == 21:
 			arena.choose_upgrade(0)
 		elif frame == 25:
-			click(Vector2(42,36))
+			click(arena.hud_panel.pause_button.get_global_rect().get_center())
 		elif frame == 31:
 			arena.toggle_hud_pause()
 		advance(4)
@@ -203,7 +229,7 @@ func record_boss_motion(boss: MeshInstance3D) -> void:
 
 func capture() -> void:
 	var args := OS.get_cmdline_user_args()
-	if args.size() != 1 or not DirAccess.dir_exists_absolute(args[0]):
+	if args.is_empty() or args.size() > 2 or not DirAccess.dir_exists_absolute(args[0]):
 		push_error("Pass an existing screenshots directory after --.")
 		quit(1)
 		return
@@ -212,6 +238,16 @@ func capture() -> void:
 	arena = load("res://main.tscn").instantiate()
 	root.add_child(arena)
 	arena.set_physics_process(false)
+	if args.size() == 2 and args[1] == "phone":
+		var frame_size := root.get_visible_rect().size
+		check_animation(frame_size.y > 1280.0 and arena.menu.artwork.size == frame_size,"Phone menu must fill the expanded viewport")
+		await shot("phone-menu",arena.menu)
+		arena.start()
+		advance(90)
+		check_animation(is_equal_approx(arena.hud_panel.footer_art.get_global_rect().end.y,frame_size.y),"HUD artwork is not flush with the phone screen")
+		await shot("phone-fullscreen",arena.hud_panel)
+		quit(int(failed))
+		return
 	await shot("menu",arena.menu)
 	var button_rects: Array[Rect2] = []
 	for control in arena.menu.get_children():
@@ -236,7 +272,7 @@ func capture() -> void:
 	arena.hud_panel.range_button.button_pressed = true
 	arena.update_hud()
 	await shot("gameplay",arena.hud_panel)
-	click(Vector2(52,168))
+	click(arena.hud_panel.task_toggle.get_global_rect().get_center())
 	var zoom_position: Vector2 = arena.hud_panel.zoom_button.get_global_rect().get_center()
 	click(zoom_position)
 	check_animation(arena.hud_panel.radar.zoom and not arena.hud_panel.tasks.visible,"HUD buttons did not receive graphical input")
@@ -244,8 +280,8 @@ func capture() -> void:
 		await process_frame
 	await shot("hud-minimap",arena.hud_panel)
 	click(zoom_position)
-	click(Vector2(52,168))
-	click(Vector2(42,36))
+	click(arena.hud_panel.task_toggle.get_global_rect().get_center())
+	click(arena.hud_panel.pause_button.get_global_rect().get_center())
 	check_animation(arena.hud_paused,"The graphical pause button did not pause the run")
 	for fade_frame in 4:
 		await process_frame
@@ -278,6 +314,10 @@ func capture() -> void:
 	check_animation(arena.ranks.has(110) and arena.credits == 350,"The synthesis menu did not complete the on-screen recipe")
 	await shot("fusion-result",arena.hud_panel)
 	arena.finish_run()
+	arena.start()
+	await capture_outer_site()
+	arena.finish_run()
+	await capture_shot_styles()
 	await record_combat_motion()
 	await record_vega_motion()
 	await record_vega_profile()
@@ -312,6 +352,7 @@ func capture() -> void:
 	await shot("settings-video",arena.settings_panel)
 	arena.settings_tabs.current_tab = 2
 	await shot("settings-audio",arena.settings_panel)
+	arena.select_hero(arena.DEFAULT_HERO)
 	for map_id in range(1, arena.BIOMES.size()):
 		arena.show_menu()
 		arena.cycle_biome()
@@ -353,6 +394,9 @@ func capture() -> void:
 		arena.camera.size = 28.0
 		arena.update_hud()
 		await shot(str(arena.BIOMES[map_id]).to_lower()+"-edge",arena.hud_panel)
+		arena.finish_run()
+		arena.start()
+		await capture_outer_site()
 		arena.finish_run()
 	arena.audio_enabled = false
 	arena.apply_settings()

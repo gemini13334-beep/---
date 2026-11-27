@@ -3,7 +3,7 @@ extends Control
 const Landscape = preload("res://landscape.gd")
 
 const GOLD := Color("#ffbb54")
-const STEEL := Color("#9fb7ca")
+const STEEL := Color("#a7a8b5")
 const TEXT := Color("#f1f4f6")
 const SOFT := Color("#b1c3cf")
 const BLUE := Color("#79dcff")
@@ -15,14 +15,33 @@ const TASKS := ["Победить врагов","Завершить забеги
 const KIT_ART := [0,1,2,5]
 const KIT_NAMES := ["КАРАБИН","БОЕВЫЕ БОТИНКИ","МАГНИТ","БРОНЕПЛАСТИНЫ"]
 const GLYPHS := ["ϟ","↑","∩","✦","⊕","◇","⌖","+","◇","♦","ϟ","↑","∩","ϟ","✦","◇"]
+const MAP_OPEN_TOP := 356.0
+const MAP_CLOSED_TOP := 273.0
+const DESIGN_SIZE := Vector2(720,1280)
 
 class Plate extends Control:
+	static var ember: GradientTexture2D
 	var border: Color
 	var cut: float
+	var light := 0.0
 	var flash := 0.0:
 		set(value):
 			flash = value
 			queue_redraw()
+
+	static func ember_texture() -> GradientTexture2D:
+		if ember == null:
+			var bloom := Gradient.new()
+			bloom.offsets = PackedFloat32Array([0.0,0.17,0.46,1.0])
+			bloom.colors = PackedColorArray([Color("#fff5c8e0"),Color("#ffb4558e"),Color("#f6792c40"),Color("#c73d1800")])
+			ember = GradientTexture2D.new()
+			ember.width = 96
+			ember.height = 48
+			ember.fill = GradientTexture2D.FILL_RADIAL
+			ember.fill_from = Vector2(.5,.5)
+			ember.fill_to = Vector2(1.0,.5)
+			ember.gradient = bloom
+		return ember
 
 	func outline(inset: float) -> PackedVector2Array:
 		var x := size.x-inset
@@ -35,37 +54,54 @@ class Plate extends Control:
 
 	func _draw() -> void:
 		var shape := outline(0)
-		var bright := border.lightened(flash*0.4)
+		var bright := border.lightened(flash*0.34)
+		var warm := border.r > border.b*1.25
 		draw_polygon(shape,PackedColorArray([
-			Color("#485665"),Color("#263440"),Color("#121b24"),Color("#141b25"),
-			Color("#243140"),Color("#182230"),Color("#0a1119"),Color("#364653")
+			Color("#595660"),Color("#2c2a34"),Color("#171620"),Color("#302634"),
+			Color("#15111a"),Color("#2e2530"),Color("#100d16"),Color("#42404a")
 		]))
-		var inside := outline(4)
+		var inside := outline(5)
 		draw_polygon(inside,PackedColorArray([
-			Color("#182936ef"),Color("#101923f5"),Color("#0c141df5"),Color("#111d29f0"),
-			Color("#162735f3"),Color("#0c141bec"),Color("#0c131bec"),Color("#1d2c38ef")
+			Color("#181720f0"),Color("#0b0b11f8"),Color("#11101af7"),Color("#090810f6"),
+			Color("#171420f7"),Color("#0c0c12f7"),Color("#08090eec"),Color("#211c24ef")
 		]))
 		shape.append(shape[0])
 		inside.append(inside[0])
-		draw_polyline(shape,Color(bright,0.68+flash*0.26),1.3,true)
-		draw_polyline(inside,Color(bright,0.36+flash*0.40),1.0,true)
+		draw_polyline(shape,Color("#040309"),4.3,true)
+		draw_polyline(shape,Color(bright,0.53+flash*0.37),1.7,true)
+		draw_polyline(inside,Color(bright,0.49+flash*0.34),1.1,true)
+		var corner_light := Color("#ffe3aa") if warm else Color("#d6d8e8")
+		draw_line(shape[7],shape[0],Color(corner_light,0.77),2.0,true)
+		draw_line(shape[3],shape[4],Color(corner_light,0.48),1.8,true)
 		if size.x > 94 and size.y > 35:
-			draw_line(Vector2(cut,1),Vector2(size.x*0.48,1),Color(bright,0.68),2,true)
-			draw_line(Vector2(size.x*0.56,size.y-2),Vector2(size.x-cut+1,size.y-2),Color(bright,0.57),1.5,true)
-			draw_line(Vector2(size.x*0.54,size.y-5),Vector2(size.x-cut,size.y-5),Color("#60c7fe1a"),2,true)
+			var lower_glow := Color("#f7892e") if warm else Color("#a96743")
+			draw_line(Vector2(cut+3,1),Vector2(size.x*0.48,1),Color(corner_light,0.46),1.6,true)
+			var edge_start := Vector2(size.x*0.27,size.y-2)
+			var edge_end := Vector2(size.x*0.73,size.y-2)
+			draw_line(edge_start,edge_end,Color(lower_glow,0.14+flash*0.16),8.0,true)
+			draw_line(edge_start,edge_end,Color(lower_glow,0.34+flash*0.30),3.8,true)
+			draw_line(edge_start.lerp(edge_end,.28),edge_end.lerp(edge_start,.28),Color(corner_light,0.62),1.15,true)
+		if light > 0.0:
+			var width := minf(size.x*0.94,185.0)
+			draw_texture_rect(ember_texture(),Rect2((size.x-width)*0.5,size.y-20,width,36),false,Color(1,1,1,light))
 
 class StickGuide extends Control:
 	func _draw() -> void:
 		var middle := size*0.5
 		var radius := size.x*0.5
-		draw_arc(middle,radius-6,0,TAU,48,Color("#889daf88"),1.5,true)
-		draw_arc(middle,radius-4,PI*.07,PI*.49,18,Color("#ffb651c4"),3,true)
-		draw_arc(middle,radius-4,PI*1.08,PI*1.52,18,Color("#708ea7b6"),2,true)
+		draw_texture_rect(Plate.ember_texture(),Rect2(middle.x-radius*.54,size.y-25,radius*1.08,42),false,Color(1,1,1,0.54))
+		draw_arc(middle,radius-8,0,TAU,60,Color("#544557b3"),1.25,true)
+		draw_arc(middle,radius-3,0,TAU,60,Color("#a08b6e"),2.2,true)
+		draw_arc(middle,radius-4,PI*.21,PI*.74,24,Color("#f2832c50"),9,true)
+		draw_arc(middle,radius-4,PI*.25,PI*.71,22,Color("#ffa953"),3,true)
+		draw_arc(middle,radius-3,PI*1.14,PI*1.61,22,Color("#eee0bd"),1.55,true)
 		for i in 4:
 			var forward := Vector2.from_angle(i*TAU/4)
 			var side := forward.orthogonal()
 			var p := middle+forward*(radius-18)
-			draw_colored_polygon(PackedVector2Array([p+forward*7,p-forward*4+side*7,p-forward*4-side*7]),Color("#afc0caaa"))
+			draw_circle(p,9,Color("#f083333c"),true,-1,true)
+			draw_polygon(PackedVector2Array([p+forward*7,p-forward*4+side*7,p-forward*4-side*7]),
+				PackedColorArray([Color("#fff4ca"),Color("#f9ae54"),Color("#b96528")]))
 
 class Reticle extends Control:
 	var active := false
@@ -81,18 +117,20 @@ class Reticle extends Control:
 
 	func _draw() -> void:
 		var center := size*0.5
-		draw_circle(center,50,Color("#171b24ed") if not active else Color("#3d2a18ed"),true,-1,true)
-		draw_circle(center,49,Color("#7c643e"),false,2,true)
-		draw_arc(center,48,0.0,PI*0.92,26,Color("#ffb652"),3,true)
-		draw_arc(center,48,PI,PI*1.53,18,Color("#6d7e8e"),2,true)
-		draw_circle(center,23,Color("#ffb95335"),false,7,true)
-		draw_circle(center,21,Color("#ffbf5a"),false,2,true)
+		draw_circle(center,50,Color("#13121aee") if not active else Color("#26190dee"),true,-1,true)
+		draw_texture_rect(Plate.ember_texture(),Rect2(12,78,82,38),false,Color(1,1,1,0.46))
+		draw_circle(center,49,Color("#ab8b69"),false,2,true)
+		draw_arc(center,48,PI*0.13,PI*0.86,26,Color("#fb8d3d53"),9,true)
+		draw_arc(center,48,PI*0.21,PI*0.74,23,Color("#ffbb63"),3,true)
+		draw_arc(center,48,PI*1.12,PI*1.69,20,Color("#ede4cb"),1.6,true)
+		draw_circle(center,23,Color("#ffa63754"),false,7,true)
+		draw_circle(center,21,Color("#ffc971"),false,2.5,true)
 		draw_circle(center,3,Color("#ffffff"),true,-1,true)
 		if active:
 			draw_arc(center,43,sweep,sweep+0.54,12,Color("#fff0b1"),3,true)
 		for i in 4:
 			var axis := Vector2.from_angle(i*PI/2)
-			draw_line(center+axis*14,center+axis*28,Color("#ffeac2"),3,true)
+			draw_line(center+axis*14,center+axis*29,Color("#ffe0a0"),3,true)
 
 class Radar extends Control:
 	var arena
@@ -177,6 +215,7 @@ var last_hp := -1.0
 var last_pickups := -1
 var last_level := -1
 var textures: Dictionary = {}
+var pause_button: Button
 var clock: Label
 var context: Label
 var level_label: Label
@@ -224,14 +263,18 @@ var fusion_confirm: Button
 var fusion_cards: Dictionary = {}
 var selected_recipe := -1
 var pause_modal: Plate
+var fusion_modal: Plate
 var pause_title: Label
 var pause_hint: Label
 var exit_button: Button
 var touch_blocks: Array[Control] = []
+var sky_art: TextureRect
+var footer_art: TextureRect
+var bottom_positions: Dictionary[Control,float] = {}
 
 func configure(owner_arena) -> void:
 	arena = owner_arena
-	size = Vector2(720,1280)
+	size = DESIGN_SIZE
 	var typeface := FontVariation.new()
 	typeface.base_font = preload("res://assets/vendor/fonts/Exo2-Variable.ttf")
 	typeface.fallbacks = [ThemeDB.fallback_font]
@@ -239,24 +282,32 @@ func configure(owner_arena) -> void:
 	hud_colors.default_font = typeface
 	theme = hud_colors
 	mouse_filter = MOUSE_FILTER_IGNORE
-	var top := plate(self,Rect2(12,12,696,52),STEEL,13)
-	button(top,Rect2(2,2,58,48),"Ⅱ","Меню забега",arena.toggle_hud_pause)
-	button(top,Rect2(62,2,58,48),"⚙","Настройки",arena.open_hud_settings)
-	display(top,Rect2(132,0,168,52),"ONE MORE",26,Color("#ffeed3"))
-	var timer := plate(top,Rect2(304,0,101,52),GOLD)
-	clock = display(timer,Rect2(0,0,101,52),"00:00",24,TEXT,true)
-	context = display(top,Rect2(409,0,198,52),"",16,SOFT,true)
-	fps = display(top,Rect2(607,0,78,52),"",15,GREEN,true)
+	sky_art = picture(self,Rect2(0,0,720,112))
+	sky_art.texture = preload("res://assets/hud/frame-sky.webp")
+	footer_art = picture(self,Rect2(0,1128,720,152))
+	footer_art.texture = preload("res://assets/hud/frame-guardians.webp")
+	touch_blocks.append_array([sky_art,footer_art])
+	var top := plate(self,Rect2(0,98,720,54),STEEL,16)
+	pause_button = button(top,Rect2(7,5,53,45),"Ⅱ","Меню забега",arena.toggle_hud_pause)
+	button(top,Rect2(62,5,53,45),"⚙","Настройки",arena.open_hud_settings)
+	var brand := display(top,Rect2(137,0,164,54),"ONE MORE",27,Color("#fff0c9"))
+	brand.add_theme_font_override("font",preload("res://assets/vendor/fonts/Cinzel-Variable.ttf"))
+	var timer := plate(top,Rect2(308,-5,122,64),GOLD,21)
+	timer.light = 0.98
+	clock = display(timer,Rect2(0,0,122,64),"00:00",27,TEXT,true)
+	context = display(top,Rect2(437,0,181,54),"",16,TEXT,true)
+	fps = display(top,Rect2(632,0,80,54),"",16,GREEN,true)
 	touch_blocks.append(top)
 
-	var rank := plate(self,Rect2(12,76,226,66),GOLD)
+	var rank := plate(self,Rect2(11,165,226,64),STEEL)
 	xp_frame = rank
 	picture(rank,Rect2(9,7,44,48)).texture = art_texture(13)
 	level_label = display(rank,Rect2(62,4,156,30),"",20,TEXT)
 	xp = meter(rank,Rect2(62,43,149,9),GOLD)
 	touch_blocks.append(rank)
 
-	var count_frame := plate(self,Rect2(519,76,189,106),GOLD)
+	var count_frame := plate(self,Rect2(516,163,192,105),GOLD,14)
+	count_frame.light = 0.52
 	score_panel = count_frame
 	for i in 3:
 		var art := picture(count_frame,Rect2(9,4+i*33,31,31))
@@ -265,33 +316,40 @@ func configure(owner_arena) -> void:
 		counters.append(display(count_frame,Rect2(43,4+i*33,140,30),"",17,tint))
 	touch_blocks.append(count_frame)
 
-	boss_frame = plate(self,Rect2(486,190,222,54),Color("#ab5347"))
+	boss_frame = plate(self,Rect2(486,278,222,54),Color("#ab5347"))
 	boss_name = display(boss_frame,Rect2(8,2,206,25),"",15,TEXT,true)
 	boss_health = meter(boss_frame,Rect2(12,33,198,9),RED)
 	boss_frame.hide()
 
-	var task_frame := plate(self,Rect2(12,152,226,38),GOLD)
+	var task_frame := plate(self,Rect2(11,234,226,38),GOLD)
 	task_toggle = button(task_frame,Rect2(0,0,226,38),"","Свернуть или открыть задания",Callable())
 	task_toggle.toggle_mode = true
 	task_toggle.add_theme_font_size_override("font_size",17)
-	tasks = plate(self,Rect2(12,192,226,88),STEEL)
+	var task_brass := StyleBoxFlat.new()
+	task_brass.bg_color = Color("#98633382")
+	task_brass.set_corner_radius_all(8)
+	task_toggle.add_theme_stylebox_override("normal",task_brass)
+	task_toggle.add_theme_stylebox_override("pressed",task_brass)
+	tasks = plate(self,Rect2(11,274,226,76),GOLD)
 	for i in TASKS.size():
-		task_text.append(display(tasks,Rect2(9,4+i*26,208,25),"",14,TEXT))
+		task_text.append(display(tasks,Rect2(10,5+i*22,207,21),"",14,TEXT))
 	touch_blocks.append(tasks)
 
-	radar_frame = plate(self,Rect2(12,292,150,168),STEEL)
+	var radar_shell := plate(self,Rect2(11,MAP_OPEN_TOP,178,184),GOLD,16)
+	radar_shell.light = 0.48
+	radar_frame = radar_shell
 	radar = Radar.new()
 	radar.arena = arena
 	radar.clip_contents = true
-	place(radar_frame,radar,Rect2(4,4,142,142))
-	display(radar_frame,Rect2(12,143,82,22),"КАРТА",13,SOFT)
-	zoom_button = button(radar_frame,Rect2(102,124,44,40),"+","Приблизить карту",toggle_radar)
+	place(radar_frame,radar,Rect2(8,8,162,158))
+	display(radar_frame,Rect2(16,158,89,21),"КАРТА",15,TEXT)
+	zoom_button = button(radar_frame,Rect2(129,139,40,37),"+","Приблизить карту",toggle_radar)
 	touch_blocks.append(radar_frame)
 	task_toggle.toggled.connect(toggle_tasks)
 	task_toggle.set_pressed_no_signal(true)
 
 	var right := Control.new()
-	place(self,right,Rect2(581,946,127,136))
+	place(self,right,Rect2(583,844,127,136))
 	var aiming := Reticle.new()
 	place(right,aiming,Rect2(10,0,106,106))
 	range_button = button(right,Rect2(10,0,106,106),"","Показать дальность автоогня",arena.toggle_attack_range)
@@ -303,16 +361,17 @@ func configure(owner_arena) -> void:
 		aiming.set_process(active)
 		aiming.queue_redraw()
 	)
-	var range_caption := plate(right,Rect2(5,106,117,26),STEEL,8)
+	var range_caption := plate(right,Rect2(5,103,117,26),STEEL,8)
 	display(range_caption,Rect2(0,0,117,26),"ДАЛЬНОСТЬ",14,TEXT,true)
 
-	var bottom := plate(self,Rect2(12,1108,696,160),STEEL,15)
+	var bottom := plate(self,Rect2(4,985,712,160),STEEL,18)
+	bottom.light = 0.88
 	touch_blocks.append(bottom)
-	var operator := plate(bottom,Rect2(7,8,211,144),GOLD)
+	var operator := plate(bottom,Rect2(7,8,218,144),GOLD,15)
 	operator_frame = operator
 	var portrait_frame := plate(operator,Rect2(6,7,68,76),GOLD,8)
 	hero_badge = picture(portrait_frame,Rect2(3,3,62,69))
-	hero_name = display(operator,Rect2(10,88,191,47),"",18,TEXT)
+	hero_name = display(operator,Rect2(14,88,192,47),"",21,Color("#fff0cc"))
 	hero_stats = display(operator,Rect2(75,8,130,77),"",15,SOFT)
 	for i in 4:
 		var slot := plate(bottom,Rect2(227+i*76,8,69,60),GOLD)
@@ -342,6 +401,22 @@ func configure(owner_arena) -> void:
 	badge.hide()
 	build_pause()
 	build_fusion()
+	for anchored in [right,bottom,fusion_anchor,footer_art]:
+		bottom_positions[anchored] = anchored.position.y
+
+func fit_viewport(extent: Vector2) -> void:
+	var spare := (extent-DESIGN_SIZE).max(Vector2.ZERO)
+	position.x = spare.x*0.5
+	size = Vector2(DESIGN_SIZE.x,extent.y)
+	for anchored in bottom_positions:
+		anchored.position.y = bottom_positions[anchored]+spare.y
+	for panel in [sky_art,footer_art,overlay,fusion_overlay]:
+		panel.position.x = -position.x
+		panel.size.x = extent.x
+	for veil in [overlay,fusion_overlay]:
+		veil.size.y = extent.y
+	pause_modal.position = (extent-pause_modal.size)*0.5
+	fusion_modal.position = (extent-fusion_modal.size)*0.5
 
 func build_pause() -> void:
 	overlay = ColorRect.new()
@@ -359,8 +434,8 @@ func build_pause() -> void:
 	overlay.hide()
 
 func build_fusion() -> void:
-	fusion_anchor = plate(self,Rect2(354,1036,184,52),GOLD,13)
-	fusion_button = button(fusion_anchor,Rect2(0,0,184,52),"СИНТЕЗ","Объединить суперспособности",arena.open_fusion)
+	fusion_anchor = plate(self,Rect2(354,921,184,49),GOLD,13)
+	fusion_button = button(fusion_anchor,Rect2(0,0,184,49),"СИНТЕЗ","Объединить суперспособности",arena.open_fusion)
 	fusion_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 
 	fusion_overlay = ColorRect.new()
@@ -368,6 +443,7 @@ func build_fusion() -> void:
 	fusion_overlay.size = size
 	add_child(fusion_overlay)
 	var modal := plate(fusion_overlay,Rect2(58,234,604,808),GOLD,21)
+	fusion_modal = modal
 	display(modal,Rect2(22,12,560,53),"СИНТЕЗ СПОСОБНОСТЕЙ",29,TEXT,true)
 	fusion_balance = display(modal,Rect2(22,66,560,34),"",20,GOLD,true)
 	display(modal,Rect2(18,100,568,22),"Сохраняет эффекты компонентов и добавляет бонус",17,SOFT,true)
@@ -483,8 +559,8 @@ func button(parent: Control, rect: Rect2, title: String, tip: String, action: Ca
 	item.add_theme_color_override("font_color",TEXT)
 	for state in ["normal","hover","pressed","disabled"]:
 		var box := StyleBoxFlat.new()
-		box.bg_color = {"normal":Color("#23334671"),"hover":Color("#ac743c62"),"pressed":Color("#bb773c96"),"disabled":Color("#0d141d90")}[state]
-		box.border_color = GOLD if state == "pressed" else Color("#516474")
+		box.bg_color = {"normal":Color("#1a181fb4"),"hover":Color("#604224c9"),"pressed":Color("#98602cb8"),"disabled":Color("#11101799")}[state]
+		box.border_color = GOLD if state == "pressed" else Color("#554953")
 		box.border_width_bottom = 1
 		box.set_corner_radius_all(7)
 		item.add_theme_stylebox_override(state,box)
@@ -499,8 +575,8 @@ func meter(parent: Control, rect: Rect2, tint: Color) -> ProgressBar:
 	var item := ProgressBar.new()
 	item.show_percentage = false
 	var box := StyleBoxFlat.new()
-	box.bg_color = Color("#050b13")
-	box.border_color = Color("#465b6f")
+	box.bg_color = Color("#080910")
+	box.border_color = Color("#57505d")
 	box.border_width_top = 1
 	box.border_width_bottom = 1
 	box.set_corner_radius_all(3)
@@ -523,7 +599,7 @@ func toggle_tasks(expanded: bool) -> void:
 	if objective_motion != null:
 		objective_motion.kill()
 	tasks.visible = expanded
-	radar_frame.position.y = 292 if expanded else 204
+	radar_frame.position.y = MAP_OPEN_TOP if expanded else MAP_CLOSED_TOP
 	if expanded:
 		tasks.modulate.a = 0.07
 		objective_motion = create_tween()
@@ -680,13 +756,16 @@ func animate_events() -> void:
 	if last_level >= 0 and arena.level > last_level:
 		if level_pop != null:
 			level_pop.kill()
-		badge.text = "НОВЫЙ УРОВЕНЬ %d" % arena.level
+		var threat: int = arena.enemy_stage(arena.level)
+		var escalation: bool = threat > arena.enemy_stage(last_level)
+		badge.text = ("ВРАГИ УСИЛЕНЫ · %d" % threat) if escalation else ("НОВЫЙ УРОВЕНЬ %d" % arena.level)
+		badge.add_theme_color_override("font_color",Color("#ffab6b") if escalation else GOLD)
 		badge.position.y = 262.0
 		badge.modulate.a = 1.0
 		badge.show()
 		level_pop = create_tween()
 		level_pop.tween_property(badge,"position:y",239.0,0.32).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-		level_pop.tween_interval(0.74)
+		level_pop.tween_interval(2.2 if escalation else 0.74)
 		level_pop.tween_property(badge,"modulate:a",0.0,0.30)
 		level_pop.tween_callback(badge.hide)
 	last_score = arena.score

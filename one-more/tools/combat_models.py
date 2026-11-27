@@ -116,11 +116,11 @@ def slab(name, center, half_size, paint, bevel=0.016, tilt=0.0):
     return obj
 
 
-def lens(name, center, size, paint, faceted=False):
+def lens(name, center, size, paint, faceted=False, *, segments=20, rings=10):
     if faceted:
         bpy.ops.mesh.primitive_ico_sphere_add(subdivisions=2, location=center)
     else:
-        bpy.ops.mesh.primitive_uv_sphere_add(segments=20, ring_count=10, location=center)
+        bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=center)
     obj = bpy.context.object
     obj.name = name
     obj.scale = size

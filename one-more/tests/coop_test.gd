@@ -97,9 +97,9 @@ func run_tests() -> void:
 		var replica := guest.coop.objects.get(enemy.get_instance_id()) as MeshInstance3D
 		return replica != null and replica.get_meta("model_asset") == enemy.get_meta("model_asset")
 	),"Spawned enemy appears in the guest scene with the authoritative model")
-	host.coop.partner.position = host.grounded(Vector3(43,0,-39))
+	host.coop.partner.position = host.grounded(Vector3(68,0,-62))
 	exchange(host,guest,4)
-	check(guest.hero.position.x > 39.0 and guest.hero.position.z < -34.0,"Cooperative snapshots preserve positions outside the old arena")
+	check(guest.hero.position.x > 63.0 and guest.hero.position.z < -58.0,"Cooperative snapshots preserve positions in the expanded arena")
 	check(absf(guest.hero.position.y-guest.grounded(guest.hero.position).y) < 0.04,"Both cooperative worlds seat the player on matching terrain")
 
 	var source = host.enemies[0]
@@ -107,10 +107,12 @@ func run_tests() -> void:
 	var replica: Node3D = guest.coop.objects[source_id]
 	var previous_tracers: int = guest.active_tracers
 	source.set_meta("health",host.damage+1)
-	host.fire_visual(host.hero,source.position)
+	host.fire_visual(host.hero,source.position,Vector3.INF,111)
 	host.hit_enemy(source,host.hero)
 	exchange(host,guest,2)
 	check(guest.active_tracers > previous_tracers,"Guest renders host shot events")
+	check(guest.get_children().any(func(node: Node) -> bool: return node.get_meta("shot_style",-2) == 111),
+		"The guest renders the host's synthesis tracer style")
 	var remote_pose = guest.actor_pose(replica)
 	if remote_pose != null:
 		check(remote_pose.hit > 0.0,"Guest applies the hit to the imported enemy rig")
@@ -135,6 +137,7 @@ func run_tests() -> void:
 	host._physics_process(0.016)
 	exchange(host,guest,3)
 	check(host.choosing and "ВЕДУЩИЙ" in guest.coop.partner_status(),"Team waits while the host selects an upgrade")
+	host.offers.assign([0])
 	host.choose_upgrade(0)
 	host.run_pickups = 13
 	host.magnet = 5.0
@@ -155,6 +158,28 @@ func run_tests() -> void:
 	exchange(host,guest,3)
 	check(host.credits == 0 and guest.credits == guest_credits and guest.ranks.has(111) and not guest.ranks.has(11) and not guest.ranks.has(12) and is_equal_approx(guest.reach,host.reach),
 		"The guest receives the fused ability and its actual range without a charge")
+	host.level = 4
+	exchange(host,guest,3)
+	guest.update_hud()
+	host.xp = host.level*3
+	host._physics_process(0.016)
+	exchange(host,guest,3)
+	guest.update_hud()
+	check(guest.level == 5 and "ВРАГИ УСИЛЕНЫ" in guest.hud_panel.badge.text,
+		"The guest receives the real escalation milestone")
+	host.offers.assign([0])
+	host.choose_upgrade(0)
+	host.spawn_timer = 0.0
+	host._physics_process(0.016)
+	exchange(host,guest,3)
+	var group: Array = host.enemies.slice(-2)
+	var replicas := group.all(func(enemy: MeshInstance3D) -> bool:
+		var remote := guest.coop.objects.get(enemy.get_instance_id()) as MeshInstance3D
+		return remote != null and remote.get_meta("model_asset") == enemy.get_meta("model_asset")
+	)
+	check(group.size() == 2 and group[0].get_meta("model_asset") == "enemy_armored"
+		and group[1].get_meta("model_asset") == "enemy_fast" and replicas,
+		"The host spawns the coordinated formation and the guest sees the same enemies")
 	var record: int = guest.best
 	host.score = 876
 	host.finish_run()

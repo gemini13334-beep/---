@@ -1,11 +1,11 @@
 extends RefCounted
 
-const PLAY_HALF := 48.0
-const SPAWN_HALF := 51.0
-const MAP_HALF := 54.0
-const FLOOR_HALF := 83.0
-const GRID := 112
-const STARTING_CRATES := 54
+const PLAY_HALF := 72.0
+const SPAWN_HALF := PLAY_HALF+4.0
+const MAP_HALF := PLAY_HALF+8.0
+const FLOOR_HALF := PLAY_HALF+39.0
+const GRID := 144
+const STARTING_CRATES := 72
 
 static func xz(point: Vector3) -> Vector2:
 	return Vector2(point.x,point.z)
@@ -29,14 +29,19 @@ static func height(biome: int,x: float,z: float) -> float:
 			var bank := smoothstep(2.4,11.0,absf(x-trail(z)))
 			feature = (softly*0.51+ridges*0.24)*lerpf(0.40,1.0,bank)
 		1:
-			var roadside := smoothstep(2.2,8.5,absf(x+z*0.18))
+			var roadside := smoothstep(2.2,8.5,minf(absf(x+z*0.18),absf(z-34.0)))
 			feature = softly*0.56*roadside + ridges*0.14
 		2:
-			feature = softly*0.68+ridges*0.86
+			var dune := sin(z*0.094+sin(x*0.061)*1.33)
+			feature = softly*0.56+ridges*0.59+dune*1.25
 		3:
-			feature = softly*0.63+ridges*0.37
+			var ridge := absf(x-sin(z*0.061)*12.0-z*0.17+11.0)
+			var glacial_bank := smoothstep(3.5,14.5,ridge)
+			feature = softly*0.67+ridges*0.52+glacial_bank*1.25-1.25
 		4:
-			feature = softly*0.81+ridges*0.42
+			var fissure := absf(x-cos(z*0.078)*9.0+z*0.29-10.0)
+			var crust := smoothstep(1.5,10.0,fissure)
+			feature = softly*0.87+ridges*0.62+crust*1.3-1.3
 	return feature+outskirts*(4.3+2.0*ridges)
 
 static func positioned(biome: int,pos: Vector3,offset: float) -> Vector3:
@@ -110,8 +115,9 @@ static func atmosphere_geometry(biome: int, texture: Texture2D, tint: Color) -> 
 	rng.seed = 4741+biome*797
 	for side in 4:
 		var heading := float(side)*PI*0.5
-		for i in 15:
-			var edge := Vector2(-58.0+8.3*i+rng.randf_range(-1.6,1.6),rng.randf_range(54.0,64.0)).rotated(heading)
+		for i in 18:
+			var interval := (PLAY_HALF+10.0)*2.0/17.0
+			var edge := Vector2(-PLAY_HALF-10.0+interval*i+rng.randf_range(-1.6,1.6),PLAY_HALF+rng.randf_range(5.0,13.0)).rotated(heading)
 			var size := Vector3(rng.randf_range(2.2,4.8),rng.randf_range(1.8,5.4),rng.randf_range(1.6,4.5))
 			var place := positioned(biome,Vector3(edge.x,0,edge.y),size.y*0.32 if biome == 1 else -0.35)
 			var facing := Basis(Vector3.UP,heading+rng.randf_range(-0.36,0.36))
@@ -122,8 +128,8 @@ static func atmosphere_geometry(biome: int, texture: Texture2D, tint: Color) -> 
 				transforms.append(Transform3D(facing*Basis.from_scale(reinforced),window_frame))
 	# Lower formations break up the interiors while the paths remain readable.
 	if biome >= 2:
-		for i in 24:
-			var p := Vector2(rng.randf_range(-46.0,46.0),rng.randf_range(-46.0,46.0))
+		for i in 35:
+			var p := Vector2(rng.randf_range(-PLAY_HALF+4.0,PLAY_HALF-4.0),rng.randf_range(-PLAY_HALF+4.0,PLAY_HALF-4.0))
 			if p.length_squared() < 200.0:
 				p.x += 9.0 if p.x >= 0.0 else -9.0
 			var feature_size := Vector3(rng.randf_range(1.15,2.9),rng.randf_range(0.38,1.75),rng.randf_range(1.2,2.5))

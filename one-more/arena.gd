@@ -5,6 +5,7 @@ const CoopSession = preload("res://coop/session.gd")
 const ActorPose = preload("res://actor_pose.gd")
 const CombatHUD = preload("res://ui/combat_hud.gd")
 const Landscape = preload("res://landscape.gd")
+const ShotStyles = preload("res://shot_styles.gd")
 var coop: CoopSession
 var hero: MeshInstance3D
 var camera: Camera3D
@@ -12,6 +13,7 @@ var enemies: Array[MeshInstance3D] = []
 var retry: Button
 var elapsed := 0.0
 var spawn_timer := 0.0
+var enemy_wave := 0
 var attack_timer := 0.0
 var score := 0
 var best := 0
@@ -45,6 +47,11 @@ var offers: Array[int] = []
 var offer_buttons: Array[Button] = []
 var offer_art: Array[TextureRect] = []
 var offer_motion: Tween
+const ENEMY_TYPES := [
+	["enemy",1,2.0,1.0], ["enemy_fast",1,3.8,0.7], ["enemy_armored",3,1.3,1.35],
+]
+const ENEMY_FORMATIONS := [[2,1],[1,1],[0,2,1]]
+const ENEMY_LIMIT := 100
 const ABILITIES = [
 	["ФОРСАЖ","Быстрее стрельба",0],["РЫВОК","Быстрее движение",0],
 	["МАГНИТ","Подбор и лечение",0],["НОВА","Урон по области",1],
@@ -137,7 +144,10 @@ func buy_fusion(id: int) -> String:
 			armor = minf(0.65,armor+0.16)
 	event_label.text = "СИНТЕЗ · "+recipe["name"]
 	play_fx("level")
-	pulse(hero.position,3.0,Color("#e9a468"))
+	var glow := Color(ShotStyles.STYLES[id][ShotStyles.HALO])
+	pulse(hero.position,3.0,glow)
+	if id == 112:
+		pulse(hero.position,1.6,Color(ShotStyles.STYLES[id][ShotStyles.CORE]))
 	update_hud()
 	return ""
 
@@ -282,12 +292,12 @@ func rebuild_scenery() -> void:
 	]
 	var rng := RandomNumberGenerator.new()
 	rng.seed = 8271+biome*147
-	var cluster_count := 12 if biome == 0 else 14
+	var cluster_count := 14 if biome == 0 else 18
 	for i in cluster_count:
 		var row := i/2.0
-		var z := -45.0+13.6*floorf(row)+rng.randf_range(-2.7,2.7)
+		var z := -59.0+(118.0/maxf(1.0,cluster_count*0.5-1.0))*floorf(row)+rng.randf_range(-2.7,2.7)
 		var sign_x := 1.0 if i%2 == 0 else -1.0
-		var x := clampf(Landscape.trail(z)+sign_x*rng.randf_range(9.0,30.0),-48.0,48.0)
+		var x := clampf(Landscape.trail(z)+sign_x*rng.randf_range(13.0,48.0),-62.0,62.0)
 		for j in range(3 if biome == 0 else 5):
 			var kind: String = themes[biome][j%4]
 			var point := Vector2(x+rng.randf_range(-4.8,4.8),z+rng.randf_range(-4.9,4.9))
@@ -301,8 +311,9 @@ func rebuild_scenery() -> void:
 		place_biome_entry()
 	if biome == 1:
 		place_industrial_district()
+	place_outer_sites()
 	var color := Color(["#74806f","#8da3ac","#dba576","#a4c8ea","#98737f"][biome])
-	var distant := Landscape.atmosphere_geometry(biome,ground_texture(),color)
+	var distant := Landscape.atmosphere_geometry(biome,GROUND_DETAILS[biome],color)
 	add_child(distant)
 	scenery.append(distant)
 	for prop in scenery:
@@ -370,6 +381,41 @@ func place_biome_entry() -> void:
 
 const INDUSTRIAL_MODELS := ["building-a","building-r","shipping-container-b","water-tower","road-barrier"]
 const FACTORY_CONCRETE := preload("res://assets/vendor/materials/concrete-color.jpg")
+const OUTER_SITES := [
+	[
+		[Vector2(-49,-51),[["ruin",-4,0,2.75],["ruin",5,1,2.50],["forest",-4,6,2.25],["tree",5,7,2.0]]],
+		[Vector2(54,39),[["tree",-5,-5,2.35],["tree",5,-3,2.1],["forest",5,5,2.4],["rock",-5,5,1.5]]],
+		[Vector2(-42,58),[["ruin",6,2,1.95],["rock",-5,1,2.20],["tree",4,-6,2.2]]],
+	],
+	[
+		[Vector2(54,34),[["shipping-container-b",-5,-7,3.4],["shipping-container-b",4,-7,3.4],["water-tower",4,6,1.70],["road-barrier",-4,4,1.4]]],
+		[Vector2(-54,34),[["building-r",-6,-8,3.1],["building-a",6,7,2.65],["road-barrier",-4,5,1.3]]],
+		[Vector2(-36,-54),[["building-a",-6,-2,3.2],["shipping-container-b",3,4,3.0],["water-tower",6,-5,1.5]]],
+	],
+	[
+		[Vector2(52,-51),[["desert",-8,-2,3.4],["desert",-2,5,2.9],["desert",5,-7,3.65],["desert",7,3,3.0],["cactus",2,5,1.55]]],
+		[Vector2(-49,49),[["ruin",-5,-3,2.5],["ruin",4,7,1.9],["cactus",4,-1,2.15],["rock",-5,6,2.05]]],
+		[Vector2(51,52),[["desert",-4,5,3.3],["rock",5,-7,2.2],["cactus",3,4,1.7]]],
+	],
+	[
+		[Vector2(-51,-45),[["ice_spire",-8,1,3.3],["ice",-5,7,3.5],["ice_spire",7,-7,2.65],["ice",5,-2,2.9]]],
+		[Vector2(52,45),[["shipping-container-b",-5,-5,3.0],["road-barrier",4,4,1.5],["ice_spire",6,-4,2.3],["ice",5,7,2.7]]],
+		[Vector2(-46,52),[["ice_spire",-6,-7,3.2],["ice_spire",5,5,2.35],["ice",4,-6,3.15]]],
+	],
+	[
+		[Vector2(51,-48),[["volcano",-6,-3,3.3],["volcano",6,-5,3.0],["lava_vent",4,5,2.15],["lava_vent",-4,5,1.7]]],
+		[Vector2(-49,54),[["volcano",-5,-6,3.35],["volcano",3,7,3.2],["lava_vent",5,-4,2.1],["rock",-6,4,2.35]]],
+		[Vector2(-50,-39),[["volcano",-5,5,3.05],["lava_vent",1,-6,2.4],["rock",7,4,2.2]]],
+	],
+]
+
+func place_outer_sites() -> void:
+	for site in OUTER_SITES[biome]:
+		var center: Vector2 = site[0]
+		for item in site[1]:
+			var offset := Vector2(item[1],item[2])
+			var size := float(item[3])
+			place_landmark(item[0],center+offset,Vector3(size*1.12,size,size),offset.angle())
 
 func place_industrial_district() -> void:
 	var layout := [
@@ -465,7 +511,7 @@ func dress_biome_stone(art: Node3D) -> void:
 				else:
 					var stone := ShaderMaterial.new()
 					stone.shader = preload("res://shaders/forest_stone.gdshader")
-					stone.set_shader_parameter("stone_surface",ground_texture())
+					stone.set_shader_parameter("stone_surface",GROUND_DETAILS[biome] if biome == 4 else ground_texture())
 					stone.set_shader_parameter("tint",tint)
 					landmark_materials[key] = stone
 			shape.set_surface_override_material(index,landmark_materials[key])
@@ -483,7 +529,6 @@ func planar_distance(a: Vector3,b: Vector3) -> float:
 var ground: MeshInstance3D
 var map_viewport: SubViewport
 var map_dirty := true
-var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
 const BIOME_NAMES = ["ЛЕС","ГОРОД","ПУСТЫНЯ","ЛЕДНИК","ВУЛКАН"]
 const GROUND_COLORS = ["#142d2d","#26323f","#674633","#2b4b68","#342732"]
@@ -492,6 +537,11 @@ const GROUND_SURFACES := [
 	preload("res://assets/art/forest-ground.jpg"),preload("res://assets/art/asphalt.jpg"),
 	preload("res://assets/art/sandstone.jpg"),preload("res://assets/art/glacier.jpg"),
 	preload("res://assets/art/basalt.jpg"),
+]
+const GROUND_DETAILS := [
+	preload("res://assets/art/forest-slate.jpg"),preload("res://assets/vendor/materials/road-asphalt.png"),
+	preload("res://assets/vendor/materials/dune-sand.png"),preload("res://assets/vendor/materials/snow-drift.png"),
+	preload("res://assets/vendor/materials/volcanic-stone.png"),
 ]
 var terrain_meshes: Dictionary = {}
 
@@ -503,7 +553,7 @@ func update_ground_material() -> void:
 	mat.shader = preload("res://shaders/terrain.gdshader")
 	mat.set_shader_parameter("biome",biome)
 	mat.set_shader_parameter("ground_albedo",ground_texture())
-	mat.set_shader_parameter("forest_slate",preload("res://assets/art/forest-slate.jpg"))
+	mat.set_shader_parameter("ground_detail",GROUND_DETAILS[biome])
 	if not terrain_meshes.has(biome):
 		terrain_meshes[biome] = Landscape.surface(biome)
 	ground.mesh = terrain_meshes[biome]
@@ -517,27 +567,32 @@ func build_forest_understory() -> void:
 var biome_rim: DirectionalLight3D
 var biome_environment: Environment
 const BIOME_KEY_LIGHT = ["#ffe2a8","#dbeaff","#ffe0a6","#d9f3ff","#ffb58b"]
+const BIOME_SUN := [Vector2(-38,-38),Vector2(-43,39),Vector2(-55,-26),Vector2(-31,43),Vector2(-33,-59)]
+const BIOME_SUN_ENERGY := [1.38,1.23,1.52,1.32,1.12]
 const BIOME_RIM_LIGHT = ["#80bfff","#83baff","#c2aaff","#75dfff","#ff6c48"]
-const BIOME_AMBIENT = ["#b9c8af","#aabbd4","#e3c9aa","#b3dff5","#c9a1aa"]
+const BIOME_AMBIENT = ["#b9c8af","#aabbd4","#e3c9aa","#c8dcea","#b7a8b4"]
 const BIOME_SKY = ["#13242c","#172331","#3c3028","#203748","#321c28"]
 
 func apply_biome_lighting() -> void:
 	if not is_instance_valid(biome_environment):
 		return
+	var elevation: Vector2 = BIOME_SUN[biome]
+	world_light.rotation_degrees = Vector3(elevation.x,elevation.y,0)
 	world_light.light_color = Color(BIOME_KEY_LIGHT[biome])
+	world_light.light_energy = BIOME_SUN_ENERGY[biome]*float(advanced["brightness"])
 	biome_rim.light_color = Color(BIOME_RIM_LIGHT[biome])
 	biome_environment.ambient_light_color = Color(BIOME_AMBIENT[biome])
 	biome_environment.background_color = Color(BIOME_SKY[biome])
 	biome_environment.fog_enabled = biome != 0
 	biome_environment.fog_light_color = Color(BIOME_AMBIENT[biome]).darkened(0.30)
-	biome_environment.fog_density = [0.0,0.005,0.007,0.007,0.008][biome]
+	biome_environment.fog_density = [0.0,0.0035,0.0055,0.0045,0.0035][biome]
 
 func cycle_biome() -> void:
 	set_biome((biome+1)%BIOMES.size())
 
 func set_biome(index: int) -> void:
 	biome = clampi(index,0,BIOMES.size()-1)
-	biome_button.text = "КАРТА  ·  "+BIOME_NAMES[biome]
+	menu.show_biome(biome,BIOME_NAMES[biome])
 	apply_biome_lighting()
 	update_ground_material()
 	range_marker.material_override.set_shader_parameter("biome",biome)
@@ -641,6 +696,8 @@ var menu_scrim: ColorRect
 var hero_stage: Node3D
 var hero_preview: Control
 var hero_preview_label: Label
+var centered_ui: Dictionary[Control,Vector2] = {}
+var ui_spare := Vector2.ZERO
 
 func style_button(btn: Button) -> void:
 	for state in ["normal","hover","pressed","disabled"]:
@@ -758,7 +815,7 @@ var quality_button: Button
 var audio_button: Button
 const FPS_OPTIONS = [30,60,90,120,144]
 var fps_limit := 60
-var high_quality := false
+var high_quality := true
 var audio_enabled := true
 
 const DEFAULT_ADVANCED = {"sensitivity":1.0,"deadzone":0.08,"camera_speed":10.0,"zoom":20.5,"master":1.0,"music":0.7,"effects":1.0,"particles":0.65,"brightness":1.0,"render_scale":1.0,"msaa":1.0,"stick_size":90.0,"stick_opacity":0.55,"vibration":0.0,"weapons":1.0,"enemies":1.0,"notifications":1.0,"vehicles":1.0}
@@ -777,7 +834,7 @@ const PRESET_VALUES = {
 
 func graphics_preset_name() -> String:
 	for index in PRESET_NAMES.size():
-		if high_quality != (index >= 2):
+		if high_quality != (index >= 1):
 			continue
 		if is_equal_approx(advanced["render_scale"],PRESET_VALUES["render_scale"][index]) and \
 			is_equal_approx(advanced["msaa"],PRESET_VALUES["msaa"][index]) and \
@@ -787,7 +844,7 @@ func graphics_preset_name() -> String:
 
 func cycle_preset() -> void:
 	preset_index = (preset_index+1)%PRESET_NAMES.size()
-	high_quality = preset_index >= 2
+	high_quality = preset_index >= 1
 	for key in PRESET_VALUES:
 		var slider := advanced_sliders[key] as HSlider
 		slider.value = float(PRESET_VALUES[key][preset_index])
@@ -897,7 +954,7 @@ func build_settings(layer: CanvasLayer) -> void:
 
 func reset_settings() -> void:
 	fps_limit = 60
-	high_quality = false
+	high_quality = true
 	audio_enabled = true
 	preset_index = 1
 	for key in DEFAULT_ADVANCED:
@@ -933,7 +990,7 @@ func apply_settings() -> void:
 	preset_button.text = "КАЧЕСТВО  ·  "+PRESET_LABELS[preset]
 	if running:
 		camera.size = float(advanced["zoom"])
-	world_light.light_energy = 1.18*float(advanced["brightness"])
+	apply_biome_lighting()
 	if is_instance_valid(ambient_player):
 		ambient_player.volume_db = -26.0+linear_to_db(maxf(0.0001,float(advanced["master"])*float(advanced["music"])))
 	if is_instance_valid(ambient_player):
@@ -946,6 +1003,12 @@ func apply_settings() -> void:
 			voice.stop()
 	Engine.max_fps = fps_limit
 	world_light.shadow_enabled = high_quality
+	var long_shadows := preset in ["HIGH","ULTRA"]
+	world_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if long_shadows else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
+	world_light.directional_shadow_max_distance = 69.0 if long_shadows else 43.0
+	world_light.shadow_blur = 1.65 if long_shadows else 1.25
+	if contact_shadow_material != null:
+		contact_shadow_material.albedo_color.a = 0.59 if high_quality else 1.0
 	for voice in fx_voices:
 		voice.volume_db = fx_volume(str(voice.get_meta("fx_key","pickup"))) if audio_enabled else -80.0
 		if not audio_enabled:
@@ -959,7 +1022,7 @@ func load_settings() -> void:
 	if cfg.load("user://settings.cfg") == OK:
 		var saved_fps := int(cfg.get_value("video","fps",60))
 		fps_limit = saved_fps if FPS_OPTIONS.has(saved_fps) else 60
-		high_quality = bool(cfg.get_value("video","shadows",false))
+		high_quality = bool(cfg.get_value("video","shadows",true))
 		preset_index = clampi(int(cfg.get_value("video","preset",1)),0,3)
 		audio_enabled = bool(cfg.get_value("audio","enabled",true))
 		for key in advanced:
@@ -1294,6 +1357,8 @@ func ring_ink(color: Color) -> ShaderMaterial:
 	var ink := ShaderMaterial.new()
 	ink.shader = preload("res://shaders/terrain_ring.gdshader")
 	ink.set_shader_parameter("biome",biome)
+	ink.set_shader_parameter("play_half",Landscape.PLAY_HALF)
+	ink.set_shader_parameter("floor_half",Landscape.FLOOR_HALF)
 	ink.set_shader_parameter("tint",color)
 	return ink
 
@@ -1350,71 +1415,121 @@ func render_boss_warning(enemy: MeshInstance3D,radius: float) -> void:
 	var intensity := 0.55+0.45*sin(elapsed*22.0)
 	ring.material_override.set_shader_parameter("tint",Color("#df7042").lerp(Color("#ffdc87"),intensity))
 
-func update_boss_attack(enemy: MeshInstance3D) -> void:
+func update_boss_attack(enemy: MeshInstance3D, damage_multiplier: float) -> void:
 	var kind := int(enemy.get_meta("kind",0))
 	var radius := 3.0+kind
 	var deadline := float(enemy.get_meta("next_pulse",99999.0))
 	if elapsed >= deadline:
 		clear_boss_warning(enemy)
 		pulse(enemy.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
+		var pulse_damage := (12.0+kind*4.0)*damage_multiplier
 		if planar_distance(hero.position,enemy.position) < radius:
-			damage_hero((12.0+kind*4.0)*(1.0-armor),enemy.position)
-		coop.damage_partner(enemy.position,radius,12.0+kind*4.0)
+			damage_hero(pulse_damage*(1.0-armor),enemy.position)
+		coop.damage_partner(enemy.position,radius,pulse_damage)
 		enemy.set_meta("next_pulse",elapsed+4.0)
 	elif deadline-elapsed <= 1.2:
 		render_boss_warning(enemy,radius)
 
 var active_tracers := 0
-func fire_visual(shooter: Node3D, target: Vector3, fallback_origin := Vector3.INF) -> void:
+var fired_shots := 0
+
+func fire_visual(shooter: Node3D, target: Vector3, fallback_origin := Vector3.INF, style := ShotStyles.AUTO) -> void:
+	if style == ShotStyles.AUTO:
+		style = ShotStyles.choose(ranks,fired_shots)
+		fired_shots += 1
+	style = ShotStyles.validated(style)
 	var pose := actor_pose(shooter)
 	if pose != null:
-		pose.fire(target)
+		pose.fire(target,float(ShotStyles.STYLES[style][ShotStyles.RECOIL]))
 	var origin := shot_origin(shooter)
 	if pose == null and fallback_origin.is_finite():
 		origin = fallback_origin
-	shot_tracer(origin,target,shooter)
+	shot_tracer(origin,target,shooter,style)
 
-func shot_tracer(from: Vector3, to: Vector3, shooter: Node3D = null) -> void:
+func tracer_piece(beam: Node3D, dimensions: Vector3, position: Vector3, ink: Material) -> MeshInstance3D:
+	var part := MeshInstance3D.new()
+	var mesh := BoxMesh.new()
+	mesh.size = dimensions
+	part.mesh = mesh
+	part.material_override = ink
+	part.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	beam.add_child(part)
+	part.position = position
+	return part
+
+func shot_tracer(from: Vector3, to: Vector3, shooter: Node3D = null, style := ShotStyles.PLAIN) -> void:
 	var length := from.distance_to(to)
 	if length < 0.05:
 		return
-	coop.record_shot(from,to,shooter)
+	var profile: Array = ShotStyles.STYLES[style]
+	var form: int = profile[ShotStyles.SHAPE]
+	var core := Color(profile[ShotStyles.CORE])
+	var glow := Color(profile[ShotStyles.HALO])
+	coop.record_shot(from,to,shooter,style)
 	play_fx("shot")
 	if active_tracers >= 24:
 		return
 	active_tracers += 1
-	var beam := MeshInstance3D.new()
-	var mesh := BoxMesh.new()
-	mesh.size = Vector3(0.085,0.085,length)
-	beam.mesh = mesh
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.albedo_color = Color("#ffe39b")
-	beam.material_override = mat
-	beam.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	var beam := Node3D.new()
+	beam.set_meta("shot_style",style)
 	add_child(beam)
 	beam.position = (from+to)*0.5
 	var up := Vector3.RIGHT if absf((to-from).dot(Vector3.UP))/length > 0.99 else Vector3.UP
 	beam.look_at(to,up)
-	var halo := MeshInstance3D.new()
-	var halo_mesh := BoxMesh.new()
-	halo_mesh.size = Vector3(0.19,0.19,length)
-	halo.mesh = halo_mesh
+	var core_mat := StandardMaterial3D.new()
+	core_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_mat.albedo_color = core
 	var halo_mat := StandardMaterial3D.new()
 	halo_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	halo_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	halo_mat.albedo_color = Color(1.0,0.52,0.12,0.28)
-	halo.material_override = halo_mat
-	halo.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	beam.add_child(halo)
+	halo_mat.albedo_color = Color(glow,0.37)
+	var duration := 0.14
+	var width := 0.073 if style != ShotStyles.PLAIN else 0.083
+	if form == ShotStyles.Form.PAIR:
+		for side in [-1.0,1.0]:
+			tracer_piece(beam,Vector3(0.055,0.055,length),Vector3(side*0.10,0,0),core_mat)
+		duration = 0.12
+	else:
+		tracer_piece(beam,Vector3(width,width,length),Vector3.ZERO,core_mat)
+	tracer_piece(beam,Vector3(0.26,0.20,length),Vector3.ZERO,halo_mat)
+	match form:
+		ShotStyles.Form.FORK:
+			for side in [-1.0,1.0]:
+				var branch := tracer_piece(beam,Vector3(0.055,0.06,length*0.58),Vector3(side*0.16,0,0),core_mat)
+				branch.rotation.y = side*0.067
+		ShotStyles.Form.NOVA:
+			pulse(to,1.3 if style != 112 else 1.7,glow)
+			duration = 0.17
+		ShotStyles.Form.HELIX:
+			var curl := ImmediateMesh.new()
+			for strand in [-1.0,1.0]:
+				curl.surface_begin(Mesh.PRIMITIVE_LINE_STRIP,core_mat)
+				for i in 19:
+					var turn := i*TAU/9.0
+					var radius: float = sin(i*PI/18.0)*0.32*strand
+					curl.surface_add_vertex(Vector3(cos(turn)*radius,sin(turn)*radius,length*(0.5-i/18.0)))
+				curl.surface_end()
+			var coil := MeshInstance3D.new()
+			coil.mesh = curl
+			coil.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+			beam.add_child(coil)
+			pulse(to,1.5,glow)
+			duration = 0.20
+		ShotStyles.Form.BURST:
+			var flash := tracer_piece(beam,Vector3(0.249,0.20,length*0.26),Vector3(0,0,length*0.37),core_mat)
+			flash.rotation.z = PI*0.25
+			pulse(to,1.42,glow)
+			duration = 0.18
 	var tween := create_tween().set_parallel(true)
-	tween.tween_property(beam,"scale",Vector3(0.1,0.1,1.0),0.14)
-	tween.tween_property(halo_mat,"albedo_color:a",0.0,0.14)
+	tween.tween_property(beam,"scale",Vector3(0.1,0.1,1.0),duration)
+	tween.tween_property(halo_mat,"albedo_color:a",0.0,duration)
 	tween.chain().tween_callback(func():
 		beam.queue_free()
 		active_tracers -= 1
 	)
-	impact_sparks(from,Color("#ffe6aa"),3)
+	impact_sparks(from,core,6 if form == ShotStyles.Form.BURST else 3)
+	if style != ShotStyles.PLAIN:
+		impact_sparks(to,glow,4)
 
 var active_bursts := 0
 var spark_fade: Gradient
@@ -1781,10 +1896,12 @@ func _ready() -> void:
 	var light := DirectionalLight3D.new()
 	world_light = light
 	add_child(light)
-	light.rotation_degrees = Vector3(-60,-30,0)
 	light.shadow_enabled = true
-	light.light_color = Color("#fff1d2")
-	light.light_energy = 1.35
+	light.shadow_bias = 0.075
+	light.shadow_normal_bias = 0.85
+	light.shadow_opacity = 0.94
+	light.directional_shadow_fade_start = 0.77
+	light.directional_shadow_blend_splits = true
 	var rim := DirectionalLight3D.new()
 	biome_rim = rim
 	add_child(rim)
@@ -1832,13 +1949,12 @@ func _ready() -> void:
 	menu = HangarMenu.new()
 	layer.add_child(menu)
 	menu.action_requested.connect(choose_menu_action)
-	biome_button = menu.map_button
-	biome_button.text = "КАРТА  ·  "+BIOME_NAMES[biome]
+	menu.show_biome(biome,BIOME_NAMES[biome])
 	result_label = menu.summary
 	achievements = menu.badges
 	event_label = Label.new()
 	layer.add_child(event_label)
-	event_label.position = Vector2(248,145)
+	event_label.position = Vector2(248,194)
 	event_label.size = Vector2(229,48)
 	event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	event_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -1887,7 +2003,7 @@ func _ready() -> void:
 	coop.configure(self,layer)
 	upgrades = VBoxContainer.new()
 	layer.add_child(upgrades)
-	upgrades.position = Vector2(90,477)
+	upgrades.position = Vector2(90,551)
 	upgrades.size = Vector2(540,320)
 	upgrades.add_theme_constant_override("separation",16)
 	var heading := Label.new()
@@ -1916,11 +2032,27 @@ func _ready() -> void:
 		offer_art.append(artwork)
 		btn.pressed.connect(choose_upgrade.bind(i))
 	upgrades.hide()
+	for panel in [retry,collection,settings_panel,awakening_panel,quest_panel,gate_panel,coop.lobby,upgrades,hero_preview]:
+		centered_ui[panel] = panel.position
+	get_viewport().size_changed.connect(resize_interface)
+	resize_interface()
 	load_profile()
 	apply_hero_art()
 	load_settings()
 	show_menu()
 	update_hud()
+
+func resize_interface(extent := Vector2.ZERO) -> void:
+	if extent == Vector2.ZERO:
+		extent = get_viewport().get_visible_rect().size
+	ui_spare = (extent-CombatHUD.DESIGN_SIZE).max(Vector2.ZERO)
+	hud_panel.fit_viewport(extent)
+	menu.fit_viewport(extent)
+	menu_scrim.size = extent
+	event_label.position.x = 248.0+ui_spare.x*0.5
+	for panel in centered_ui:
+		panel.position = centered_ui[panel]+ui_spare*0.5
+	refresh_touch_stick()
 
 func profile_int(value: Variant, fallback: int = 0) -> int:
 	if value is int or (value is float and is_finite(value)):
@@ -1987,10 +2119,17 @@ func start(populate := true) -> void:
 	for crate in crates:
 		crate.queue_free()
 	crates.clear()
+	var sites: Array = OUTER_SITES[biome]
 	for i in range(Landscape.STARTING_CRATES if populate else 0):
 		var radius := 16.0 if i < 12 else Landscape.PLAY_HALF-1.0
 		var p := Vector3(randf_range(-radius,radius),0.0,randf_range(-radius,radius))
-		if p.length_squared() < 16.0:
+		var site_crate := i-12
+		if 0 <= site_crate and site_crate < sites.size()*4:
+			var site_center: Vector2 = sites[floori(site_crate/4.0)][0]
+			var angle := site_center.angle()+(site_crate%4)*TAU/4.0+randf_range(-0.43,0.43)
+			var point := site_center+Vector2.from_angle(angle)*randf_range(2.8,5.2)
+			p = Vector3(point.x,0,point.y)
+		elif p.length_squared() < 16.0:
 			p.x += 6.0
 		p = grounded(p)
 		var mesh := BoxMesh.new()
@@ -2043,6 +2182,8 @@ func start(populate := true) -> void:
 		blast = 1
 	level = 1
 	spawn_timer = 0
+	enemy_wave = 0
+	fired_shots = 0
 	attack_timer = 0
 	clear_touch()
 	running = true
@@ -2071,7 +2212,7 @@ func stick_circle(parent: Node, tint: Color, edge: Color, knob: bool) -> Panel:
 	style.shadow_color = Color("#071119c5")
 	style.shadow_size = 4
 	if knob:
-		style.border_color = edge.lightened(0.20)
+		style.border_color = edge.lightened(0.24)
 		style.border_width_top = 3
 	style.set_corner_radius_all(256)
 	panel.add_theme_stylebox_override("panel",style)
@@ -2079,11 +2220,11 @@ func stick_circle(parent: Node, tint: Color, edge: Color, knob: bool) -> Panel:
 	return panel
 
 func build_touch_stick(layer: CanvasLayer) -> void:
-	stick_base = stick_circle(layer,Color("#101723df"),Color("#919aa9"),false)
+	stick_base = stick_circle(layer,Color("#100f17e5"),Color("#816a53"),false)
 	stick_guide = CombatHUD.StickGuide.new()
 	stick_guide.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	stick_base.add_child(stick_guide)
-	stick_knob = stick_circle(stick_base,Color("#516476ed"),Color("#9faec0"),true)
+	stick_knob = stick_circle(stick_base,Color("#3b3542f1"),Color("#a89286"),true)
 	stick_base.hide()
 
 func refresh_touch_stick() -> void:
@@ -2095,7 +2236,7 @@ func refresh_touch_stick() -> void:
 	var radius := float(advanced["stick_size"])
 	stick_base.size = Vector2.ONE*radius*2.0
 	stick_guide.size = stick_base.size
-	var center := origin if finger != -1 else Vector2(130,979)
+	var center := origin if finger != -1 else Vector2(120+ui_spare.x*0.5,883+ui_spare.y)
 	stick_base.position = center-Vector2.ONE*radius
 	stick_base.modulate.a = float(advanced["stick_opacity"])
 	stick_knob.size = Vector2.ONE*radius*0.7
@@ -2157,6 +2298,43 @@ func follow_player_camera(dt: float) -> void:
 		focus = coop.partner.position
 	camera.position = camera.position.lerp(focus + COMBAT_CAMERA_OFFSET,1.0-exp(-float(advanced["camera_speed"])*dt))
 
+func enemy_stage(run_level: int) -> int:
+	return floori(run_level/5.0)
+
+func reinforce_enemy(enemy: MeshInstance3D, stages: int) -> void:
+	var health := int(enemy.get_meta("health",1))
+	var maximum := int(enemy.get_meta("max_health",health))
+	var bonus := stages*(4 if enemy.get_meta("boss",false) else 1)
+	enemy.set_meta("health",health+bonus)
+	enemy.set_meta("max_health",maximum+bonus)
+
+func spawn_enemy_wave(center: Vector3, stage: int) -> void:
+	enemy_wave += 1
+	var types: Array = []
+	if stage > 0 and enemy_wave % 4 == 0:
+		var formation := (stage+floori(enemy_wave/4.0)-2) % ENEMY_FORMATIONS.size()
+		types = ENEMY_FORMATIONS[formation]
+	else:
+		var roll := randf()
+		types = [2 if roll < 0.25 else (1 if roll < 0.5125 else 0)]
+	var angle := randf()*TAU
+	var count := mini(types.size(),ENEMY_LIMIT-enemies.size())
+	for i in count:
+		var spawn_angle := angle+(i-(count-1)*0.5)*0.42
+		var position := Landscape.keep_inside(center+Vector3(cos(spawn_angle),0,sin(spawn_angle))*12,Landscape.SPAWN_HALF)
+		var data: Array = ENEMY_TYPES[types[i]]
+		var mesh := BoxMesh.new()
+		mesh.size = Vector3.ONE*0.8
+		var enemy := model(mesh,Color("#ff7865"),position)
+		attach_art(enemy,data[0])
+		enemy.scale = Vector3.ONE*float(data[3])
+		enemy.set_meta("health",int(data[1])+(gate_rank if mode == 2 else 0))
+		enemy.set_meta("speed",data[2])
+		reinforce_enemy(enemy,stage)
+		seat_actor(enemy)
+		add_contact_shadow(enemy,1.72)
+		enemies.append(enemy)
+
 func _physics_process(dt: float) -> void:
 	if running and defeat_timer > 0.0:
 		defeat_timer -= dt
@@ -2183,31 +2361,14 @@ func _physics_process(dt: float) -> void:
 	seat_actor(hero)
 	follow_player_camera(dt)
 	coop.tick_partner(dt)
+	var stage := enemy_stage(level)
+	var enemy_speed_multiplier := 1.0+minf(0.65,stage*0.065)
+	var enemy_damage_multiplier := 1.0+0.16*sqrt(stage)
 	spawn_timer -= dt
-	if spawn_timer <= 0 and enemies.size() < 100:
-		spawn_timer = maxf(0.25,1.1-elapsed/150.0)
-		var a := randf()*TAU
+	if spawn_timer <= 0 and enemies.size() < ENEMY_LIMIT:
+		spawn_timer = maxf(0.25,(1.1-elapsed/150.0)*pow(0.94,mini(stage,8)))
 		var center: Vector3 = coop.partner.position if hp <= 0 and coop.live_partner() != null else hero.position
-		var p := Landscape.keep_inside(center+Vector3(cos(a),0,sin(a))*12,Landscape.SPAWN_HALF)
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(0.8,0.8,0.8)
-		var enemy := model(mesh,Color("#ff7865"),p)
-		if randf() < 0.25:
-			attach_art(enemy,"enemy_armored")
-			enemy.set_meta("health",3)
-			enemy.set_meta("speed",1.3)
-			enemy.scale = Vector3.ONE*1.35
-		elif randf() < 0.35:
-			attach_art(enemy,"enemy_fast")
-			enemy.set_meta("speed",3.8)
-			enemy.scale = Vector3.ONE*0.7
-		else:
-			attach_art(enemy,"enemy")
-		if mode == 2:
-			enemy.set_meta("health",int(enemy.get_meta("health",1))+gate_rank)
-		seat_actor(enemy)
-		add_contact_shadow(enemy,1.72)
-		enemies.append(enemy)
+		spawn_enemy_wave(center,stage)
 	if elapsed >= 45 and not boss_spawned:
 		boss_spawned = true
 		var boss_mesh := BoxMesh.new()
@@ -2222,6 +2383,7 @@ func _physics_process(dt: float) -> void:
 		boss.set_meta("health",boss_health)
 		boss.set_meta("max_health",boss_health)
 		boss.set_meta("speed",1.5)
+		reinforce_enemy(boss,stage)
 		seat_actor(boss)
 		add_contact_shadow(boss,3.35)
 		enemies.append(boss)
@@ -2235,11 +2397,11 @@ func _physics_process(dt: float) -> void:
 		var hero_distance := d if target == hero else planar_distance(hero.position,e.position)
 		if d > 0.05:
 			e.rotation.y = lerp_angle(e.rotation.y,atan2(offset.x,offset.z),1.0-exp(-9.0*dt))
-		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
+		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))*enemy_speed_multiplier
 		seat_actor(e)
 		if e.get_meta("boss",false):
-			update_boss_attack(e)
-		var contact_damage: float = dt*(24 if e.get_meta("boss",false) else 12)
+			update_boss_attack(e,enemy_damage_multiplier)
+		var contact_damage: float = dt*(24 if e.get_meta("boss",false) else 12)*enemy_damage_multiplier
 		if hero_distance < 0.9*e.scale.x:
 			damage_hero(contact_damage*(1.0-armor),e.position)
 		coop.damage_partner(e.position,0.9*e.scale.x,contact_damage)
@@ -2282,6 +2444,12 @@ func _physics_process(dt: float) -> void:
 	if xp >= level*3 and (hp > 0 or coop.live):
 		xp -= level*3
 		level += 1
+		var new_stage := enemy_stage(level)
+		if new_stage > stage:
+			for enemy in enemies:
+				reinforce_enemy(enemy,new_stage-stage)
+			enemy_wave = 3
+			spawn_timer = minf(spawn_timer,0.6)
 		play_fx("level")
 		hero.scale = Vector3.ONE*(1.0+minf((level-1)*0.12,1.5))
 		seat_actor(hero)
