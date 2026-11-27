@@ -1,7 +1,7 @@
 extends Node
 
 const Landscape = preload("res://landscape.gd")
-const PROTOCOL := 3
+const PROTOCOL := 4
 const UPDATE_INTERVAL := 0.085
 const LINK_TIMEOUT := 3.5
 const ENEMY_ART := ["enemy","enemy_fast","enemy_armored","boss_overlord","boss_crystal","boss_inferno"]
@@ -363,9 +363,7 @@ func send_world() -> void:
 		var vehicle: MeshInstance3D = arena.vehicle
 		actors.append([vehicle.get_instance_id(),arena.VEHICLES[arena.vehicle_kind],vehicle.position.x,vehicle.position.z,vehicle.rotation.y,1,false])
 	var upgrade_levels: Array[int] = []
-	for id in arena.ABILITIES.size():
-		upgrade_levels.append(int(arena.ranks.get(id,0)))
-	for id in arena.COMBINATIONS:
+	for id in arena.ability_rank_ids():
 		upgrade_levels.append(int(arena.ranks.get(id,0)))
 	if transmit({
 		"type":"state","players":[player_row(arena.hero,arena.hp,arena.max_hp),player_row(partner,partner_hp,partner_max_hp)],
@@ -426,7 +424,8 @@ func apply_boss_health(bosses: Variant) -> void:
 		actor.set_meta("health",clampi(int(number(values[0])),0,int(actor.get_meta("max_health"))))
 
 func apply_hud(data: Variant) -> void:
-	if not data is Array or data.size() < 4 or not data[3] is Array or data[3].size() != arena.ABILITIES.size()+arena.COMBINATIONS.size():
+	var rank_ids: Array = arena.ability_rank_ids()
+	if not data is Array or data.size() < 4 or not data[3] is Array or data[3].size() != rank_ids.size():
 		return
 	arena.run_pickups = clampi(int(number(data[0])),0,1000000)
 	arena.damage = clampi(int(number(data[1])),1,1000000)
@@ -436,7 +435,6 @@ func apply_hud(data: Variant) -> void:
 	# Guest contact damage is calculated by the host without the host's personal armor.
 	arena.armor = 0.0
 	arena.ranks.clear()
-	var rank_ids: Array = range(arena.ABILITIES.size())+arena.COMBINATIONS.keys()
 	for i in rank_ids.size():
 		var rank := clampi(int(number(data[3][i])),0,1000)
 		if rank > 0:

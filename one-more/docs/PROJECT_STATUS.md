@@ -39,3 +39,7 @@ The combat HUD uses illustrated skill and equipment cards, with an overhead aren
 Playable bounds are 96 × 96 world units, with terrain extending to 166 × 166 so the combat camera remains over solid terrain at the outermost corners. The minimap and Bluetooth snapshots share the new bounds. Walkable terrain varies in elevation. Crates, characters, props and local effects are placed from the same height function. City, desert, glacier and volcano use individual surface textures, grouped props and distinct relief. The layout supports the existing combat rules.
 
 The four human operators use separate walk and run clips selected according to movement speed. Blender validates the knee pole and support foot height at each frame. Their trousers use blended weights across each knee; the revised shoulder plates, footwear and facial geometry are baked into the original models.
+
+## Ability synthesis
+
+The combat HUD opens synthesis for solo players and the Bluetooth host. The three recipes cost 300, 350, or 450 profile credits. Each spends one rank of every listed epic ability, retains the effects of those ranks inside the result, and adds its own bonus for the rest of the run. Choosing a recipe shows its ingredients and price before confirmation. A failed profile save leaves the wallet and upgrade ranks intact. A guest receives the host's fused ability state and keeps their own wallet.

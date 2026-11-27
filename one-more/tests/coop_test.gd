@@ -141,6 +141,20 @@ func run_tests() -> void:
 	exchange(host,guest,3)
 	guest.update_hud()
 	check(guest.run_pickups == 13 and guest.magnet == 5.0 and guest.ranks == host.ranks and "13" in guest.hud_panel.counters[1].text,"Guest HUD mirrors team pickups and acquired upgrade ranks")
+	for id in [11,12]:
+		host.choosing = true
+		host.offers.assign([id])
+		host.choose_upgrade(0)
+	host.credits = 350
+	var guest_credits: int = guest.credits
+	guest.open_fusion()
+	check(not guest.hud_fusing,"A guest cannot purchase on the host's profile")
+	host.hud_panel.fusion_button.pressed.emit()
+	check(host.hud_fusing and host.buy_fusion(111).is_empty(),"The host can buy synthesis on their profile")
+	host.close_fusion()
+	exchange(host,guest,3)
+	check(host.credits == 0 and guest.credits == guest_credits and guest.ranks.has(111) and not guest.ranks.has(11) and not guest.ranks.has(12) and is_equal_approx(guest.reach,host.reach),
+		"The guest receives the fused ability and its actual range without a charge")
 	var record: int = guest.best
 	host.score = 876
 	host.finish_run()

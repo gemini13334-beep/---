@@ -266,6 +266,17 @@ func capture() -> void:
 		"The upgrade picker lacks illustrated offers")
 	await shot("upgrade",arena.upgrades)
 	arena.choose_upgrade(0)
+	arena.credits = 650
+	for ingredient in [10,13]:
+		arena.choosing = true
+		arena.offers.assign([ingredient])
+		arena.choose_upgrade(0)
+	arena.open_fusion()
+	arena.hud_panel.select_fusion(110)
+	await shot("fusion",arena.hud_panel.fusion_overlay)
+	arena.hud_panel.fusion_confirm.pressed.emit()
+	check_animation(arena.ranks.has(110) and arena.credits == 350,"The synthesis menu did not complete the on-screen recipe")
+	await shot("fusion-result",arena.hud_panel)
 	arena.finish_run()
 	await record_combat_motion()
 	await record_vega_motion()

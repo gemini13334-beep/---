@@ -215,6 +215,7 @@ func run_tests() -> void:
 	check(weathered_factory,"The city factories use the bundled concrete texture in the weathering shader")
 	check(scene.INDUSTRIAL_MODELS.all(func(asset: String) -> bool: return scenery_ids.has(asset)),
 		"The city displays all five imported industrial models")
+	check_fusion(scene)
 	scene.queue_free()
 	await process_frame
 	print("Gameplay tests: ",failures.size()," failures")
@@ -248,3 +249,59 @@ func check_boundaries(scene) -> void:
 			var lowest := origin+direction*((-2.0-origin.y)/direction.y)
 			stays_inside = stays_inside and maxf(absf(lowest.x),absf(lowest.z)) < Landscape.FLOOR_HALF
 	check(stays_inside,"All camera corners at maximum zoom remain over terrain at the four world corners")
+
+
+func check_fusion(scene) -> void:
+	scene.start(false)
+	scene.credits = 299
+	var before_damage: int = scene.damage
+	scene.hud_panel.fusion_button.pressed.emit()
+	var old_time: float = scene.elapsed
+	scene._physics_process(0.25)
+	check(scene.hud_fusing and scene.elapsed == old_time and not scene.stick_base.visible,"Synthesis opens from combat and pauses a solo run")
+	scene.hud_panel.select_fusion(110)
+	check(scene.hud_panel.fusion_confirm.disabled and not scene.buy_fusion(110).is_empty(),"Missing ingredients block synthesis")
+	scene.close_fusion()
+	for id in [10,10,13]:
+		scene.choosing = true
+		scene.offers.assign([id])
+		scene.choose_upgrade(0)
+	scene.open_fusion()
+	scene.hud_panel.select_fusion(110)
+	check(scene.hud_panel.fusion_confirm.disabled and scene.credits == 299 and not scene.buy_fusion(110).is_empty(),
+		"Insufficient credits leave all ranks and the wallet intact")
+
+	scene.credits = 750
+	scene.hud_panel.refresh_fusion()
+	check(DirAccess.make_dir_absolute(scene.PROFILE_TEMP) == OK,"Prepare a failed-write test for synthesis")
+	check(not scene.buy_fusion(110).is_empty() and scene.credits == 750 and scene.ranks[10] == 2 and scene.ranks[13] == 1 and not scene.ranks.has(110),
+		"Failed profile write leaves both credits and components intact")
+	check(DirAccess.remove_absolute(scene.PROFILE_TEMP) == OK,"Remove the profile write failure fixture")
+	scene.hud_panel.fusion_confirm.pressed.emit()
+	var saved: ConfigFile = scene.read_profile(scene.PROFILE_PATH)
+	check(saved != null and scene.credits == 450 and saved.get_value("records","credits") == 450,"Synthesis saves the exact remaining balance")
+	check(not scene.hud_fusing and scene.ranks[10] == 1 and not scene.ranks.has(13) and scene.ranks[110] == 1,
+		"Synthesis consumes one rank of each component and adds one result")
+	check(scene.damage == before_damage+6 and scene.blast == 4 and scene.power == 2,
+		"Combined effects carry over and gain the new combat bonuses")
+	check(scene.hud_panel.active_abilities[0] == 110 and "БУРЯ ЯДРА" in scene.hud_panel.status_text.text,
+		"The new ability appears first in the combat bar")
+	scene.open_fusion()
+	scene.hud_panel.select_fusion(110)
+	check(scene.hud_panel.fusion_confirm.disabled and not scene.buy_fusion(110).is_empty() and scene.credits == 450,
+		"A finished recipe cannot be purchased twice in one run")
+	scene.close_fusion()
+
+	for id in [11,14,15]:
+		scene.choosing = true
+		scene.offers.assign([id])
+		scene.choose_upgrade(0)
+	var previous_max: float = scene.max_hp
+	var previous_regen: float = scene.regen
+	scene.open_fusion()
+	check(scene.buy_fusion(112).is_empty() and scene.credits == 0 and scene.ranks.has(112) and not scene.ranks.has(11) and not scene.ranks.has(14) and not scene.ranks.has(15),
+		"A three-component recipe spends the final credits and each selected rank")
+	check(scene.max_hp == previous_max+65.0 and scene.regen == previous_regen+2.0 and scene.hp <= scene.max_hp,
+		"The defensive result increases health and regeneration without breaking the health cap")
+	scene.start(false)
+	check(not scene.hud_fusing and scene.ranks.is_empty() and scene.credits == 0,"A fresh run clears fused abilities and keeps the wallet balance")

@@ -215,6 +215,14 @@ var health: ProgressBar
 var xp: ProgressBar
 var bottom_xp: ProgressBar
 var overlay: ColorRect
+var fusion_anchor: Plate
+var fusion_button: Button
+var fusion_overlay: ColorRect
+var fusion_balance: Label
+var fusion_feedback: Label
+var fusion_confirm: Button
+var fusion_cards: Dictionary = {}
+var selected_recipe := -1
 var pause_modal: Plate
 var pause_title: Label
 var pause_hint: Label
@@ -333,6 +341,7 @@ func configure(owner_arena) -> void:
 	badge = display(self,Rect2(241,244,236,39),"",20,GOLD,true)
 	badge.hide()
 	build_pause()
+	build_fusion()
 
 func build_pause() -> void:
 	overlay = ColorRect.new()
@@ -348,6 +357,82 @@ func build_pause() -> void:
 	button(modal,Rect2(40,224,420,65),"НАСТРОЙКИ","Настройки игры",arena.open_hud_settings)
 	exit_button = button(modal,Rect2(40,306,420,65),"","Выйти из боя",arena.exit_hud_run)
 	overlay.hide()
+
+func build_fusion() -> void:
+	fusion_anchor = plate(self,Rect2(354,1036,184,52),GOLD,13)
+	fusion_button = button(fusion_anchor,Rect2(0,0,184,52),"СИНТЕЗ","Объединить суперспособности",arena.open_fusion)
+	fusion_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+
+	fusion_overlay = ColorRect.new()
+	fusion_overlay.color = Color(0.019,0.029,0.050,0.89)
+	fusion_overlay.size = size
+	add_child(fusion_overlay)
+	var modal := plate(fusion_overlay,Rect2(58,234,604,808),GOLD,21)
+	display(modal,Rect2(22,12,560,53),"СИНТЕЗ СПОСОБНОСТЕЙ",29,TEXT,true)
+	fusion_balance = display(modal,Rect2(22,66,560,34),"",20,GOLD,true)
+	display(modal,Rect2(18,100,568,22),"Сохраняет эффекты компонентов и добавляет бонус",17,SOFT,true)
+	display(modal,Rect2(18,122,568,22),"По одному рангу · действует до конца забега",17,SOFT,true)
+	var row := 0
+	for id in arena.FUSION_RECIPES:
+		var recipe: Dictionary = arena.FUSION_RECIPES[id]
+		var card := plate(modal,Rect2(20,146+float(row)*139,564,126),STEEL,12)
+		var pick := button(card,Rect2(0,0,564,126),"",str(recipe["name"]),select_fusion.bind(id))
+		pick.add_theme_stylebox_override("normal",StyleBoxEmpty.new())
+		var glyph := picture(card,Rect2(14,24,78,78))
+		glyph.texture = art_texture(int(recipe["art"]))
+		display(card,Rect2(109,6,446,31),str(recipe["name"]),22,TEXT)
+		var ingredients := display(card,Rect2(109,37,446,24),"",16,SOFT)
+		display(card,Rect2(109,62,446,23),str(recipe["bonus"]),16,BLUE)
+		var status := display(card,Rect2(109,89,446,25),"",16,GOLD)
+		fusion_cards[id] = {"plate":card,"ingredients":ingredients,"status":status}
+		row += 1
+
+	fusion_feedback = display(modal,Rect2(22,573,560,40),"Выберите рецепт",18,SOFT,true)
+	fusion_confirm = button(modal,Rect2(28,627,548,65),"ОБЪЕДИНИТЬ","Подтвердить покупку",confirm_fusion)
+	button(modal,Rect2(28,709,548,62),"ВЕРНУТЬСЯ В БОЙ","Закрыть синтез",arena.close_fusion)
+	fusion_overlay.hide()
+
+func set_fusion_open(open: bool) -> void:
+	fusion_overlay.visible = open
+	selected_recipe = -1
+	if open:
+		fusion_feedback.text = "Выберите рецепт" if not arena.coop.live else "Оплата из ваших кредитов · бой продолжается"
+		refresh_fusion()
+
+func select_fusion(id: int) -> void:
+	selected_recipe = id
+	var issue: String = arena.fusion_issue(id)
+	fusion_feedback.text = "Все условия выполнены" if issue.is_empty() else issue
+	refresh_fusion()
+
+func confirm_fusion() -> void:
+	var issue: String = arena.buy_fusion(selected_recipe)
+	if not issue.is_empty():
+		fusion_feedback.text = issue
+		refresh_fusion()
+		return
+	ability_page = 0
+	inspected = selected_recipe
+	inspected_slot = -1
+	arena.close_fusion()
+
+func refresh_fusion() -> void:
+	fusion_balance.text = "КРЕДИТЫ  %d" % arena.credits
+	for id in arena.FUSION_RECIPES:
+		var recipe: Dictionary = arena.FUSION_RECIPES[id]
+		var card: Dictionary = fusion_cards[id]
+		var entries := PackedStringArray()
+		for ingredient in recipe["ingredients"]:
+			var rank: int = arena.ranks.get(ingredient,0)
+			entries.append("%s %s" % [arena.ABILITIES[ingredient][0],"✓" if rank > 0 else "—"])
+		card["ingredients"].text = " + ".join(entries)
+		var issue: String = arena.fusion_issue(id)
+		var caption := "ГОТОВО" if issue.is_empty() else issue
+		card["status"].text = "%d КР. · %s" % [recipe["credits"],caption]
+		card["plate"].flash = 0.95 if id == selected_recipe else (0.32 if issue.is_empty() else 0.0)
+
+	fusion_confirm.disabled = selected_recipe == -1 or not arena.can_open_fusion() or not arena.fusion_issue(selected_recipe).is_empty()
+	fusion_confirm.text = "ОБЪЕДИНИТЬ" if selected_recipe == -1 else "ОБЪЕДИНИТЬ · %d КР." % arena.FUSION_RECIPES[selected_recipe]["credits"]
 
 func place(parent: Control, child: Control, rect: Rect2) -> void:
 	child.mouse_filter = MOUSE_FILTER_IGNORE
@@ -490,6 +575,7 @@ func reset_run() -> void:
 	for panel in [score_panel,xp_frame,operator_frame]:
 		panel.flash = 0.0
 	set_paused(false)
+	set_fusion_open(false)
 
 func refresh_tasks() -> void:
 	var count := 0
@@ -527,7 +613,13 @@ func next_ability_page() -> void:
 
 func refresh_abilities() -> void:
 	var ids: Array = arena.ranks.keys()
-	ids.sort_custom(func(a: int,b: int): return arena.ranks[a] > arena.ranks[b] or (arena.ranks[a] == arena.ranks[b] and a < b))
+	ids.sort_custom(func(a: int,b: int):
+		var merged_a: bool = arena.FUSION_RECIPES.has(a)
+		var merged_b: bool = arena.FUSION_RECIPES.has(b)
+		if merged_a != merged_b:
+			return merged_a
+		return arena.ranks[a] > arena.ranks[b] or (arena.ranks[a] == arena.ranks[b] and a < b)
+	)
 	var pages := maxi(1,ceili(float(ids.size())/slots.size()))
 	ability_page = mini(ability_page,pages-1)
 	page_button.visible = pages > 1
@@ -539,6 +631,8 @@ func refresh_abilities() -> void:
 		var active := i < active_abilities.size()
 		var id: int = active_abilities[i] if active else KIT_ART[i]
 		var art_id: int = 3 if id == 100 else (12 if id == 101 else id)
+		if arena.FUSION_RECIPES.has(id):
+			art_id = int(arena.FUSION_RECIPES[id]["art"])
 		var icon := slot_art[i]
 		icon.texture = art_texture(art_id)
 		icon.modulate = Color.WHITE if active else Color("#c0d5e6")
@@ -548,6 +642,8 @@ func refresh_abilities() -> void:
 		slot_ranks[i].get_parent().visible = has_rank
 		slot_ranks[i].text = str(arena.ranks[id]) if has_rank else ""
 		slot_frames[i].border = [GOLD,BLUE,Color("#ca96ff")][data[2]] if active else STEEL
+		if arena.FUSION_RECIPES.has(id):
+			slot_frames[i].border = Color("#eda75c")
 		slot_frames[i].flash = 0.85 if (active and inspected == id) or (not active and inspected_slot == i) else 0.0
 		slot_icons[i].text = GLYPHS[art_id] if icon.texture == null else ""
 	if inspected in active_abilities:
@@ -613,6 +709,15 @@ func refresh_boss() -> void:
 
 func refresh() -> void:
 	animate_events()
+	fusion_anchor.visible = arena.can_open_fusion() and not fusion_overlay.visible
+	if fusion_anchor.visible:
+		var ready := 0
+		for id in arena.FUSION_RECIPES:
+			ready += int(arena.fusion_issue(id).is_empty())
+		fusion_button.text = "СИНТЕЗ" if ready == 0 else "СИНТЕЗ · %d" % ready
+		fusion_button.modulate = Color.WHITE if ready > 0 else Color("#b3c5d8")
+	if fusion_overlay.visible:
+		refresh_fusion()
 	var seconds := maxi(0,60-int(arena.elapsed)) if arena.mode == 1 else int(arena.elapsed)
 	clock.text = "%02d:%02d" % [int(seconds/60.0),seconds%60]
 	context.text = "BLUETOOTH · 2 ИГРОКА" if arena.coop.live else MODES[arena.mode]

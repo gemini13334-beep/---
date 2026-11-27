@@ -61,8 +61,85 @@ const COMBINATIONS := {
 	101: ["ГРАВИТАЦИОННЫЙ РЫВОК","Увеличивает радиус подбора осколков",2],
 }
 
+const FUSION_RECIPES := {
+	110: {
+		"name":"БУРЯ ЯДРА", "ingredients":[10,13], "credits":300, "art":10,
+		"bonus":"+3 урона, сильнее взрыв, быстрее автоогонь",
+	},
+	111: {
+		"name":"СИНГУЛЯРНОСТЬ", "ingredients":[11,12], "credits":350, "art":12,
+		"bonus":"+2,4 дальности, +2,1 магнит, +1,25 скорости",
+	},
+	112: {
+		"name":"ЯДРО ВОЗРОЖДЕНИЯ", "ingredients":[14,15,11], "credits":450, "art":15,
+		"bonus":"+65 здоровья, +2 ОЗ/с, до +16 п.п. брони",
+	},
+}
+
 func ability_data(id: int) -> Array:
+	if FUSION_RECIPES.has(id):
+		var recipe: Dictionary = FUSION_RECIPES[id]
+		return [recipe["name"],recipe["bonus"],2]
 	return COMBINATIONS[id] if COMBINATIONS.has(id) else ABILITIES[id]
+
+func ability_rank_ids() -> Array:
+	return range(ABILITIES.size())+COMBINATIONS.keys()+FUSION_RECIPES.keys()
+
+func can_open_fusion() -> bool:
+	return running and not choosing and not hud_paused and not hud_in_settings and hp > 0.0 and (not coop.live or coop.hosting)
+
+func fusion_issue(id: int) -> String:
+	if not FUSION_RECIPES.has(id):
+		return "Рецепт недоступен"
+	if ranks.has(id):
+		return "Уже создано в этом забеге"
+	var recipe: Dictionary = FUSION_RECIPES[id]
+	for ingredient in recipe["ingredients"]:
+		if int(ranks.get(ingredient,0)) <= 0:
+			return "Нужны все указанные суперспособности"
+	if credits < int(recipe["credits"]):
+		return "Недостаточно кредитов"
+	return ""
+
+func buy_fusion(id: int) -> String:
+	if not hud_fusing or not can_open_fusion():
+		return "Синтез недоступен"
+	var issue := fusion_issue(id)
+	if not issue.is_empty():
+		return issue
+	var recipe: Dictionary = FUSION_RECIPES[id]
+	var remaining := credits-int(recipe["credits"])
+	if not save_profile(remaining):
+		return "Не удалось сохранить покупку"
+	credits = remaining
+	# The new ability inherits the effects already applied by the spent ranks.
+	# Apply the extra power once, without replaying healing or losing capped stats.
+	for ingredient in recipe["ingredients"]:
+		var count := int(ranks[ingredient])-1
+		if count == 0:
+			ranks.erase(ingredient)
+		else:
+			ranks[ingredient] = count
+	ranks[id] = 1
+	match id:
+		110:
+			damage += 3
+			blast += 2
+			power += 1
+		111:
+			reach += 2.4
+			magnet += 2.1
+			speed_bonus += 1.25
+		112:
+			max_hp += 65.0
+			hp = minf(max_hp,hp+65.0)
+			regen += 2.0
+			armor = minf(0.65,armor+0.16)
+	event_label.text = "СИНТЕЗ · "+recipe["name"]
+	play_fx("level")
+	pulse(hero.position,3.0,Color("#e9a468"))
+	update_hud()
+	return ""
 
 func roll_offers() -> void:
 	offers.clear()
@@ -557,6 +634,7 @@ const PALETTE = ["#62f5c5","#8caee9","#ff7043","#b998ff","#e2b45d","#72e5ff","#f
 var hud_panel: CombatHUD
 var hud_paused := false
 var hud_in_settings := false
+var hud_fusing := false
 var run_pickups := 0
 var range_marker: MeshInstance3D
 var menu_scrim: ColorRect
@@ -617,10 +695,10 @@ func read_profile(path: String) -> ConfigFile:
 		return cfg
 	return null
 
-func save_profile() -> void:
+func save_profile(new_credit_balance: int = -1) -> bool:
 	var cfg := ConfigFile.new()
 	cfg.set_value("records","best",best)
-	cfg.set_value("records","credits",credits)
+	cfg.set_value("records","credits",credits if new_credit_balance < 0 else new_credit_balance)
 	cfg.set_value("records","sprint",best_sprint)
 	cfg.set_value("records","runs",runs)
 	cfg.set_value("records","kills",total_kills)
@@ -636,15 +714,16 @@ func save_profile() -> void:
 	cfg.set_value("meta","version",4)
 	if cfg.save(PROFILE_TEMP) != OK:
 		push_warning("Profile temporary write failed")
-		return
+		return false
 	var current := read_profile(PROFILE_PATH)
 	if current != null:
 		if current.save(PROFILE_BACKUP_TEMP) != OK or DirAccess.rename_absolute(PROFILE_BACKUP_TEMP,PROFILE_BACKUP) != OK:
 			push_warning("Profile backup failed")
-			return
+			return false
 	var err := DirAccess.rename_absolute(PROFILE_TEMP,PROFILE_PATH)
 	if err != OK:
 		push_warning("Profile replacement failed: "+str(err))
+	return err == OK
 
 func refresh_collection() -> void:
 	collection_balance.text = "КРЕДИТЫ %d  ·  ОТКРЫТО %d ИЗ %d" % [credits,owned.size(),HEROES.size()]
@@ -1109,6 +1188,8 @@ func show_collection() -> void:
 func show_menu() -> void:
 	hud_paused = false
 	hud_in_settings = false
+	hud_fusing = false
+	hud_panel.set_fusion_open(false)
 	range_marker.hide()
 	hero_preview.hide()
 	gate_panel.hide()
@@ -1885,6 +1966,7 @@ func start(populate := true) -> void:
 	defeat_timer = 0.0
 	hud_paused = false
 	hud_in_settings = false
+	hud_fusing = false
 	run_pickups = 0
 	hud_panel.reset_run()
 	refresh_minimap()
@@ -2007,7 +2089,7 @@ func build_touch_stick(layer: CanvasLayer) -> void:
 func refresh_touch_stick() -> void:
 	if not is_instance_valid(stick_base):
 		return
-	stick_base.visible = running and not choosing and not hud_paused and not hud_in_settings and defeat_timer <= 0.0
+	stick_base.visible = running and not choosing and not hud_paused and not hud_in_settings and not hud_fusing and defeat_timer <= 0.0
 	if not stick_base.visible:
 		return
 	var radius := float(advanced["stick_size"])
@@ -2037,7 +2119,9 @@ func _notification(what: int) -> void:
 
 func _input(event: InputEvent) -> void:
 	if running and event.is_action_pressed("ui_cancel") and not event.is_echo():
-		if hud_in_settings:
+		if hud_fusing:
+			close_fusion()
+		elif hud_in_settings:
 			close_settings()
 		elif not choosing:
 			toggle_hud_pause()
@@ -2046,7 +2130,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch and not event.pressed and event.index == finger:
 		clear_touch()
 		return
-	if not running or choosing or hud_paused or hud_in_settings or defeat_timer > 0.0:
+	if not running or choosing or hud_paused or hud_in_settings or hud_fusing or defeat_timer > 0.0:
 		return
 	if event is InputEventScreenTouch:
 		if event.pressed and finger == -1:
@@ -2061,7 +2145,7 @@ func _input(event: InputEvent) -> void:
 	refresh_touch_stick()
 
 func movement_input() -> Vector2:
-	if hud_paused or hud_in_settings:
+	if hud_paused or hud_in_settings or hud_fusing:
 		return Vector2.ZERO
 	if finger != -1:
 		return direction
@@ -2079,7 +2163,7 @@ func _physics_process(dt: float) -> void:
 		if defeat_timer <= 0.0:
 			finish_run()
 		return
-	if not running or choosing or (hud_paused and not coop.live) or (coop.live and not coop.hosting):
+	if not running or choosing or ((hud_paused or hud_fusing) and not coop.live) or (coop.live and not coop.hosting):
 		return
 	elapsed += dt
 	if not coop.live or hp > 0:
@@ -2203,6 +2287,8 @@ func _physics_process(dt: float) -> void:
 		seat_actor(hero)
 		hero_shadow.position.y = -0.5+0.028/hero.scale.y
 		choosing = true
+		if hud_fusing:
+			close_fusion()
 		clear_touch()
 		roll_offers()
 		upgrades.show()
@@ -2246,7 +2332,7 @@ func attack_distance() -> float:
 func update_hud() -> void:
 	if hud_panel.visible:
 		hud_panel.refresh()
-	range_marker.visible = running and not choosing and not hud_paused and hud_panel.range_button.button_pressed
+	range_marker.visible = running and not choosing and not hud_paused and not hud_fusing and hud_panel.range_button.button_pressed
 	if range_marker.visible:
 		var radius := attack_distance()
 		range_marker.position = grounded(hero.position,0.068)
@@ -2268,8 +2354,24 @@ func build_attack_range() -> void:
 func toggle_attack_range() -> void:
 	update_hud()
 
+func open_fusion() -> void:
+	if not can_open_fusion() or hud_fusing:
+		return
+	hud_fusing = true
+	hud_panel.set_fusion_open(true)
+	event_label.hide()
+	clear_touch()
+	update_hud()
+
+func close_fusion() -> void:
+	hud_fusing = false
+	hud_panel.set_fusion_open(false)
+	event_label.visible = running and not hud_paused
+	clear_touch()
+	update_hud()
+
 func toggle_hud_pause() -> void:
-	if not running or choosing or defeat_timer > 0.0:
+	if not running or choosing or hud_fusing or defeat_timer > 0.0:
 		return
 	hud_paused = not hud_paused
 	hud_panel.set_paused(hud_paused)
@@ -2278,7 +2380,7 @@ func toggle_hud_pause() -> void:
 	update_hud()
 
 func open_hud_settings() -> void:
-	if not running or choosing or hud_in_settings or defeat_timer > 0.0:
+	if not running or choosing or hud_in_settings or hud_fusing or defeat_timer > 0.0:
 		return
 	if not hud_paused:
 		toggle_hud_pause()
