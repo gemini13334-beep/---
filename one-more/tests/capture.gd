@@ -199,7 +199,7 @@ func record_boss_motion(boss: MeshInstance3D) -> void:
 		charged = charged or pose.windup > 0.62
 		released = released or pose.strike > 0.0
 	check_animation(charged and released and float(boss.get_meta("next_pulse")) > deadline,
-		"Boss capture did not include the preparation and release")
+		"Boss capture incomplete (charged=%s released=%s time=%.2f deadline=%.2f)" % [charged,released,arena.elapsed,deadline])
 
 func capture() -> void:
 	var args := OS.get_cmdline_user_args()
@@ -315,9 +315,12 @@ func capture() -> void:
 	for map_id in range(1, arena.BIOMES.size()):
 		arena.show_menu()
 		arena.cycle_biome()
-		arena.start()
+		arena.start(map_id < 3)
 		var boss: MeshInstance3D
 		if map_id >= 3:
+			# Unrelated crates, enemy waves and shard events can pause this take for an upgrade.
+			arena.next_event = 200.0
+			arena.spawn_timer = 200.0
 			arena.elapsed = 45.0
 			advance(1)
 			boss = arena.enemies.back()
