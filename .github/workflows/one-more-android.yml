@@ -9,11 +9,16 @@ on:
       baseline_preview:
         description: Optional ONE MORE preview tag to compare with the new APK on the emulators
         type: string
+      baseline_only:
+        description: Diagnose an existing preview without building a new APK
+        type: boolean
+        default: false
 concurrency:
   group: one-more-android-${{ github.ref }}
   cancel-in-progress: true
 jobs:
   build:
+    if: inputs.baseline_only == false
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -179,6 +184,7 @@ jobs:
   install:
     name: Install and launch on ${{ matrix.device }}
     needs: build
+    if: always() && (needs.build.result == 'success' || inputs.baseline_only)
     runs-on: ubuntu-24.04
     timeout-minutes: 16
     permissions:
@@ -196,10 +202,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
+        if: inputs.baseline_only == false
         with:
           name: ONE-MORE-Android
           path: android-download
       - uses: actions/download-artifact@v4
+        if: inputs.baseline_only == false
         with:
           name: ONE-MORE-Android-compatibility
           path: android-download
@@ -211,20 +219,27 @@ jobs:
       - name: Install and launch the published format
         env:
           BASELINE_PREVIEW: ${{ inputs.baseline_preview }}
+          BASELINE_ONLY: ${{ inputs.baseline_only }}
           GH_TOKEN: ${{ github.token }}
           SYSTEM_IMAGE: ${{ matrix.image }}
           PAGE_SIZE: ${{ matrix.page_size }}
         run: |
           set -euo pipefail
-          package=$(sed -n 's/^package: name=\x27\([^\x27]*\)\x27.*$/\1/p' android-download/android-compatibility.txt)
-          test -n "$package"
+          mkdir -p android-download
           baseline=
           if [[ -n "$BASELINE_PREVIEW" ]]; then
             [[ "$BASELINE_PREVIEW" =~ ^one-more-preview-[0-9a-f]{7}$ ]]
             baseline=android-download/baseline.apk
             gh release download "$BASELINE_PREVIEW" --pattern one-more.apk --output "$baseline"
           fi
-          bash one-more/tools/test_android_install.sh "$SYSTEM_IMAGE" "$PAGE_SIZE" android-download/one-more.apk "$package" "$baseline"
+          if [[ "$BASELINE_ONLY" == true ]]; then
+            test -n "$baseline"
+            bash one-more/tools/test_android_install.sh "$SYSTEM_IMAGE" "$PAGE_SIZE" '' '' "$baseline"
+          else
+            package=$(sed -n 's/^package: name=\x27\([^\x27]*\)\x27.*$/\1/p' android-download/android-compatibility.txt)
+            test -n "$package"
+            bash one-more/tools/test_android_install.sh "$SYSTEM_IMAGE" "$PAGE_SIZE" android-download/one-more.apk "$package" "$baseline"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -232,7 +247,7 @@ jobs:
           path: install-logs/
           if-no-files-found: warn
   publish-preview:
-    if: inputs.publish_preview
+    if: inputs.publish_preview && !inputs.baseline_only
     needs: [build, install]
     runs-on: ubuntu-latest
     timeout-minutes: 5
