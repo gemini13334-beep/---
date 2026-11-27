@@ -280,6 +280,22 @@ func check_boundaries(scene) -> void:
 
 
 func check_fusion(scene) -> void:
+	# Reproduce a funded run with only Phantom acquired.
+	scene.start(false)
+	scene.credits = 6781
+	scene.ranks[11] = 1
+	scene.open_fusion()
+	check(scene.hud_panel.selected_recipe == 111 and scene.hud_panel.fusion_confirm.disabled
+		and "ТЯГОТЕНИЕ" in scene.hud_panel.fusion_feedback.text,"The closest recipe names the missing component")
+	scene.close_fusion()
+	scene.xp = scene.level*3
+	scene._physics_process(0.016)
+	check(scene.choosing and scene.offers.size() == 3 and scene.offers[0] == 12,"The next level-up offers the missing component")
+	scene.choose_upgrade(0)
+	scene.open_fusion()
+	check(scene.hud_panel.selected_recipe == 111 and not scene.hud_panel.fusion_confirm.disabled,"An affordable recipe is selected automatically")
+	scene.hud_panel.fusion_confirm.pressed.emit()
+	check(scene.ranks.has(111) and scene.credits == 6431,"Buying Singularity spends exactly 350 credits")
 	scene.start(false)
 	scene.credits = 299
 	var before_damage: int = scene.damage

@@ -82,6 +82,7 @@ const FUSION_RECIPES := {
 		"bonus":"+65 здоровья, +2 ОЗ/с, до +16 п.п. брони",
 	},
 }
+var fusion_target := -1
 
 func ability_data(id: int) -> Array:
 	if FUSION_RECIPES.has(id):
@@ -95,15 +96,25 @@ func ability_rank_ids() -> Array:
 func can_open_fusion() -> bool:
 	return running and not choosing and not hud_paused and not hud_in_settings and hp > 0.0 and (not coop.live or coop.hosting)
 
+func missing_fusion_ingredients(id: int) -> Array[int]:
+	var missing: Array[int] = []
+	if FUSION_RECIPES.has(id) and not ranks.has(id):
+		for ingredient in FUSION_RECIPES[id]["ingredients"]:
+			if int(ranks.get(ingredient,0)) <= 0:
+				missing.append(ingredient)
+	return missing
+
 func fusion_issue(id: int) -> String:
 	if not FUSION_RECIPES.has(id):
 		return "Рецепт недоступен"
 	if ranks.has(id):
 		return "Уже создано в этом забеге"
 	var recipe: Dictionary = FUSION_RECIPES[id]
-	for ingredient in recipe["ingredients"]:
-		if int(ranks.get(ingredient,0)) <= 0:
-			return "Нужны все указанные суперспособности"
+	var missing := PackedStringArray()
+	for ingredient in missing_fusion_ingredients(id):
+		missing.append(ABILITIES[ingredient][0])
+	if not missing.is_empty():
+		return "Не хватает: %s" % ", ".join(missing)
 	if credits < int(recipe["credits"]):
 		return "Недостаточно кредитов"
 	return ""
@@ -153,6 +164,9 @@ func buy_fusion(id: int) -> String:
 
 func roll_offers() -> void:
 	offers.clear()
+	var missing := missing_fusion_ingredients(fusion_target)
+	if not missing.is_empty():
+		offers.append(missing[0])
 	while offers.size() < 3:
 		var id := randi_range(0,ABILITIES.size()-1)
 		var rarity := int(ABILITIES[id][2])
@@ -2179,6 +2193,7 @@ func start(populate := true) -> void:
 	hud_paused = false
 	hud_in_settings = false
 	hud_fusing = false
+	fusion_target = -1
 	run_pickups = 0
 	hud_panel.reset_run()
 	prepare_arena()

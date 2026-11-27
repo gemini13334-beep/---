@@ -442,7 +442,7 @@ func build_fusion() -> void:
 	display(modal,Rect2(22,12,560,53),"СИНТЕЗ СПОСОБНОСТЕЙ",29,TEXT,true)
 	fusion_balance = display(modal,Rect2(22,66,560,34),"",20,GOLD,true)
 	display(modal,Rect2(18,100,568,22),"Сохраняет эффекты компонентов и добавляет бонус",17,SOFT,true)
-	display(modal,Rect2(18,122,568,22),"По одному рангу · действует до конца забега",17,SOFT,true)
+	display(modal,Rect2(18,122,568,22),"Компоненты выбираются при повышении уровня",17,SOFT,true)
 	var row := 0
 	for id in arena.FUSION_RECIPES:
 		var recipe: Dictionary = arena.FUSION_RECIPES[id]
@@ -458,7 +458,7 @@ func build_fusion() -> void:
 		fusion_cards[id] = {"plate":card,"ingredients":ingredients,"status":status}
 		row += 1
 
-	fusion_feedback = display(modal,Rect2(22,573,560,40),"Выберите рецепт",18,SOFT,true)
+	fusion_feedback = display(modal,Rect2(22,573,560,48),"Выберите рецепт",17,SOFT,true)
 	fusion_confirm = button(modal,Rect2(28,627,548,65),"ОБЪЕДИНИТЬ","Подтвердить покупку",confirm_fusion)
 	button(modal,Rect2(28,709,548,62),"ВЕРНУТЬСЯ В БОЙ","Закрыть синтез",arena.close_fusion)
 	fusion_overlay.hide()
@@ -467,13 +467,32 @@ func set_fusion_open(open: bool) -> void:
 	fusion_overlay.visible = open
 	selected_recipe = -1
 	if open:
-		fusion_feedback.text = "Выберите рецепт" if not arena.coop.live else "Оплата из ваших кредитов · бой продолжается"
+		var closest := -1
+		var closest_count := 4
+		for id in arena.FUSION_RECIPES:
+			if arena.fusion_issue(id).is_empty():
+				select_fusion(id)
+				return
+			var missing: Array[int] = arena.missing_fusion_ingredients(id)
+			if not missing.is_empty() and missing.size() < closest_count:
+				closest = id
+				closest_count = missing.size()
+		if arena.missing_fusion_ingredients(arena.fusion_target).size() > 0:
+			closest = arena.fusion_target
+		if closest != -1:
+			select_fusion(closest)
+			return
+		fusion_feedback.text = "Выберите рецепт"
 		refresh_fusion()
 
 func select_fusion(id: int) -> void:
 	selected_recipe = id
+	arena.fusion_target = id
 	var issue: String = arena.fusion_issue(id)
 	fusion_feedback.text = "Все условия выполнены" if issue.is_empty() else issue
+	var missing: Array[int] = arena.missing_fusion_ingredients(id)
+	if not missing.is_empty():
+		fusion_feedback.text += "\nВ следующем выборе: %s" % arena.ABILITIES[missing[0]][0]
 	refresh_fusion()
 
 func confirm_fusion() -> void:
@@ -499,6 +518,10 @@ func refresh_fusion() -> void:
 		card["ingredients"].text = " + ".join(entries)
 		var issue: String = arena.fusion_issue(id)
 		var caption := "ГОТОВО" if issue.is_empty() else issue
+		var missing: Array[int] = arena.missing_fusion_ingredients(id)
+		if not missing.is_empty():
+			var total: int = recipe["ingredients"].size()
+			caption = "СОБРАНО %d/%d" % [total-missing.size(),total]
 		card["status"].text = "%d КР. · %s" % [recipe["credits"],caption]
 		card["plate"].flash = 0.95 if id == selected_recipe else (0.32 if issue.is_empty() else 0.0)
 
