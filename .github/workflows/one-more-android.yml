@@ -6,6 +6,9 @@ on:
         description: Publish the verified APK as a ONE MORE GitHub prerelease
         type: boolean
         default: false
+      baseline_preview:
+        description: Optional ONE MORE preview tag to compare with the new APK on the emulators
+        type: string
 concurrency:
   group: one-more-android-${{ github.ref }}
   cancel-in-progress: true
@@ -22,6 +25,27 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - name: Restore ARM64 Godot template libraries
+        id: android-engine
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/one-more-android-engine
+          key: one-more-godot-android-${{ runner.os }}-${{ hashFiles('one-more/tools/build_android_engine.sh') }}
+      - name: Build Godot 4.4.1 ARM64 for 16 KiB pages
+        if: steps.android-engine.outputs.cache-hit != 'true'
+        timeout-minutes: 30
+        run: |
+          set -o pipefail
+          mkdir -p build-logs
+          python3 -m venv "$RUNNER_TEMP/one-more-scons"
+          "$RUNNER_TEMP/one-more-scons/bin/pip" install 'scons==4.9.1'
+          PATH="$RUNNER_TEMP/one-more-scons/bin:$PATH" bash one-more/tools/build_android_engine.sh "$RUNNER_TEMP/one-more-android-engine" 2>&1 | tee build-logs/android-engine.log
+      - name: Cache ARM64 Godot template libraries
+        if: steps.android-engine.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/one-more-android-engine
+          key: ${{ steps.android-engine.outputs.cache-primary-key }}
       - name: Build Bluetooth AAR
         timeout-minutes: 10
         run: bash one-more/tools/build_bluetooth_library.sh
@@ -48,6 +72,20 @@ jobs:
           chmod +x one-more/android/build/gradlew
           printf '%s\n' '4.4.1.stable' > one-more/android/.build_version
           touch one-more/android/.gdignore
+      - name: Update native libraries in the stock Gradle template
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          aars=("$GITHUB_WORKSPACE/one-more/android/build/libs/debug/"*.aar)
+          test "${#aars[@]}" -eq 1
+          work=$(mktemp -d)
+          cd "$work"
+          mkdir -p jni/arm64-v8a
+          for lib in libgodot_android.so libc++_shared.so; do
+            unzip -p "${aars[0]}" "jni/arm64-v8a/$lib" >/dev/null
+            cp "$RUNNER_TEMP/one-more-android-engine/$lib" jni/arm64-v8a/
+          done
+          zip -q "${aars[0]}" jni/arm64-v8a/*.so
       - name: Configure Android
         env:
           PUBLISH_PREVIEW: ${{ inputs.publish_preview }}
@@ -82,6 +120,36 @@ jobs:
           timeout 840 "$GODOT" --headless --path one-more --export-debug Android "$GITHUB_WORKSPACE/one-more.apk" 2>&1 | tee build-logs/export.log
           test -s one-more.apk
           unzip -tq one-more.apk
+      - name: Align and sign the exported APK for both page sizes
+        run: |
+          set -euo pipefail
+          sdk_tools="$ANDROID_HOME/build-tools/35.0.0"
+          if [[ ! -x "$sdk_tools/zipalign" ]]; then sdkmanager 'build-tools;35.0.0'; fi
+          "$sdk_tools/zipalign" -P 16 -f 4 one-more.apk "$RUNNER_TEMP/one-more-aligned.apk"
+          "$sdk_tools/apksigner" sign --ks "$HOME/.android/debug.keystore" --ks-key-alias androiddebugkey \
+            --ks-pass pass:android --v4-signing-enabled false --out one-more.apk "$RUNNER_TEMP/one-more-aligned.apk"
+      - name: Verify Android 14 and 16 KiB page compatibility
+        env:
+          PUBLISH_PREVIEW: ${{ inputs.publish_preview }}
+        run: |
+          set -euo pipefail
+          sdk_tools="$ANDROID_HOME/build-tools/35.0.0"
+          "$sdk_tools/aapt" dump badging one-more.apk | tee android-compatibility.txt
+          if [[ "$PUBLISH_PREVIEW" == "true" ]]; then
+            grep -Fq "package: name='${PREVIEW_PACKAGE:?}'" android-compatibility.txt
+          fi
+          python3 -c 'import re; s=open("android-compatibility.txt").read(); m=re.search(r"sdkVersion:\x27(\d+)\x27",s); t=re.search(r"targetSdkVersion:\x27(\d+)\x27",s); assert m and int(m[1])<=34, "APK must install on Android 14"; assert t and int(t[1])>=34, "Target SDK must be at least 34"; assert "arm64-v8a" in s, "ARM64 required"'
+          "$sdk_tools/zipalign" -c -P 16 -v 4 one-more.apk > build-logs/zipalign.log
+          tail -1 build-logs/zipalign.log | tee -a android-compatibility.txt
+          for lib in libgodot_android.so libc++_shared.so; do
+            unzip -p one-more.apk "lib/arm64-v8a/$lib" > "$RUNNER_TEMP/$lib"
+            readelf -lW "$RUNNER_TEMP/$lib" | python3 -c 'import sys; loads=[int(row.split()[-1],16) for row in sys.stdin if row.lstrip().startswith("LOAD ")]; assert loads and min(loads)>=16384, loads'
+            echo "$lib: ELF LOAD segments aligned to at least 16 KiB" | tee -a android-compatibility.txt
+          done
+          "$sdk_tools/apksigner" verify --min-sdk-version 34 --verbose one-more.apk | tee -a android-compatibility.txt
+          sha256sum one-more.apk | tee -a android-compatibility.txt
+          "$sdk_tools/aapt" dump permissions one-more.apk | tee -a android-compatibility.txt
+          grep -Fq 'android.permission.BLUETOOTH_CONNECT' android-compatibility.txt
       - name: Preserve build logs
         if: always()
         uses: actions/upload-artifact@v4
@@ -89,22 +157,6 @@ jobs:
           name: ONE-MORE-build-logs
           path: build-logs/
           if-no-files-found: warn
-      - name: Verify Android 14 compatibility
-        env:
-          PUBLISH_PREVIEW: ${{ inputs.publish_preview }}
-        run: |
-          set -euo pipefail
-          AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
-          "$AAPT" dump badging one-more.apk | tee android-compatibility.txt
-          if [[ "$PUBLISH_PREVIEW" == "true" ]]; then
-            grep -Fq "package: name='${PREVIEW_PACKAGE:?}'" android-compatibility.txt
-          fi
-          python3 -c 'import re; s=open("android-compatibility.txt").read(); m=re.search(r"sdkVersion:\x27(\d+)\x27",s); t=re.search(r"targetSdkVersion:\x27(\d+)\x27",s); assert m and int(m[1])<=34, "APK must install on Android 14"; assert t and int(t[1])>=34, "Target SDK must be at least 34"; assert "arm64-v8a" in s, "ARM64 required"'
-          APKSIGNER="$(dirname "$AAPT")/apksigner"
-          "$APKSIGNER" verify --min-sdk-version 34 --verbose one-more.apk | tee -a android-compatibility.txt
-          sha256sum one-more.apk | tee -a android-compatibility.txt
-          "$AAPT" dump permissions one-more.apk | tee -a android-compatibility.txt
-          grep -Fq 'android.permission.BLUETOOTH_CONNECT' android-compatibility.txt
       - uses: actions/upload-artifact@v4
         with:
           name: ONE-MORE-Android-compatibility
@@ -120,9 +172,61 @@ jobs:
             ${{ runner.temp }}/one-more-blender/*.blend
             one-more/assets/models/*.glb
           if-no-files-found: warn
+  install:
+    name: Install and launch on ${{ matrix.device }}
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - device: Android 14 (4 KiB)
+            image: system-images;android-34;google_apis;x86_64
+            page_size: 4096
+          - device: Android 15 (16 KiB)
+            image: system-images;android-35;google_apis_ps16k;x86_64
+            page_size: 16384
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: ONE-MORE-Android
+          path: android-download
+      - uses: actions/download-artifact@v4
+        with:
+          name: ONE-MORE-Android-compatibility
+          path: android-download
+      - name: Enable emulator acceleration
+        run: sudo chmod a+rw /dev/kvm
+      - name: Install and launch the published format
+        env:
+          BASELINE_PREVIEW: ${{ inputs.baseline_preview }}
+          GH_TOKEN: ${{ github.token }}
+          SYSTEM_IMAGE: ${{ matrix.image }}
+          PAGE_SIZE: ${{ matrix.page_size }}
+        run: |
+          set -euo pipefail
+          package=$(sed -n 's/^package: name=\x27\([^\x27]*\)\x27.*$/\1/p' android-download/android-compatibility.txt)
+          test -n "$package"
+          baseline=
+          if [[ -n "$BASELINE_PREVIEW" ]]; then
+            [[ "$BASELINE_PREVIEW" =~ ^one-more-preview-[0-9a-f]{7}$ ]]
+            baseline=android-download/baseline.apk
+            gh release download "$BASELINE_PREVIEW" --pattern one-more.apk --output "$baseline"
+          fi
+          bash one-more/tools/test_android_install.sh "$SYSTEM_IMAGE" "$PAGE_SIZE" android-download/one-more.apk "$package" "$baseline"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ONE-MORE-Android-install-${{ matrix.page_size }}
+          path: install-logs/
+          if-no-files-found: warn
   publish-preview:
     if: inputs.publish_preview
-    needs: build
+    needs: [build, install]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
