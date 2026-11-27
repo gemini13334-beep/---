@@ -7,9 +7,12 @@ on:
       - '.github/workflows/forge-engine-build.yml'
 permissions:
   contents: read
+concurrency:
+  group: forge-engine-android-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   android-editor:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 180
     steps:
       - uses: actions/checkout@v4
@@ -17,21 +20,38 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
       - name: Fetch Godot sources
         run: bash forge-engine/bootstrap.sh
       - name: Install build tools
         run: |
-          python -m pip install scons
-          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.1.13356709'
+          python -m pip install scons==4.8.1
+          command -v sdkmanager
+          sdkmanager 'platforms;android-34' 'build-tools;34.0.0' 'ndk;23.2.8568313'
       - name: Build ARM64 editor
         working-directory: forge-engine/upstream
-        run: scons platform=android target=editor arch=arm64 generate_android_binaries=yes -j2
+        run: scons platform=android target=editor arch=arm64 production=yes debug_symbols=no module_text_server_fb_enabled=yes -j2
+      - name: Package editor
+        working-directory: forge-engine/upstream/platform/android/java
+        run: bash gradlew generateGodotEditor --no-daemon --stacktrace
+      - name: Verify APK metadata
+        working-directory: forge-engine/upstream
+        run: |
+          mkdir -p ../verified-apk
+          shopt -s nullglob
+          apks=(bin/android_editor_builds/*.apk)
+          test "${#apks[@]}" -gt 0
+          for apk in "${apks[@]}"; do
+            "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$apk" > "../verified-apk/$(basename "$apk").txt"
+            grep -q 'arm64-v8a' "../verified-apk/$(basename "$apk").txt"
+            min_sdk=$(sed -n "s/^sdkVersion:'\([0-9]*\)'.*/\1/p" "../verified-apk/$(basename "$apk").txt")
+            test -n "$min_sdk"
+            test "$min_sdk" -le 31
+            cp "$apk" ../verified-apk/
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: FORGE-ENGINE-0.1-upstream-editor
           path: |
-            forge-engine/upstream/bin/**/*.apk
-            forge-engine/upstream/platform/android/java/**/build/outputs/apk/**/*.apk
+            forge-engine/verified-apk/
             forge-engine/upstream-revision.txt
           if-no-files-found: error
