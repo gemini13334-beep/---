@@ -1,0 +1,35 @@
+name: NEXUS AI APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'nexus-ai/**'
+      - '.github/workflows/nexus-ai-build.yml'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Import upstream if absent
+        run: |
+          if [ ! -d nexus-ai/gallery ]; then bash nexus-ai/import-gallery.sh; fi
+      - name: Build debug APK
+        working-directory: nexus-ai/gallery/Android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NEXUS-AI-debug
+          path: |
+            nexus-ai/gallery/Android/**/build/outputs/apk/**/*.apk
+            nexus-ai/gallery-revision.txt
+          if-no-files-found: error
