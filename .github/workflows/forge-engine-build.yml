@@ -1,0 +1,37 @@
+name: FORGE ENGINE Android APK
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'forge-engine/**'
+      - '.github/workflows/forge-engine-build.yml'
+permissions:
+  contents: read
+jobs:
+  android-editor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Fetch Godot sources
+        run: bash forge-engine/bootstrap.sh
+      - name: Install build tools
+        run: |
+          python -m pip install scons
+          sdkmanager 'platforms;android-35' 'build-tools;35.0.0' 'ndk;28.1.13356709'
+      - name: Build ARM64 editor
+        working-directory: forge-engine/upstream
+        run: scons platform=android target=editor arch=arm64 generate_android_binaries=yes -j2
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FORGE-ENGINE-0.1-upstream-editor
+          path: |
+            forge-engine/upstream/bin/**/*.apk
+            forge-engine/upstream/platform/android/java/**/build/outputs/apk/**/*.apk
+            forge-engine/upstream-revision.txt
+          if-no-files-found: error
