@@ -10,13 +10,16 @@ baseline="${5:-}"
 log_dir=install-logs
 avd=one-more-install
 adb="$ANDROID_HOME/platform-tools/adb"
-mkdir -p "$log_dir"
+export ANDROID_USER_HOME="${RUNNER_TEMP:?}/one-more-android-user"
+export ANDROID_EMULATOR_HOME="$ANDROID_USER_HOME"
+export ANDROID_AVD_HOME="$ANDROID_USER_HOME/avd"
+mkdir -p "$log_dir" "$ANDROID_AVD_HOME"
 
 sdkmanager emulator "$image"
 printf 'no\n' | avdmanager create avd --force --name "$avd" --package "$image"
 emulator="$ANDROID_HOME/emulator/emulator"
 "$emulator" -accel-check
-df -h "$ANDROID_HOME" "${ANDROID_AVD_HOME:-$HOME/.android}"
+df -h "$ANDROID_HOME" "$ANDROID_AVD_HOME"
 "$adb" start-server
 "$emulator" -avd "$avd" -no-window -noaudio -no-boot-anim -skip-adb-auth \
   -no-snapshot -gpu swiftshader_indirect -partition-size 2048 -memory 3072 -cores 2 > "$log_dir/emulator.log" 2>&1 &
