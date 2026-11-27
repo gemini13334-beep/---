@@ -53,7 +53,14 @@ jobs:
           PUBLISH_PREVIEW: ${{ inputs.publish_preview }}
         run: |
           if [[ "$PUBLISH_PREVIEW" == "true" ]]; then
-            sed -i 's/^package\/unique_name=.*/package\/unique_name="com.onemore.arcade.preview"/; s/^package\/name=.*/package\/name="ONE MORE Тест"/' one-more/export_presets.cfg
+            preset=one-more/export_presets.cfg
+            version_code=$(sed -n 's/^version\/code=\([0-9][0-9]*\)$/\1/p' "$preset")
+            version_name=$(sed -n 's/^version\/name="\([0-9.]*\)"$/\1/p' "$preset")
+            test -n "$version_code"
+            test -n "$version_name"
+            preview_package="com.onemore.arcade.preview.v$version_code"
+            sed -i "s|^package/unique_name=.*|package/unique_name=\"$preview_package\"|; s|^package/name=.*|package/name=\"ONE MORE $version_name\"|" "$preset"
+            printf 'PREVIEW_PACKAGE=%s\n' "$preview_package" >> "$GITHUB_ENV"
           fi
           mkdir -p ~/.android ~/.config/godot
           keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -dname "CN=Android Debug,O=Android,C=US" -keyalg RSA -keysize 2048 -validity 10000
@@ -90,7 +97,7 @@ jobs:
           AAPT=$(find "$ANDROID_HOME/build-tools" -type f -name aapt | sort -V | tail -1)
           "$AAPT" dump badging one-more.apk | tee android-compatibility.txt
           if [[ "$PUBLISH_PREVIEW" == "true" ]]; then
-            grep -Fq "package: name='com.onemore.arcade.preview'" android-compatibility.txt
+            grep -Fq "package: name='${PREVIEW_PACKAGE:?}'" android-compatibility.txt
           fi
           python3 -c 'import re; s=open("android-compatibility.txt").read(); m=re.search(r"sdkVersion:\x27(\d+)\x27",s); t=re.search(r"targetSdkVersion:\x27(\d+)\x27",s); assert m and int(m[1])<=34, "APK must install on Android 14"; assert t and int(t[1])>=34, "Target SDK must be at least 34"; assert "arm64-v8a" in s, "ARM64 required"'
           APKSIGNER="$(dirname "$AAPT")/apksigner"
@@ -142,5 +149,5 @@ jobs:
           fi
           gh release create "$tag" --target "$GITHUB_SHA" --prerelease --latest=false \
             --title "ONE MORE · Android · ${GITHUB_SHA:0:7}" \
-            --notes "Тестовая сборка ONE MORE для Android 14 и новее (ARM64). Устанавливается рядом с основной версией и использует отдельный профиль." \
+            --notes "Тестовая сборка ONE MORE для Android 14 и новее (ARM64). Устанавливается рядом с прежними версиями и использует отдельный профиль." \
             preview/one-more.apk preview/android-compatibility.txt

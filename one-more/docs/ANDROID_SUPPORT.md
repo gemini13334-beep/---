@@ -6,4 +6,4 @@ Bluetooth uses Godot's Android plugin v2 and a secure RFCOMM connection between 
 
 The validation workflow compiles the AAR and runs Godot's host/guest tests with an in-memory transport. Physical devices are needed to verify pairing, permission dialogs, throughput and reconnect behavior over real Bluetooth. Both devices must run the same build for the current co-op protocol. APK export needs separate user authorization.
 
-The published arena preview uses `com.onemore.arcade.preview` so Android can install it alongside `com.onemore.arcade`. Android keeps each app's files in its own sandbox. Both builds use the same profile format, and each application has its own local profile. The previous build used a runner-local debug key, so it cannot be updated with a different certificate.
+Published previews use `com.onemore.arcade.preview.v<versionCode>`. Android installs them alongside the main app and older previews, preserving their separate profiles. Each preview uses the same profile format. The runner generates a debug signing key for each build.
