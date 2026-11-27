@@ -33,3 +33,9 @@ The Russian combat HUD draws live pickups, score, combo, health, experience, cur
 Vega starts new profiles. Existing profiles retain their selected hero. The four operators have Blender rigs and exported action clips. Mechanical opponents telegraph attacks and react to shots using their moving joints. The capture workflow checks the imported rigs and records motion from the game.
 
 The combat HUD uses illustrated skill and equipment cards, with an overhead arena render reused as the minimap background. Counters respond to pickups, changes in health, and leveling. Players can inspect a skill or a piece of equipment during combat.
+
+## Expanded arenas and operator gait
+
+Playable bounds are 96 × 96 world units, with terrain extending to 166 × 166 so the combat camera remains over solid terrain at the outermost corners. The minimap and Bluetooth snapshots share the new bounds. Walkable terrain varies in elevation. Crates, characters, props and local effects are placed from the same height function. City, desert, glacier and volcano use individual surface textures, grouped props and distinct relief. The layout supports the existing combat rules.
+
+The four human operators use separate walk and run clips selected according to movement speed. Blender validates the knee pole and support foot height at each frame. Their trousers use blended weights across each knee; the revised shoulder plates, footwear and facial geometry are baked into the original models.

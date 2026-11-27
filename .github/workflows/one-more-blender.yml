@@ -50,7 +50,7 @@ jobs:
                   assert len(document.get("skins", [])) == 1, name
                   assert any(node.get("name") == "Muzzle" for node in document["nodes"]), name
                   clips = {clip["name"]: clip for clip in document.get("animations", [])}
-                  assert set(clips) == {"Idle", "Run", "Fire", "Hit", "Fall"}, name
+                  assert set(clips) == {"Idle", "Walk", "Run", "Fire", "Hit", "Fall"}, name
                   assert all(clip.get("channels") for clip in clips.values()), name
                   assert 0 < sum(len(mesh["primitives"]) for mesh in document["meshes"]) <= 16, name
               print(name,glb.stat().st_size,blend.stat().st_size)

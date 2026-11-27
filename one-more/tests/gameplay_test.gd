@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Landscape = preload("res://landscape.gd")
+
 var failures: Array[String] = []
 
 func check(condition: bool, description: String) -> void:
@@ -39,7 +41,7 @@ func run_tests() -> void:
 	check(scene.selected == scene.DEFAULT_HERO and scene.owned.has(scene.DEFAULT_HERO),"New profile begins with Vega unlocked and selected")
 	scene.start()
 	check(scene.running and scene.hp == scene.max_hp and scene.level == 1,"Start initializes run")
-	check(scene.crates.size() == 22,"Arena populated")
+	check(scene.crates.size() == Landscape.STARTING_CRATES,"Arena populated")
 	var hud = scene.hud_panel
 	var ui_input := InputEventScreenTouch.new()
 	ui_input.pressed = true
@@ -191,7 +193,37 @@ func run_tests() -> void:
 	check(legacy.save("user://records.cfg") == OK,"Create legacy profile fixture")
 	scene.load_profile()
 	check(scene.best == 777 and scene.gate_wins[0] == 0 and scene.hunter_stats[1] == 0 and scene.selected == 0,"Legacy profile keeps its score and defaults missing sections")
+	check_boundaries(scene)
 	scene.queue_free()
 	await process_frame
 	print("Gameplay tests: ",failures.size()," failures")
 	quit(0 if failures.is_empty() else 1)
+
+
+func check_boundaries(scene) -> void:
+	scene.set_biome(2)
+	scene.start(false)
+	scene.hero.position = scene.grounded(Vector3(46,0,-46))
+	scene.finger = 0
+	scene.direction = Vector2(1,-1).normalized()
+	scene.spawn_timer = 30.0
+	scene._physics_process(2.0)
+	check(is_equal_approx(scene.hero.position.x,Landscape.PLAY_HALF) and is_equal_approx(scene.hero.position.z,-Landscape.PLAY_HALF),
+		"Movement crosses the old arena and stops only at the expanded boundary")
+	check(is_equal_approx(scene.hero.position.y,scene.grounded(scene.hero.position).y),
+		"The player follows the new terrain height")
+	var footprint: Vector3 = scene.ground.mesh.get_aabb().size
+	check(footprint.x > 160.0 and footprint.y > 4.0,"Terrain mesh provides relief and extends past the playable camera bounds")
+	scene.camera.size = 28.0
+	var display_size := root.get_visible_rect().size
+	var stays_inside := true
+	for corner in [Vector3(48,0,-48),Vector3(48,0,48),Vector3(-48,0,-48),Vector3(-48,0,48)]:
+		scene.hero.position = scene.grounded(corner)
+		scene.camera.position = scene.hero.position+scene.COMBAT_CAMERA_OFFSET
+		scene.camera.look_at(scene.hero.position)
+		for pixel in [Vector2.ZERO,Vector2(display_size.x,0),Vector2(0,display_size.y),display_size]:
+			var origin: Vector3 = scene.camera.project_ray_origin(pixel)
+			var direction: Vector3 = scene.camera.project_ray_normal(pixel)
+			var lowest := origin+direction*((-2.0-origin.y)/direction.y)
+			stays_inside = stays_inside and maxf(absf(lowest.x),absf(lowest.z)) < Landscape.FLOOR_HALF
+	check(stays_inside,"All camera corners at maximum zoom remain over terrain at the four world corners")

@@ -1,5 +1,7 @@
 extends SceneTree
 
+const Landscape = preload("res://landscape.gd")
+
 class MemoryLink extends RefCounted:
 	var other: WeakRef
 	var state := "idle"
@@ -82,7 +84,7 @@ func run_tests() -> void:
 	exchange(host,guest)
 	check(host.coop.live and guest.coop.live and host.running and guest.running,"Host and guest negotiate a shared run")
 	check(guest.biome == 3 and host.coop.partner_hero == 5,"Map and hero are synchronized")
-	check(guest.crates.is_empty() and guest.coop.objects.size() == 22,"Only host creates the authoritative layout")
+	check(guest.crates.is_empty() and guest.coop.objects.size() == Landscape.STARTING_CRATES,"Only host creates the authoritative layout")
 	var old_position: Vector3 = host.coop.partner.position
 	guest.finger = 1
 	guest.direction = Vector2.RIGHT
@@ -95,6 +97,11 @@ func run_tests() -> void:
 		var replica := guest.coop.objects.get(enemy.get_instance_id()) as MeshInstance3D
 		return replica != null and replica.get_meta("model_asset") == enemy.get_meta("model_asset")
 	),"Spawned enemy appears in the guest scene with the authoritative model")
+	host.coop.partner.position = host.grounded(Vector3(43,0,-39))
+	exchange(host,guest,4)
+	check(guest.hero.position.x > 39.0 and guest.hero.position.z < -34.0,"Cooperative snapshots preserve positions outside the old arena")
+	check(absf(guest.hero.position.y-guest.grounded(guest.hero.position).y) < 0.04,"Both cooperative worlds seat the player on matching terrain")
+
 	var source = host.enemies[0]
 	var source_id: int = source.get_instance_id()
 	var replica: Node3D = guest.coop.objects[source_id]

@@ -1,6 +1,7 @@
 extends Node
 
-const PROTOCOL := 2
+const Landscape = preload("res://landscape.gd")
+const PROTOCOL := 3
 const UPDATE_INTERVAL := 0.085
 const LINK_TIMEOUT := 3.5
 const ENEMY_ART := ["enemy","enemy_fast","enemy_armored","boss_overlord","boss_crystal","boss_inferno"]
@@ -261,6 +262,7 @@ func start_match(peer_hero: int) -> void:
 	arena.start(hosting)
 	partner = arena.model(SphereMesh.new(),Color(arena.PALETTE[partner_hero]),Vector3(1.6,0.5,0))
 	arena.attach_art(partner,arena.HERO_ART[partner_hero])
+	arena.seat_actor(partner)
 	arena.add_contact_shadow(partner,1.9)
 
 func end_match(reason: String) -> void:
@@ -291,7 +293,7 @@ func live_partner() -> MeshInstance3D:
 
 func target_for(position: Vector3) -> MeshInstance3D:
 	var peer := live_partner()
-	if peer != null and (arena.hp <= 0.0 or position.distance_squared_to(peer.position) < position.distance_squared_to(arena.hero.position)):
+	if peer != null and (arena.hp <= 0.0 or Landscape.xz(position).distance_squared_to(Landscape.xz(peer.position)) < Landscape.xz(position).distance_squared_to(Landscape.xz(arena.hero.position))):
 		return peer
 	return arena.hero
 
@@ -302,15 +304,16 @@ func tick_partner(dt: float) -> void:
 	var speed: float = 6.0+float(arena.HEROES[partner_hero][4])
 	if partner_move.length_squared() > 0.0025:
 		peer.rotation.y = lerp_angle(peer.rotation.y,atan2(partner_move.x,partner_move.y),1.0-exp(-12.0*dt))
-	peer.position.x = clampf(peer.position.x+partner_move.x*dt*speed,-20,20)
-	peer.position.z = clampf(peer.position.z+partner_move.y*dt*speed,-20,20)
+	peer.position += Vector3(partner_move.x,0,partner_move.y)*dt*speed
+	peer.position = Landscape.keep_inside(peer.position,Landscape.PLAY_HALF)
+	arena.seat_actor(peer)
 	partner_attack -= dt
 	if partner_attack > 0.0:
 		return
 	var nearest: MeshInstance3D
 	var range_squared: float = pow(arena.attack_distance(),2.0)
 	for enemy in arena.enemies:
-		var distance: float = peer.position.distance_squared_to(enemy.position)
+		var distance: float = Landscape.xz(peer.position).distance_squared_to(Landscape.xz(enemy.position))
 		if distance < range_squared:
 			range_squared = distance
 			nearest = enemy
@@ -321,7 +324,7 @@ func tick_partner(dt: float) -> void:
 
 func damage_partner(position: Vector3, radius: float, amount: float) -> void:
 	var peer := live_partner()
-	if peer != null and peer.position.distance_squared_to(position) < radius*radius:
+	if peer != null and Landscape.xz(peer.position).distance_squared_to(Landscape.xz(position)) < radius*radius:
 		partner_hp = maxf(0.0,partner_hp-amount)
 		peer.visible = partner_hp > 0.0
 		if amount > 0.0:
@@ -351,9 +354,9 @@ func send_world() -> void:
 		actors.append([crate.get_instance_id(),"crate",crate.position.x,crate.position.z,0,1,false])
 	var gems := 0
 	for gem in arena.gems:
-		if gems >= 180:
+		if gems >= 160 or actors.size() >= 318:
 			break
-		if partner.position.distance_squared_to(gem.position) < 225.0:
+		if Landscape.xz(partner.position).distance_squared_to(Landscape.xz(gem.position)) < 225.0:
 			actors.append([gem.get_instance_id(),"gem",gem.position.x,gem.position.z,0,1,false])
 			gems += 1
 	if is_instance_valid(arena.vehicle) and not arena.vehicle.is_queued_for_deletion() and arena.vehicle.visible:
@@ -448,7 +451,7 @@ func apply_hits(hits: Variant) -> void:
 		var id := int(clampf(number(row[0]),1,9007199254740991.0))
 		var actor := objects.get(id) as MeshInstance3D
 		if actor != null:
-			var origin := Vector3(clampf(number(row[2]),-24,24),0.5,clampf(number(row[3]),-24,24))
+			var origin := Vector3(clampf(number(row[2]),-Landscape.SPAWN_HALF,Landscape.SPAWN_HALF),0.5,clampf(number(row[3]),-Landscape.SPAWN_HALF,Landscape.SPAWN_HALF))
 			arena.show_actor_hit(actor,origin,row[1])
 
 func play_shots(shots: Variant, shooters: Variant) -> void:
@@ -459,8 +462,8 @@ func play_shots(shots: Variant, shooters: Variant) -> void:
 		var row: Variant = shots[index]
 		if not row is Array or row.size() != 6:
 			continue
-		var from := Vector3(clampf(number(row[0]),-28,28),clampf(number(row[1]),0,6),clampf(number(row[2]),-28,28))
-		var to := Vector3(clampf(number(row[3]),-28,28),clampf(number(row[4]),0,6),clampf(number(row[5]),-28,28))
+		var from := Vector3(clampf(number(row[0]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF),clampf(number(row[1]),-2,12),clampf(number(row[2]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF))
+		var to := Vector3(clampf(number(row[3]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF),clampf(number(row[4]),-2,12),clampf(number(row[5]),-Landscape.FLOOR_HALF,Landscape.FLOOR_HALF))
 		var role: Variant = shooters[index] if has_shooters else null
 		if role == 0 or role == 1:
 			arena.fire_visual(partner if role == 0 else arena.hero,to,from)
@@ -469,7 +472,7 @@ func play_shots(shots: Variant, shooters: Variant) -> void:
 
 func update_player(player: MeshInstance3D,row: Array) -> void:
 	var scale_factor := clampf(number(row[5]),0.5,3.0)
-	targets[player] = Vector4(clampf(number(row[0]),-22,22),0.5,clampf(number(row[1]),-22,22),clampf(number(row[2]),-TAU,TAU))
+	targets[player] = Vector4(clampf(number(row[0]),-Landscape.PLAY_HALF,Landscape.PLAY_HALF),0.5,clampf(number(row[1]),-Landscape.PLAY_HALF,Landscape.PLAY_HALF),clampf(number(row[2]),-TAU,TAU))
 	player.scale = Vector3.ONE * scale_factor
 	player.visible = number(row[3]) > 0.0
 
@@ -483,7 +486,7 @@ func sync_actors(actors: Array) -> void:
 			continue
 		var id := int(clampf(number(row[0]),1,9007199254740991.0))
 		var y := 0.3 if art == "gem" else 0.5
-		var position := Vector3(clampf(number(row[2]),-24,24),y,clampf(number(row[3]),-24,24))
+		var position := Vector3(clampf(number(row[2]),-Landscape.SPAWN_HALF,Landscape.SPAWN_HALF),y,clampf(number(row[3]),-Landscape.SPAWN_HALF,Landscape.SPAWN_HALF))
 		if not objects.has(id):
 			objects[id] = arena.create_coop_visual(art,position)
 		var actor := objects[id] as MeshInstance3D
@@ -506,6 +509,8 @@ func smooth_world(dt: float) -> void:
 	var blend := 1.0-exp(-18.0*dt)
 	for actor in targets:
 		var pose: Vector4 = targets[actor]
-		actor.position = actor.position.lerp(Vector3(pose.x,pose.y,pose.z),blend)
+		var next: Vector3 = actor.position.lerp(Vector3(pose.x,pose.y,pose.z),blend)
+		var lift: float = 0.3 if actor.get_meta("model_asset","") == "gem" else 0.5*actor.scale.y
+		actor.position = arena.grounded(next,lift)
 		actor.rotation.y = lerp_angle(actor.rotation.y,pose.w,blend)
 	arena.follow_player_camera(dt)

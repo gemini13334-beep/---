@@ -33,3 +33,7 @@ ONE MORE uses original geometry and generated materials. The six mechanical hero
 ## Illustrated combat HUD
 
 OpenAI ImageGen created an original atlas for the combat kit and 16 abilities. The game uses 112 × 112 WebP tiles in `assets/hud/`, ordered by the original ability IDs. Four tiles also illustrate equipment stats while a new run has available slots. The input atlas SHA-256 is `2fa5824657dabf87e539ca4d5416c5f71cc82cc4c12ce509e1c9caf4d73ddbdc`.
+
+## Arena surfaces
+
+Four 512 × 512 albedo textures from an original OpenAI ImageGen material sheet cover broken asphalt, stratified sandstone, fractured glacial ice and cooled basalt. The arena shader blends rotated samples at two scales. The source atlas SHA-256 is `d6c17f6e419b4c3226f87bcee858b91f071afef6e36601ce127867923941ef6d`.

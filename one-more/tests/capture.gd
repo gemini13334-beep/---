@@ -1,5 +1,6 @@
 extends SceneTree
 
+const Landscape = preload("res://landscape.gd")
 const ModelGallery = preload("res://tests/model_gallery.gd")
 
 var arena
@@ -91,22 +92,65 @@ func record_vega_motion() -> void:
 		return
 	var states := {}
 	arena.finger = 0
-	arena.direction = Vector2(0.22,0.0)
+	arena.direction = Vector2(0.68,0.0)
 	for frame in 36:
-		if frame == 8:
+		if frame == 5:
+			arena.direction = Vector2(0.20,0.0)
+		elif frame == 9:
 			arena.clear_touch()
+		elif frame == 13:
 			arena.fire_visual(arena.hero,arena.hero.position+Vector3(2,0,2))
-		elif frame == 14:
+		elif frame == 18:
 			arena.damage_hero(20,arena.hero.position+Vector3(1,0,1))
-		elif frame == 23:
+		elif frame == 24:
 			arena.damage_hero(arena.hp,arena.hero.position+Vector3(1,0,1))
 		advance(4)
 		await shot("motion-vega/%03d" % frame)
 		states[str(pose.animation.current_animation)] = true
-	for animation in ["Run","Fire","Hit","Idle","Fall"]:
+	for animation in ["Walk","Run","Fire","Hit","Idle","Fall"]:
 		check_animation(states.has(animation),"Vega combat did not play "+animation)
 	arena.finish_run()
 
+
+func record_vega_profile() -> void:
+	if not motion_folder("motion-gait"):
+		return
+	arena.select_hero(arena.DEFAULT_HERO)
+	arena.start(false)
+	arena.spawn_timer = 40.0
+	arena.hud_panel.hide()
+	arena.event_label.hide()
+	for prop in arena.scenery:
+		prop.hide()
+	arena.forest_understory.hide()
+	arena.finger = 0
+	arena.direction = Vector2(0,0.24)
+	var pose = arena.actor_pose(arena.hero)
+	check_animation(pose != null and pose.animation != null,"Vega profile requires the imported skinned model")
+	if pose == null or pose.animation == null:
+		restore_landmarks()
+		arena.finish_run()
+		return
+	var seen: Dictionary = {}
+	for frame in 30:
+		if frame == 14:
+			arena.direction = Vector2(0,0.82)
+		advance(4)
+		arena.stick_base.hide()
+		var focus: Vector3 = arena.grounded(arena.hero.position,0.92)
+		arena.camera.size = 2.22
+		arena.camera.position = focus+Vector3(5.80,0.49,1.08)
+		arena.camera.look_at(focus)
+		await shot("motion-gait/%03d" % frame)
+		seen[pose.animation.current_animation] = true
+	check_animation(seen.has("Walk") and seen.has("Run"),"The side recording must show both walking and running")
+	restore_landmarks()
+	arena.finish_run()
+
+func restore_landmarks() -> void:
+	for prop in arena.scenery:
+		prop.show()
+	arena.forest_understory.visible = arena.biome == 0
 
 func record_hud_motion() -> void:
 	if not motion_folder("motion-hud"):
@@ -225,6 +269,7 @@ func capture() -> void:
 	arena.finish_run()
 	await record_combat_motion()
 	await record_vega_motion()
+	await record_vega_profile()
 	await record_hud_motion()
 	arena.show_collection()
 	await shot("collection",arena.collection)
@@ -280,6 +325,13 @@ func capture() -> void:
 		await shot(str(arena.BIOMES[map_id]).to_lower(),arena.hud_panel)
 		if map_id == 3:
 			await record_boss_motion(boss)
+		arena.clear_touch()
+		arena.hero.position = arena.grounded(Vector3(Landscape.PLAY_HALF,0,-Landscape.PLAY_HALF))
+		arena.camera.position = arena.hero.position+arena.COMBAT_CAMERA_OFFSET
+		arena.camera.look_at(arena.hero.position)
+		arena.camera.size = 28.0
+		arena.update_hud()
+		await shot(str(arena.BIOMES[map_id]).to_lower()+"-edge",arena.hud_panel)
 		arena.finish_run()
 	arena.audio_enabled = false
 	arena.apply_settings()

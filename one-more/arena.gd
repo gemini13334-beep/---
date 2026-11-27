@@ -4,6 +4,7 @@ const ForestCover = preload("res://forest_cover.gd")
 const CoopSession = preload("res://coop/session.gd")
 const ActorPose = preload("res://actor_pose.gd")
 const CombatHUD = preload("res://ui/combat_hud.gd")
+const Landscape = preload("res://landscape.gd")
 var coop: CoopSession
 var hero: MeshInstance3D
 var camera: Camera3D
@@ -89,7 +90,7 @@ var result_label: Label
 var max_hp := 100.0
 var mode := 0
 var biome := 0
-var scenery: Array[MeshInstance3D] = []
+var scenery: Array[GeometryInstance3D] = []
 var sound: AudioStreamPlayer
 var sounds: Dictionary = {}
 
@@ -191,31 +192,33 @@ func rebuild_scenery() -> void:
 		prop.hide()
 		prop.queue_free()
 	scenery.clear()
-	for i in range(24):
-		var angle := TAU*float(i)/24.0
-		var radius := 20.5 if i%2 == 0 else 17.5
-		var mesh := BoxMesh.new()
-		mesh.size = Vector3(1.1,1.4,1.1)
-		var prop := model(mesh,Color(GROUND_COLORS[biome]).lightened(0.25),Vector3(cos(angle)*radius,0.5,sin(angle)*radius))
-		attach_art(prop,BIOMES[biome].to_lower() if i%2 == 0 else ["tree","ruin","cactus","ice_spire","lava_vent"][biome])
-		prop.rotation.y = angle
-		prop.scale = Vector3.ONE*(0.8+0.45*abs(sin(float(i)*2.7)))
-		scenery.append(prop)
+	var themes := [
+		["tree","forest","rock","ruin"],["city","ruin","city","rock"],
+		["desert","cactus","desert","rock"],["ice","ice_spire","ice_spire","ice"],["volcano","lava_vent","volcano","rock"],
+	]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 8271+biome*147
+	var cluster_count := 12 if biome == 0 else 14
+	for i in cluster_count:
+		var row := i/2.0
+		var z := -45.0+13.6*floorf(row)+rng.randf_range(-2.7,2.7)
+		var sign_x := 1.0 if i%2 == 0 else -1.0
+		var x := clampf(Landscape.trail(z)+sign_x*rng.randf_range(9.0,30.0),-48.0,48.0)
+		for j in range(3 if biome == 0 else 5):
+			var kind: String = themes[biome][j%4]
+			var point := Vector2(x+rng.randf_range(-4.8,4.8),z+rng.randf_range(-4.9,4.9))
+			var size := rng.randf_range(0.69,1.25)
+			if j == 0:
+				size = rng.randf_range(1.35,1.85)
+			place_landmark(kind,point,Vector3(size*1.18,size,size),rng.randf_range(-PI,PI))
 	if biome == 0:
-		var rng := RandomNumberGenerator.new()
-		rng.seed = 8271
-		for i in range(30):
-			var angle := rng.randf_range(0,TAU)
-			var radius := rng.randf_range(21.5,23.5)
-			var mesh := SphereMesh.new()
-			mesh.radius = 0.45
-			mesh.height = 0.65
-			var prop := model(mesh,Color("#52634c"),Vector3(cos(angle)*radius,0.3,sin(angle)*radius))
-			attach_art(prop,"rock" if i%3 == 0 else "tree")
-			prop.scale = Vector3.ONE*rng.randf_range(0.65,1.5)
-			prop.rotation.y = angle
-			scenery.append(prop)
 		place_forest_landmarks()
+	else:
+		place_biome_entry()
+	var color := Color(["#74806f","#8da3ac","#dba576","#a4c8ea","#98737f"][biome])
+	var distant := Landscape.atmosphere_geometry(biome,ground_texture(),color)
+	add_child(distant)
+	scenery.append(distant)
 	for prop in scenery:
 		mark_on_map(prop)
 	map_dirty = true
@@ -228,16 +231,16 @@ func mark_on_map(node: Node) -> void:
 
 func build_minimap_camera() -> void:
 	map_viewport = SubViewport.new()
-	map_viewport.size = Vector2i(192,192)
+	map_viewport.size = Vector2i(256,256)
 	map_viewport.render_target_update_mode = SubViewport.UPDATE_DISABLED
 	map_viewport.gui_disable_input = true
 	add_child(map_viewport)
 	var map_camera := Camera3D.new()
 	map_camera.projection = Camera3D.PROJECTION_ORTHOGONAL
-	map_camera.size = 46.0
+	map_camera.size = Landscape.MAP_HALF*2.0
 	map_camera.cull_mask = 2
 	map_viewport.add_child(map_camera)
-	map_camera.look_at_from_position(Vector3(0,32,0),Vector3.ZERO,Vector3.FORWARD)
+	map_camera.look_at_from_position(Vector3(0,65,0),Vector3.ZERO,Vector3.FORWARD)
 	map_camera.current = true
 
 func refresh_minimap() -> void:
@@ -262,22 +265,70 @@ func place_forest_landmarks() -> void:
 		["tree",Vector2(6.2,6.1),Vector3(1.40,1.49,1.40),0.72],
 	]
 	for entry in layout:
-		var asset: String = entry[0]
-		var point: Vector2 = entry[1]
-		var scale_factor: Vector3 = entry[2]
-		var fallback := SphereMesh.new()
-		fallback.height = 0.56
-		fallback.radius = 0.65
-		var prop := model(fallback,Color("#526044"),Vector3(point.x,0.5*scale_factor.y,point.y))
-		var art := attach_art(prop,asset)
-		if art == null:
-			prop.position.y = 0.23*scale_factor.y
-		elif asset != "tree":
+		place_landmark(entry[0],entry[1],entry[2],entry[3])
+
+func place_biome_entry() -> void:
+	var layouts := [
+		[],
+		[["ruin",-4.8,-4.7,1.48],["city",4.3,-6.3,1.8],["city",-6.4,4.6,1.6],
+		 ["city",6.7,4.9,1.6],["ruin",10.7,-9.2,2.45],["ruin",-11.4,-10.8,2.35]],
+		[["desert",-4.9,-6.0,1.8],["desert",5.6,-6.0,2.4],["cactus",4.6,7.3,1.28],
+		 ["desert",-7.0,6.6,2.4],["desert",12.5,-12.6,2.7]],
+		[["ice_spire",5.5,-5.3,1.67],["ice",-6.7,-6.1,2.5],["ice_spire",-5.8,6.7,1.76],
+		 ["ice",7.2,5.4,2.3],["ice_spire",-11.8,-11.4,2.9]],
+		[["lava_vent",4.6,-6.3,1.7],["volcano",-5.5,-5.5,2.12],["lava_vent",-5.1,6.3,1.55],
+		 ["volcano",6.1,5.9,2.52],["volcano",-10.8,-11.4,2.75]],
+	]
+	for item in layouts[biome]:
+		var size := float(item[3])
+		place_landmark(item[0],Vector2(item[1],item[2]),Vector3(size*1.23,size,size),float(item[1])*0.27)
+
+func place_landmark(asset: String,point: Vector2,scale_factor: Vector3,rotation_y: float) -> void:
+	var fallback := SphereMesh.new()
+	fallback.height = 0.56
+	fallback.radius = 0.65
+	var prop := model(fallback,Color(GROUND_COLORS[biome]).lightened(0.26),Vector3(point.x,0,point.y))
+	var art := attach_art(prop,asset)
+	if art != null:
+		if biome == 0 and asset in ["forest","rock","ruin"]:
 			forest_understory.dress_stone(art)
-		prop.rotation.y = entry[3]
-		prop.scale = scale_factor
-		add_contact_shadow(prop,2.1)
-		scenery.append(prop)
+		elif biome > 0 and asset != "cactus":
+			dress_biome_stone(art)
+	prop.rotation.y = rotation_y
+	prop.scale = scale_factor
+	prop.position = grounded(prop.position,(0.50 if art != null else 0.26)*scale_factor.y)
+	add_contact_shadow(prop,2.1)
+	scenery.append(prop)
+
+var landmark_materials: Dictionary = {}
+
+func dress_biome_stone(art: Node3D) -> void:
+	for node in art.find_children("*","MeshInstance3D",true,false):
+		var shape := node as MeshInstance3D
+		if shape.mesh == null:
+			continue
+		for index in shape.mesh.get_surface_count():
+			var original := shape.get_active_material(index) as StandardMaterial3D
+			if original == null or original.emission_enabled:
+				continue
+			var key := "%d:%s" % [biome,original.resource_name]
+			if not landmark_materials.has(key):
+				var stone := ShaderMaterial.new()
+				stone.shader = preload("res://shaders/forest_stone.gdshader")
+				stone.set_shader_parameter("stone_surface",ground_texture())
+				stone.set_shader_parameter("tint",original.albedo_color.lerp(Color.WHITE,0.46))
+				landmark_materials[key] = stone
+			shape.set_surface_override_material(index,landmark_materials[key])
+
+
+func grounded(position: Vector3,offset: float = 0.5) -> Vector3:
+	return Landscape.positioned(biome,position,offset)
+
+func seat_actor(actor: Node3D) -> void:
+	actor.position = grounded(actor.position,0.5*actor.scale.y)
+
+func planar_distance(a: Vector3,b: Vector3) -> float:
+	return Landscape.xz(a).distance_to(Landscape.xz(b))
 
 var ground: MeshInstance3D
 var map_viewport: SubViewport
@@ -286,19 +337,28 @@ var biome_button: Button
 const BIOMES = ["FOREST","CITY","DESERT","ICE","VOLCANO"]
 const BIOME_NAMES = ["ЛЕС","ГОРОД","ПУСТЫНЯ","ЛЕДНИК","ВУЛКАН"]
 const GROUND_COLORS = ["#142d2d","#26323f","#674633","#2b4b68","#342732"]
-const GROUND_ACCENTS = ["#344739","#505f70","#ad7b48","#537a91","#68403b"]
-const GROUND_MARKINGS = ["#62583d","#7b9aa2","#a87744","#88b2c2","#eb784a"]
+
+const GROUND_SURFACES := [
+	preload("res://assets/art/forest-ground.jpg"),preload("res://assets/art/asphalt.jpg"),
+	preload("res://assets/art/sandstone.jpg"),preload("res://assets/art/glacier.jpg"),
+	preload("res://assets/art/basalt.jpg"),
+]
+var terrain_meshes: Dictionary = {}
+
+func ground_texture() -> Texture2D:
+	return GROUND_SURFACES[biome]
 
 func update_ground_material() -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = preload("res://shaders/terrain.gdshader")
-	mat.set_shader_parameter("base_color",Color(GROUND_COLORS[biome]))
-	mat.set_shader_parameter("second_color",Color(GROUND_ACCENTS[biome]))
-	mat.set_shader_parameter("path_color",Color(GROUND_MARKINGS[biome]))
 	mat.set_shader_parameter("biome",biome)
-	mat.set_shader_parameter("forest_ground",preload("res://assets/art/forest-ground.jpg"))
+	mat.set_shader_parameter("ground_albedo",ground_texture())
 	mat.set_shader_parameter("forest_slate",preload("res://assets/art/forest-slate.jpg"))
+	if not terrain_meshes.has(biome):
+		terrain_meshes[biome] = Landscape.surface(biome)
+	ground.mesh = terrain_meshes[biome]
 	ground.material_override = mat
+	ground.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 
 func build_forest_understory() -> void:
 	forest_understory = ForestCover.new()
@@ -318,6 +378,9 @@ func apply_biome_lighting() -> void:
 	biome_rim.light_color = Color(BIOME_RIM_LIGHT[biome])
 	biome_environment.ambient_light_color = Color(BIOME_AMBIENT[biome])
 	biome_environment.background_color = Color(BIOME_SKY[biome])
+	biome_environment.fog_enabled = biome != 0
+	biome_environment.fog_light_color = Color(BIOME_AMBIENT[biome]).darkened(0.30)
+	biome_environment.fog_density = [0.0,0.005,0.007,0.007,0.008][biome]
 
 func cycle_biome() -> void:
 	set_biome((biome+1)%BIOMES.size())
@@ -327,6 +390,7 @@ func set_biome(index: int) -> void:
 	biome_button.text = "КАРТА  ·  "+BIOME_NAMES[biome]
 	apply_biome_lighting()
 	update_ground_material()
+	range_marker.material_override.set_shader_parameter("biome",biome)
 	rebuild_scenery()
 
 var best_sprint := 0
@@ -386,7 +450,8 @@ func spawn_vehicle() -> void:
 		vehicle.queue_free()
 	var mesh := BoxMesh.new()
 	mesh.size = Vector3(1.7,0.65,2.4)
-	vehicle = model(mesh,Color("#ffc45c"),Vector3(clampf(hero.position.x+5,-19,19),0.5,clampf(hero.position.z+3,-19,19)))
+	var location := Landscape.keep_inside(hero.position+Vector3(5,0,3),Landscape.PLAY_HALF-1.0)
+	vehicle = model(mesh,Color("#ffc45c"),grounded(location))
 	vehicle_kind = randi_range(0,3)
 	attach_art(vehicle,VEHICLES[vehicle_kind])
 	event_label.text = "ТРАНСПОРТ  ·  "+VEHICLE_NAMES[vehicle_kind]+"  ·  Подберите"
@@ -398,10 +463,10 @@ func update_events(dt: float) -> void:
 			spawn_vehicle()
 		else:
 			for i in range(12):
-				drop_gem(Vector3(clampf(hero.position.x+randf_range(-6,6),-20,20),0.3,clampf(hero.position.z+randf_range(-6,6),-20,20)))
+				drop_gem(Landscape.keep_inside(hero.position+Vector3(randf_range(-6,6),0,randf_range(-6,6)),Landscape.PLAY_HALF))
 			event_label.text = "ЭНЕРГЕТИЧЕСКИЙ ДОЖДЬ"
 	if is_instance_valid(vehicle) and not vehicle.is_queued_for_deletion():
-		if hero.position.distance_to(vehicle.position) < 1.4:
+		if planar_distance(hero.position,vehicle.position) < 1.4:
 			vehicle.queue_free()
 			vehicle_time = [10.0,8.0,12.0,15.0][vehicle_kind]
 			play_fx("boost")
@@ -988,7 +1053,7 @@ func show_menu() -> void:
 		actor.hide()
 	if is_instance_valid(vehicle):
 		vehicle.hide()
-	hero.position = Vector3(0,0.67,0)
+	hero.position = grounded(Vector3.ZERO,0.67)
 	hero.scale = Vector3.ONE
 	hero.rotation.y = -0.24
 	var pose := actor_pose(hero)
@@ -1071,6 +1136,13 @@ func menu_button(parent: Control, label: String, action: Callable) -> Button:
 
 
 var active_pulses := 0
+func ring_ink(color: Color) -> ShaderMaterial:
+	var ink := ShaderMaterial.new()
+	ink.shader = preload("res://shaders/terrain_ring.gdshader")
+	ink.set_shader_parameter("biome",biome)
+	ink.set_shader_parameter("tint",color)
+	return ink
+
 func pulse(pos: Vector3, radius: float, color: Color) -> void:
 	if active_pulses >= 32:
 		return
@@ -1080,16 +1152,14 @@ func pulse(pos: Vector3, radius: float, color: Color) -> void:
 	mesh.outer_radius = 1.0
 	mesh.rings = 24
 	mesh.ring_segments = 8
-	var effect := model(mesh,color,Vector3(pos.x,0.06,pos.z))
-	var material := effect.material_override as StandardMaterial3D
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color.a = 0.85
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var effect := model(mesh,color,grounded(pos,0.075))
+	var material := ring_ink(Color(color,0.85))
+	effect.material_override = material
 	effect.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	effect.scale = Vector3(0.15,0.12,0.15)
 	var tween := create_tween().set_parallel(true)
 	tween.tween_property(effect,"scale",Vector3(radius,0.12,radius),0.28).set_trans(Tween.TRANS_CUBIC).set_ease(Tween.EASE_OUT)
-	tween.tween_property(material,"albedo_color:a",0.0,0.28)
+	tween.tween_method(func(alpha: float): material.set_shader_parameter("tint",Color(color,alpha)),0.85,0.0,0.28)
 	tween.chain().tween_callback(func(): 
 		effect.queue_free()
 		active_pulses -= 1
@@ -1115,19 +1185,16 @@ func render_boss_warning(enemy: MeshInstance3D,radius: float) -> void:
 		mesh.outer_radius = radius+0.09
 		ring = MeshInstance3D.new()
 		ring.mesh = mesh
-		var mat := StandardMaterial3D.new()
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		mat.albedo_color = Color("#ffb34f")
-		ring.material_override = mat
+		ring.material_override = ring_ink(Color("#ffb34f"))
 		enemy.add_child(ring)
 		ring.scale = Vector3.ONE/enemy.scale.x
-		ring.position.y = -0.42
+		ring.position.y = -0.50+0.09/enemy.scale.y
 		enemy.set_meta("warning_ring",ring)
 		var pose := actor_pose(enemy)
 		if pose != null:
 			pose.charging = true
 	var intensity := 0.55+0.45*sin(elapsed*22.0)
-	ring.material_override.albedo_color = Color("#df7042").lerp(Color("#ffdc87"),intensity)
+	ring.material_override.set_shader_parameter("tint",Color("#df7042").lerp(Color("#ffdc87"),intensity))
 
 func update_boss_attack(enemy: MeshInstance3D) -> void:
 	var kind := int(enemy.get_meta("kind",0))
@@ -1136,7 +1203,7 @@ func update_boss_attack(enemy: MeshInstance3D) -> void:
 	if elapsed >= deadline:
 		clear_boss_warning(enemy)
 		pulse(enemy.position,radius,Color(["#b66aff","#6adfff","#ff7733"][kind]))
-		if hero.position.distance_to(enemy.position) < radius:
+		if planar_distance(hero.position,enemy.position) < radius:
 			damage_hero((12.0+kind*4.0)*(1.0-armor),enemy.position)
 		coop.damage_partner(enemy.position,radius,12.0+kind*4.0)
 		enemy.set_meta("next_pulse",elapsed+4.0)
@@ -1296,7 +1363,7 @@ func add_contact_shadow(host: Node3D, size: float) -> MeshInstance3D:
 	shadow.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	shadow.scale = Vector3(size,1,size)
 	host.add_child(shadow)
-	shadow.position.y = (0.012-host.position.y)/host.scale.y
+	shadow.position.y = (grounded(host.position,0.028).y-host.position.y)/host.scale.y
 	return shadow
 
 func attach_art(host: MeshInstance3D, asset: String) -> Node3D:
@@ -1414,7 +1481,8 @@ func make_gem(pos: Vector3) -> MeshInstance3D:
 	gem.material_override = gem_material
 	gem.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(gem)
-	gem.position = Vector3(pos.x,0.3,pos.z)
+	gem.position = grounded(pos,0.3)
+	gem.set_meta("model_asset","gem")
 	return gem
 
 func create_coop_visual(asset: String,pos: Vector3) -> MeshInstance3D:
@@ -1426,7 +1494,7 @@ func create_coop_visual(asset: String,pos: Vector3) -> MeshInstance3D:
 	if asset.begins_with("boss_"):
 		mesh.size = Vector3(1.6,1.4,1.6)
 		color = Color("#a56bff")
-	var visual := model(mesh,color,pos)
+	var visual := model(mesh,color,grounded(pos))
 	attach_art(visual,asset)
 	add_contact_shadow(visual,2.8 if asset.begins_with("boss_") else 1.7)
 	return visual
@@ -1531,9 +1599,8 @@ func _ready() -> void:
 	add_child(ambient_player)
 	ambient_player.volume_db = -26.0
 	ambient_player.stream = ambient_loop()
-	var floor_mesh := BoxMesh.new()
-	floor_mesh.size = Vector3(44, 0.2, 44)
-	ground = model(floor_mesh, Color(GROUND_COLORS[biome]), Vector3(0,-0.1,0))
+	ground = model(Landscape.surface(0),Color(GROUND_COLORS[0]),Vector3.ZERO)
+	terrain_meshes[0] = ground.mesh
 	mark_on_map(ground)
 	update_ground_material()
 	build_forest_understory()
@@ -1752,10 +1819,12 @@ func start(populate := true) -> void:
 	for crate in crates:
 		crate.queue_free()
 	crates.clear()
-	for i in range(22 if populate else 0):
-		var p := Vector3(randf_range(-19,19),0.5,randf_range(-19,19))
-		if p.length() < 4:
-			p.x += 6
+	for i in range(Landscape.STARTING_CRATES if populate else 0):
+		var radius := 16.0 if i < 12 else Landscape.PLAY_HALF-1.0
+		var p := Vector3(randf_range(-radius,radius),0.0,randf_range(-radius,radius))
+		if p.length_squared() < 16.0:
+			p.x += 6.0
+		p = grounded(p)
 		var mesh := BoxMesh.new()
 		var crate := model(mesh,Color("#d49b43"),p)
 		attach_art(crate,"crate")
@@ -1779,13 +1848,13 @@ func start(populate := true) -> void:
 	choosing = false
 	upgrades.hide()
 	hero.show()
-	hero.position = Vector3(0,0.5,0)
+	hero.position = grounded(Vector3.ZERO)
 	hero.rotation = Vector3.ZERO
 	camera.position = hero.position + COMBAT_CAMERA_OFFSET
 	camera.look_at(hero.position)
 	camera.size = float(advanced["zoom"])
 	hero.scale = Vector3.ONE
-	hero_shadow.position.y = -0.488
+	hero_shadow.position.y = -0.472
 	elapsed = 0
 	score = 0
 	apply_hero_art()
@@ -1940,9 +2009,8 @@ func _physics_process(dt: float) -> void:
 	var move := movement_input() if not coop.live or hp > 0 else Vector2.ZERO
 	if move.length() > 0.05:
 		hero.rotation.y = lerp_angle(hero.rotation.y,atan2(move.x,move.y),minf(dt*12,1.0))
-	hero.position += Vector3(move.x,0,move.y)*dt*move_speed()
-	hero.position.x = clampf(hero.position.x,-20,20)
-	hero.position.z = clampf(hero.position.z,-20,20)
+	hero.position = Landscape.keep_inside(hero.position+Vector3(move.x,0,move.y)*dt*move_speed(),Landscape.PLAY_HALF)
+	seat_actor(hero)
 	follow_player_camera(dt)
 	coop.tick_partner(dt)
 	spawn_timer -= dt
@@ -1950,9 +2018,7 @@ func _physics_process(dt: float) -> void:
 		spawn_timer = maxf(0.25,1.1-elapsed/150.0)
 		var a := randf()*TAU
 		var center: Vector3 = coop.partner.position if hp <= 0 and coop.live_partner() != null else hero.position
-		var p := center+Vector3(cos(a),0,sin(a))*12
-		p.x = clampf(p.x,-21,21)
-		p.z = clampf(p.z,-21,21)
+		var p := Landscape.keep_inside(center+Vector3(cos(a),0,sin(a))*12,Landscape.SPAWN_HALF)
 		var mesh := BoxMesh.new()
 		mesh.size = Vector3(0.8,0.8,0.8)
 		var enemy := model(mesh,Color("#ff7865"),p)
@@ -1969,12 +2035,13 @@ func _physics_process(dt: float) -> void:
 			attach_art(enemy,"enemy")
 		if mode == 2:
 			enemy.set_meta("health",int(enemy.get_meta("health",1))+gate_rank)
+		seat_actor(enemy)
 		add_contact_shadow(enemy,1.72)
 		enemies.append(enemy)
 	if elapsed >= 45 and not boss_spawned:
 		boss_spawned = true
 		var boss_mesh := BoxMesh.new()
-		var boss := model(boss_mesh,Color("#a56bff"),Vector3(clampf(hero.position.x+9,-20,20),0.5,hero.position.z))
+		var boss := model(boss_mesh,Color("#a56bff"),Landscape.keep_inside(hero.position+Vector3(9,0,0),Landscape.PLAY_HALF))
 		var boss_kind := 1 if biome == 3 else (2 if biome == 4 else 0)
 		attach_art(boss,["boss_overlord","boss_crystal","boss_inferno"][boss_kind])
 		boss.scale = Vector3.ONE*1.35
@@ -1985,6 +2052,7 @@ func _physics_process(dt: float) -> void:
 		boss.set_meta("health",boss_health)
 		boss.set_meta("max_health",boss_health)
 		boss.set_meta("speed",1.5)
+		seat_actor(boss)
 		add_contact_shadow(boss,3.35)
 		enemies.append(boss)
 	var nearest: MeshInstance3D = null
@@ -1992,11 +2060,13 @@ func _physics_process(dt: float) -> void:
 	for e in enemies:
 		var target := coop.target_for(e.position)
 		var offset: Vector3 = target.position-e.position
+		offset.y = 0.0
 		var d := offset.length()
-		var hero_distance := d if target == hero else hero.position.distance_to(e.position)
+		var hero_distance := d if target == hero else planar_distance(hero.position,e.position)
 		if d > 0.05:
 			e.rotation.y = lerp_angle(e.rotation.y,atan2(offset.x,offset.z),1.0-exp(-9.0*dt))
 		e.position += offset.normalized()*dt*(float(e.get_meta("speed",2.0))+minf(elapsed/90.0,2.0))
+		seat_actor(e)
 		if e.get_meta("boss",false):
 			update_boss_attack(e)
 		var contact_damage: float = dt*(24 if e.get_meta("boss",false) else 12)
@@ -2015,22 +2085,23 @@ func _physics_process(dt: float) -> void:
 		if blast > 0:
 			pulse(impact,1.5+blast*0.4,Color("#64cfff"))
 			for other in enemies.duplicate():
-				if other != nearest and other.position.distance_to(impact) < 1.5+blast*0.4:
+				if other != nearest and planar_distance(other.position,impact) < 1.5+blast*0.4:
 					hit_enemy(other)
 	for crate in crates.duplicate():
-		if coop.target_for(crate.position).position.distance_to(crate.position) < 1.0+level*0.12:
+		if planar_distance(coop.target_for(crate.position).position,crate.position) < 1.0+level*0.12:
 			drop_gem(crate.position)
 			pulse(crate.position,2.2,Color("#ff9d45"))
 			for enemy in enemies.duplicate():
-				if enemy.position.distance_to(crate.position) < 2.2:
+				if planar_distance(enemy.position,crate.position) < 2.2:
 					hit_enemy(enemy,crate)
 			award(50)
 			crates.erase(crate)
 			crate.queue_free()
 	for gem in gems.duplicate():
 		var offset: Vector3 = coop.target_for(gem.position).position-gem.position
+		offset.y = 0
 		if offset.length() < magnet:
-			gem.position += offset.normalized()*dt*9
+			gem.position = grounded(gem.position+offset.normalized()*dt*9,0.3)
 		if offset.length() < 0.65:
 			gems.erase(gem)
 			gem.queue_free()
@@ -2043,7 +2114,8 @@ func _physics_process(dt: float) -> void:
 		level += 1
 		play_fx("level")
 		hero.scale = Vector3.ONE*(1.0+minf((level-1)*0.12,1.5))
-		hero_shadow.position.y = (0.012-hero.position.y)/hero.scale.y
+		seat_actor(hero)
+		hero_shadow.position.y = -0.5+0.028/hero.scale.y
 		choosing = true
 		clear_touch()
 		roll_offers()
@@ -2071,7 +2143,7 @@ func _process(dt: float) -> void:
 		hud_elapsed = 0.0
 		update_hud()
 	if range_marker.visible:
-		range_marker.position = Vector3(hero.position.x,0.044,hero.position.z)
+		range_marker.position = grounded(hero.position,0.068)
 	if fps_elapsed >= 0.5:
 		fps_elapsed = 0.0
 		fps_label.text = "%d FPS" % Engine.get_frames_per_second()
@@ -2091,7 +2163,7 @@ func update_hud() -> void:
 	range_marker.visible = running and not choosing and not hud_paused and hud_panel.range_button.button_pressed
 	if range_marker.visible:
 		var radius := attack_distance()
-		range_marker.position = Vector3(hero.position.x,0.044,hero.position.z)
+		range_marker.position = grounded(hero.position,0.068)
 		range_marker.scale = Vector3(radius,1,radius)
 
 func build_attack_range() -> void:
@@ -2102,11 +2174,7 @@ func build_attack_range() -> void:
 	ring.rings = 56
 	ring.ring_segments = 4
 	range_marker.mesh = ring
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = Color("#ffbb54aa")
-	range_marker.material_override = material
+	range_marker.material_override = ring_ink(Color("#ffbb54aa"))
 	range_marker.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(range_marker)
 	range_marker.hide()

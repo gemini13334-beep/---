@@ -1,5 +1,7 @@
 extends Control
 
+const Landscape = preload("res://landscape.gd")
+
 const GOLD := Color("#ffbb54")
 const STEEL := Color("#9fb7ca")
 const TEXT := Color("#f1f4f6")
@@ -123,9 +125,9 @@ class Radar extends Control:
 		if not is_instance_valid(arena.hero):
 			return
 		var focus: Vector3 = Vector3.ZERO.lerp(arena.hero.position,zoom_blend)
-		var radius := lerpf(23.0,11.0,zoom_blend)
-		var top_left := project_point(Vector3(-23,0,-23),focus,radius)
-		var bottom_right := project_point(Vector3(23,0,23),focus,radius)
+		var radius := lerpf(Landscape.MAP_HALF,15.0,zoom_blend)
+		var top_left := project_point(Vector3(-Landscape.MAP_HALF,0,-Landscape.MAP_HALF),focus,radius)
+		var bottom_right := project_point(Vector3(Landscape.MAP_HALF,0,Landscape.MAP_HALF),focus,radius)
 		var map_rect := Rect2(top_left,bottom_right-top_left)
 		if is_instance_valid(arena.map_viewport):
 			draw_texture_rect(arena.map_viewport.get_texture(),map_rect,false,Color("#82a3a9"))

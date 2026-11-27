@@ -6,7 +6,7 @@ import sys
 from PIL import Image
 
 root = Path(sys.argv[1])
-for name, expected in (("motion-combat", 36), ("motion-boss", 30), ("motion-vega", 36), ("motion-hud", 33)):
+for name, expected in (("motion-combat", 36), ("motion-boss", 30), ("motion-vega", 36), ("motion-hud", 33), ("motion-gait", 30)):
     paths = sorted((root / name).glob("*.png"))
     if len(paths) != expected:
         raise RuntimeError(f"Expected {expected} screenshots in {name}, got {len(paths)}")

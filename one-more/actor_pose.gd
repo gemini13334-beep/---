@@ -58,6 +58,7 @@ var animation: AnimationPlayer
 var skeleton: Skeleton3D
 var muzzle_bone := -1
 var one_shot := 0.0
+var measured_speed := 0.0
 var defeated := false
 
 func configure(actor: Node3D, model: Node3D, model_name: String) -> void:
@@ -85,7 +86,7 @@ func configure(actor: Node3D, model: Node3D, model_name: String) -> void:
 		animation = players[0] as AnimationPlayer
 		skeleton = skeletons[0] as Skeleton3D
 		muzzle_bone = skeleton.find_bone("Muzzle")
-		for clip in ["Idle","Run"]:
+		for clip in ["Idle","Walk","Run"]:
 			if animation.has_animation(clip):
 				animation.get_animation(clip).loop_mode = Animation.LOOP_LINEAR
 		reset_clips()
@@ -98,7 +99,7 @@ func fire(target: Vector3) -> void:
 	recoil = 1.0
 	art.rotation.y = base_rotation.y+aim_yaw
 	apply_weapon()
-	if not defeated and one_shot <= 0.10:
+	if not defeated and one_shot <= 0.10 and (animation == null or measured_speed < 0.9):
 		play_event("Fire",0.20)
 
 func muzzle_position() -> Vector3:
@@ -109,6 +110,7 @@ func muzzle_position() -> Vector3:
 func play_event(clip: StringName, hold: float) -> void:
 	if animation == null or not animation.has_animation(clip):
 		return
+	animation.speed_scale = 1.0
 	animation.play(clip,0.06)
 	one_shot = hold
 
@@ -124,6 +126,7 @@ func reset_clips() -> void:
 	defeated = false
 	one_shot = 0.0
 	stride = 0.0
+	measured_speed = 0.0
 	if animation != null and animation.has_animation("Idle"):
 		animation.play("Idle",0.10)
 
@@ -146,11 +149,13 @@ func _process(dt: float) -> void:
 	previous_position = host.position
 	if not host.is_visible_in_tree() or defeated:
 		return
-	if offset.length_squared() > 0.64:
-		offset = Vector3.ZERO
 	offset.y = 0.0
+	if offset.length_squared() > 2.25:
+		offset = Vector3.ZERO
 	phase = fposmod(phase + offset.length()*gait.x*TAU,TAU)
 	var smoothing := 1.0-exp(-13.0*dt)
+	var speed := offset.length()/dt
+	measured_speed = lerpf(measured_speed,speed,smoothing)
 	var velocity := (host.transform.basis.inverse()*offset/dt).limit_length(7.0)
 	local_motion = local_motion.lerp(velocity/7.0,smoothing)
 	stride = lerpf(stride,minf(offset.length()/dt/3.0,1.0),smoothing)
@@ -162,9 +167,18 @@ func _process(dt: float) -> void:
 	strike = move_toward(strike,0.0,dt*3.8)
 	one_shot = maxf(0.0,one_shot-dt)
 	if animation != null and one_shot == 0.0:
-		var clip := &"Run" if stride > 0.20 else &"Idle"
+		var clip := &"Idle"
+		if measured_speed > 2.40:
+			clip = &"Run"
+		elif measured_speed > 0.42:
+			clip = &"Walk"
 		if animation.current_animation != clip and animation.has_animation(clip):
-			animation.play(clip,0.13)
+			animation.play(clip,0.15)
+		if clip == &"Idle":
+			animation.speed_scale = 1.0
+		else:
+			var pace := 5.5 if clip == &"Run" else 1.6
+			animation.speed_scale = clampf(measured_speed/pace,0.60,1.72)
 
 	var lift := sin(idle)*0.014
 	if floating:
