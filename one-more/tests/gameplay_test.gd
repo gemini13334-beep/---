@@ -50,14 +50,15 @@ func run_tests() -> void:
 	scene.audio_enabled = false
 	scene.apply_settings()
 	check(scene.selected == scene.DEFAULT_HERO and scene.owned.has(scene.DEFAULT_HERO),"New profile begins with Vega unlocked and selected")
+	check(scene.hero_stage.visible and scene.ground.mesh == null and scene.scenery.is_empty(),"The live menu starts without loading arena geometry")
 	scene.start()
 	check(scene.running and scene.hp == scene.max_hp and scene.level == 1,"Start initializes run")
 	check(scene.crates.size() == Landscape.STARTING_CRATES,"Arena populated")
 	var hud = scene.hud_panel
 	var portrait_phone := Vector2(720,1600)
 	scene.resize_interface(portrait_phone)
-	check(hud.footer_art.get_global_rect().end.y == portrait_phone.y and scene.menu.artwork.size == portrait_phone
-		and scene.stick_base.position.y > 1000.0,"Tall phones keep the HUD, joystick and menu aligned to their full screen")
+	check(is_equal_approx(portrait_phone.y-hud.loadout_frame.get_global_rect().end.y,7.0) and scene.menu.scrim.size == portrait_phone
+		and scene.stick_base.position.y > 1000.0,"Tall phones keep the HUD, joystick and live menu aligned to their full screen")
 	scene.resize_interface()
 	var ui_input := InputEventScreenTouch.new()
 	ui_input.pressed = true

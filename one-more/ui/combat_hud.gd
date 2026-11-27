@@ -15,8 +15,8 @@ const TASKS := ["Победить врагов","Завершить забеги
 const KIT_ART := [0,1,2,5]
 const KIT_NAMES := ["КАРАБИН","БОЕВЫЕ БОТИНКИ","МАГНИТ","БРОНЕПЛАСТИНЫ"]
 const GLYPHS := ["ϟ","↑","∩","✦","⊕","◇","⌖","+","◇","♦","ϟ","↑","∩","ϟ","✦","◇"]
-const MAP_OPEN_TOP := 356.0
-const MAP_CLOSED_TOP := 273.0
+const MAP_OPEN_TOP := 269.0
+const MAP_CLOSED_TOP := 186.0
 const DESIGN_SIZE := Vector2(720,1280)
 
 class Plate extends Control:
@@ -268,8 +268,7 @@ var pause_title: Label
 var pause_hint: Label
 var exit_button: Button
 var touch_blocks: Array[Control] = []
-var sky_art: TextureRect
-var footer_art: TextureRect
+var loadout_frame: Plate
 var bottom_positions: Dictionary[Control,float] = {}
 
 func configure(owner_arena) -> void:
@@ -282,12 +281,7 @@ func configure(owner_arena) -> void:
 	hud_colors.default_font = typeface
 	theme = hud_colors
 	mouse_filter = MOUSE_FILTER_IGNORE
-	sky_art = picture(self,Rect2(0,0,720,112))
-	sky_art.texture = preload("res://assets/hud/frame-sky.webp")
-	footer_art = picture(self,Rect2(0,1128,720,152))
-	footer_art.texture = preload("res://assets/hud/frame-guardians.webp")
-	touch_blocks.append_array([sky_art,footer_art])
-	var top := plate(self,Rect2(0,98,720,54),STEEL,16)
+	var top := plate(self,Rect2(0,11,720,54),STEEL,16)
 	pause_button = button(top,Rect2(7,5,53,45),"Ⅱ","Меню забега",arena.toggle_hud_pause)
 	button(top,Rect2(62,5,53,45),"⚙","Настройки",arena.open_hud_settings)
 	var brand := display(top,Rect2(137,0,164,54),"ONE MORE",27,Color("#fff0c9"))
@@ -299,14 +293,14 @@ func configure(owner_arena) -> void:
 	fps = display(top,Rect2(632,0,80,54),"",16,GREEN,true)
 	touch_blocks.append(top)
 
-	var rank := plate(self,Rect2(11,165,226,64),STEEL)
+	var rank := plate(self,Rect2(11,78,226,64),STEEL)
 	xp_frame = rank
 	picture(rank,Rect2(9,7,44,48)).texture = art_texture(13)
 	level_label = display(rank,Rect2(62,4,156,30),"",20,TEXT)
 	xp = meter(rank,Rect2(62,43,149,9),GOLD)
 	touch_blocks.append(rank)
 
-	var count_frame := plate(self,Rect2(516,163,192,105),GOLD,14)
+	var count_frame := plate(self,Rect2(516,76,192,105),GOLD,14)
 	count_frame.light = 0.52
 	score_panel = count_frame
 	for i in 3:
@@ -316,12 +310,12 @@ func configure(owner_arena) -> void:
 		counters.append(display(count_frame,Rect2(43,4+i*33,140,30),"",17,tint))
 	touch_blocks.append(count_frame)
 
-	boss_frame = plate(self,Rect2(486,278,222,54),Color("#ab5347"))
+	boss_frame = plate(self,Rect2(486,191,222,54),Color("#ab5347"))
 	boss_name = display(boss_frame,Rect2(8,2,206,25),"",15,TEXT,true)
 	boss_health = meter(boss_frame,Rect2(12,33,198,9),RED)
 	boss_frame.hide()
 
-	var task_frame := plate(self,Rect2(11,234,226,38),GOLD)
+	var task_frame := plate(self,Rect2(11,147,226,38),GOLD)
 	task_toggle = button(task_frame,Rect2(0,0,226,38),"","Свернуть или открыть задания",Callable())
 	task_toggle.toggle_mode = true
 	task_toggle.add_theme_font_size_override("font_size",17)
@@ -330,7 +324,7 @@ func configure(owner_arena) -> void:
 	task_brass.set_corner_radius_all(8)
 	task_toggle.add_theme_stylebox_override("normal",task_brass)
 	task_toggle.add_theme_stylebox_override("pressed",task_brass)
-	tasks = plate(self,Rect2(11,274,226,76),GOLD)
+	tasks = plate(self,Rect2(11,187,226,76),GOLD)
 	for i in TASKS.size():
 		task_text.append(display(tasks,Rect2(10,5+i*22,207,21),"",14,TEXT))
 	touch_blocks.append(tasks)
@@ -349,7 +343,7 @@ func configure(owner_arena) -> void:
 	task_toggle.set_pressed_no_signal(true)
 
 	var right := Control.new()
-	place(self,right,Rect2(583,844,127,136))
+	place(self,right,Rect2(583,972,127,136))
 	var aiming := Reticle.new()
 	place(right,aiming,Rect2(10,0,106,106))
 	range_button = button(right,Rect2(10,0,106,106),"","Показать дальность автоогня",arena.toggle_attack_range)
@@ -364,7 +358,8 @@ func configure(owner_arena) -> void:
 	var range_caption := plate(right,Rect2(5,103,117,26),STEEL,8)
 	display(range_caption,Rect2(0,0,117,26),"ДАЛЬНОСТЬ",14,TEXT,true)
 
-	var bottom := plate(self,Rect2(4,985,712,160),STEEL,18)
+	var bottom := plate(self,Rect2(4,1113,712,160),STEEL,18)
+	loadout_frame = bottom
 	bottom.light = 0.88
 	touch_blocks.append(bottom)
 	var operator := plate(bottom,Rect2(7,8,218,144),GOLD,15)
@@ -401,7 +396,7 @@ func configure(owner_arena) -> void:
 	badge.hide()
 	build_pause()
 	build_fusion()
-	for anchored in [right,bottom,fusion_anchor,footer_art]:
+	for anchored in [right,bottom,fusion_anchor]:
 		bottom_positions[anchored] = anchored.position.y
 
 func fit_viewport(extent: Vector2) -> void:
@@ -410,7 +405,7 @@ func fit_viewport(extent: Vector2) -> void:
 	size = Vector2(DESIGN_SIZE.x,extent.y)
 	for anchored in bottom_positions:
 		anchored.position.y = bottom_positions[anchored]+spare.y
-	for panel in [sky_art,footer_art,overlay,fusion_overlay]:
+	for panel in [overlay,fusion_overlay]:
 		panel.position.x = -position.x
 		panel.size.x = extent.x
 	for veil in [overlay,fusion_overlay]:
@@ -434,7 +429,7 @@ func build_pause() -> void:
 	overlay.hide()
 
 func build_fusion() -> void:
-	fusion_anchor = plate(self,Rect2(354,921,184,49),GOLD,13)
+	fusion_anchor = plate(self,Rect2(354,1049,184,49),GOLD,13)
 	fusion_button = button(fusion_anchor,Rect2(0,0,184,49),"СИНТЕЗ","Объединить суперспособности",arena.open_fusion)
 	fusion_button.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 

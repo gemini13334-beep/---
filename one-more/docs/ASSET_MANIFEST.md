@@ -19,7 +19,7 @@ Generated for ONE MORE with OpenAI ImageGen in the November 2026 art pass. The i
 
 | File | Purpose | SHA-256 |
 | --- | --- | --- |
-| `assets/art/gate-valley.jpg` | Portrait menu backdrop | `f402422caf4ce435d5ad7f576f6ce7056ba1755d10642dc448a9d125e9f47b7b` |
+| `assets/art/gate-valley.jpg` | Archived menu concept | `f402422caf4ce435d5ad7f576f6ce7056ba1755d10642dc448a9d125e9f47b7b` |
 | `assets/art/forest-ground.jpg` | Repeating forest albedo with mipmaps | `fc77f124665090fd5086672eb5411ce3f6735301c539258e7aa6e262c88f584f` |
 | `assets/art/forest-slate.jpg` | Forest trail and triplanar masonry material | `9c570d539b0f84c428095120a0f70fa37126220ee2dce4d5787929c5cdd0b6f9` |
 | `assets/art/forest-fern.png` | Mipmapped alpha-scissor foliage shared by instanced forest plants | `40964c2228e76a6c9ab3dfb5ddb24b49d93ec0dd29e3bd6b605d009e4084ca60` |
@@ -36,7 +36,7 @@ The head topology is cropped from [MakeHuman 1.3.0 `base.obj`](https://github.co
 
 OpenAI ImageGen created an original atlas for the combat kit and 16 abilities. The game uses 112 × 112 WebP tiles in `assets/hud/`, ordered by the original ability IDs. Four tiles also illustrate equipment stats while a new run has available slots. The input atlas SHA-256 is `2fa5824657dabf87e539ca4d5416c5f71cc82cc4c12ce509e1c9caf4d73ddbdc`.
 
-The original skyline and guardian artwork for the live combat HUD came from a second ImageGen sheet, SHA-256 `6697201c62b7c11d3f4c88346435ffafd6166d2a8accf16be50537f5c179acbd`. Its WebP crops are `assets/hud/frame-sky.webp` and `assets/hud/frame-guardians.webp`. Controls, indicators, typography and progress bars are drawn by Godot.
+Godot draws the controls, indicators and progress bars over the full arena. The main menu renders the selected character live on a 3D stage with custom stonework, cloth banners, and lighting.
 
 ## Arena surfaces
 

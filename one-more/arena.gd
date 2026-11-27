@@ -178,6 +178,7 @@ var max_hp := 100.0
 var mode := 0
 var biome := 0
 var scenery: Array[GeometryInstance3D] = []
+var scenery_biome := -1
 var sound: AudioStreamPlayer
 var sounds: Dictionary = {}
 
@@ -319,6 +320,7 @@ func rebuild_scenery() -> void:
 	for prop in scenery:
 		mark_on_map(prop)
 	map_dirty = true
+	scenery_biome = biome
 
 func mark_on_map(node: Node) -> void:
 	if node is GeometryInstance3D:
@@ -592,11 +594,24 @@ func cycle_biome() -> void:
 
 func set_biome(index: int) -> void:
 	biome = clampi(index,0,BIOMES.size()-1)
-	menu.show_biome(biome,BIOME_NAMES[biome])
+	menu.show_biome(BIOME_NAMES[biome])
 	apply_biome_lighting()
-	update_ground_material()
 	range_marker.material_override.set_shader_parameter("biome",biome)
-	rebuild_scenery()
+	if running:
+		prepare_arena()
+
+func prepare_arena() -> void:
+	if forest_understory == null:
+		build_forest_understory()
+		forest_understory.set_density(graphics_preset_name())
+		mark_on_map(forest_understory)
+	if scenery_biome != biome:
+		update_ground_material()
+		rebuild_scenery()
+	ground.show()
+	forest_understory.visible = biome == 0
+	for prop in scenery:
+		prop.show()
 
 var best_sprint := 0
 var runs := 0
@@ -694,6 +709,8 @@ var run_pickups := 0
 var range_marker: MeshInstance3D
 var menu_scrim: ColorRect
 var hero_stage: Node3D
+var hangar_light: SpotLight3D
+const HANGAR_ORIGIN := Vector3(0,0,-220)
 var hero_preview: Control
 var hero_preview_label: Label
 var centered_ui: Dictionary[Control,Vector2] = {}
@@ -783,6 +800,7 @@ func save_profile(new_credit_balance: int = -1) -> bool:
 	return err == OK
 
 func refresh_collection() -> void:
+	menu.hero_caption.text = HERO_NAMES[selected]
 	collection_balance.text = "КРЕДИТЫ %d  ·  ОТКРЫТО %d ИЗ %d" % [credits,owned.size(),HEROES.size()]
 	for i in range(HEROES.size()):
 		var h: Array = HEROES[i]
@@ -986,7 +1004,8 @@ func apply_settings() -> void:
 		2: get_viewport().msaa_3d = Viewport.MSAA_4X
 		_: get_viewport().msaa_3d = Viewport.MSAA_DISABLED
 	var preset := graphics_preset_name()
-	forest_understory.set_density(preset)
+	if forest_understory != null:
+		forest_understory.set_density(preset)
 	preset_button.text = "КАЧЕСТВО  ·  "+PRESET_LABELS[preset]
 	if running:
 		camera.size = float(advanced["zoom"])
@@ -1003,6 +1022,7 @@ func apply_settings() -> void:
 			voice.stop()
 	Engine.max_fps = fps_limit
 	world_light.shadow_enabled = high_quality
+	hangar_light.shadow_enabled = high_quality
 	var long_shadows := preset in ["HIGH","ULTRA"]
 	world_light.directional_shadow_mode = DirectionalLight3D.SHADOW_PARALLEL_4_SPLITS if long_shadows else DirectionalLight3D.SHADOW_PARALLEL_2_SPLITS
 	world_light.directional_shadow_max_distance = 69.0 if long_shadows else 43.0
@@ -1264,13 +1284,20 @@ func show_menu() -> void:
 	hud_panel.hide()
 	event_label.hide()
 	hero_stage.show()
+	world_light.hide()
+	biome_rim.hide()
+	ground.hide()
+	if forest_understory != null:
+		forest_understory.hide()
+	for prop in scenery:
+		prop.hide()
 	hero.show()
 	hero_shadow.hide()
 	for actor in enemies + crates + gems:
 		actor.hide()
 	if is_instance_valid(vehicle):
 		vehicle.hide()
-	hero.position = grounded(Vector3.ZERO,0.67)
+	hero.position = HANGAR_ORIGIN+Vector3(0,0.69,0)
 	hero.scale = Vector3.ONE
 	hero.rotation.y = -0.24
 	var pose := actor_pose(hero)
@@ -1280,10 +1307,10 @@ func show_menu() -> void:
 		pose.hit = 0.0
 		pose.art.rotation = pose.base_rotation
 		pose.reset_clips()
-	var target := Vector3(0,-0.98,0.90)
-	camera.position = target + Vector3(0,4.2,7.6)
+	var target := HANGAR_ORIGIN+Vector3(0.13,0.32,1.12)
+	camera.position = target+Vector3(2.3,2.8,8.0)
 	camera.look_at(target)
-	camera.size = 7.25
+	camera.size = 4.90
 	menu.show()
 	refresh_collection()
 
@@ -1292,7 +1319,7 @@ func show_hero_preview() -> void:
 	collection.hide()
 	menu_scrim.hide()
 	hero_preview_label.text = HERO_NAMES[selected]
-	var focus := Vector3(0,0.96,0.05)
+	var focus := HANGAR_ORIGIN+Vector3(0,0.97,0.05)
 	camera.position = focus+Vector3(1.23,0.7,4)
 	camera.look_at(focus)
 	camera.size = 2.75
@@ -1833,25 +1860,82 @@ func model(mesh: Mesh, color: Color, pos: Vector3) -> MeshInstance3D:
 	n.position = pos
 	return n
 
+func stage_piece(mesh: Mesh, material: Material, point: Vector3) -> MeshInstance3D:
+	var piece := MeshInstance3D.new()
+	piece.mesh = mesh
+	piece.material_override = material
+	piece.position = point
+	hero_stage.add_child(piece)
+	return piece
+
 func build_hero_stage() -> void:
+	hero_stage = Node3D.new()
+	hero_stage.position = HANGAR_ORIGIN
+	add_child(hero_stage)
+	var stone := ShaderMaterial.new()
+	stone.shader = preload("res://shaders/forest_stone.gdshader")
+	stone.set_shader_parameter("stone_surface",FACTORY_CONCRETE)
+	stone.set_shader_parameter("tint",Color("#716364"))
+	var deck := PlaneMesh.new()
+	deck.size = Vector2(34,28)
+	stage_piece(deck,stone,Vector3(0,-0.07,-2)).cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	var pedestal := CylinderMesh.new()
-	pedestal.top_radius = 1.22
+	pedestal.top_radius = 1.24
 	pedestal.bottom_radius = 1.42
-	pedestal.height = 0.22
-	hero_stage = model(pedestal,Color("#243f47"),Vector3(0,0.01,0))
+	pedestal.height = 0.25
+	stage_piece(pedestal,stone,Vector3(0,0.06,0))
 	var rim_mesh := TorusMesh.new()
-	rim_mesh.inner_radius = 1.14
-	rim_mesh.outer_radius = 1.2
+	rim_mesh.inner_radius = 1.13
+	rim_mesh.outer_radius = 1.20
 	rim_mesh.rings = 48
 	rim_mesh.ring_segments = 6
-	var rim := MeshInstance3D.new()
-	rim.mesh = rim_mesh
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.albedo_color = Color("#61ddbf")
-	rim.material_override = material
-	rim.scale.y = 0.45
-	rim.position.y = 0.12
+	var copper := StandardMaterial3D.new()
+	copper.albedo_color = Color("#ae805b")
+	copper.metallic = 0.65
+	copper.roughness = 0.45
+	stage_piece(rim_mesh,copper,Vector3(0,0.185,0)).scale.y = 0.22
+	var wall := BoxMesh.new()
+	wall.size = Vector3(21,7,0.5)
+	stage_piece(wall,stone,Vector3(0,3.0,-8.3))
+	var column := BoxMesh.new()
+	column.size = Vector3(0.9,5.5,1.2)
+	for x in [-4.2,-2.25,2.15,3.80]:
+		var support := stage_piece(column,stone,Vector3(x,2.68,-5.8))
+		support.rotation.y = 0.16 if x < 0 else -0.18
+	var cloth := StandardMaterial3D.new()
+	cloth.albedo_color = Color("#8b302c")
+	cloth.roughness = 0.97
+	cloth.cull_mode = BaseMaterial3D.CULL_DISABLED
+	var banner := SurfaceTool.new()
+	banner.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for row in 17:
+		var u := row/16.0
+		for col in 13:
+			var v := col/12.0
+			var taper := lerpf(1.0,0.74,u*u*u)
+			banner.add_vertex(Vector3((v-0.5)*1.24*taper,-u*2.8-0.28*u*u*sin(v*PI),0.08*cos(v*TAU*2.0)-0.20*u*u))
+	for row in 16:
+		for col in 12:
+			var a := row*13+col
+			for index in [a,a+1,a+13,a+1,a+14,a+13]:
+				banner.add_index(index)
+	banner.generate_normals()
+	var fabric := banner.commit()
+	stage_piece(fabric,cloth,Vector3(-1.39,3.45,-2.9)).rotation.y = 0.13
+	stage_piece(fabric,cloth,Vector3(1.2,3.4,-3.7)).rotation.y = -0.13
+	hangar_light = SpotLight3D.new()
+	hangar_light.position = Vector3(-2.5,3.65,3.35)
+	hangar_light.spot_range = 13.0
+	hangar_light.spot_angle = 42.0
+	hangar_light.light_color = Color("#ffdcaf")
+	hangar_light.light_energy = 4.8
+	hero_stage.add_child(hangar_light)
+	hangar_light.look_at(HANGAR_ORIGIN+Vector3(0,0.95,0))
+	var rim := OmniLight3D.new()
+	rim.position = Vector3(1.85,1.55,-1.65)
+	rim.light_color = Color("#e8683c")
+	rim.light_energy = 3.9
+	rim.omni_range = 6.0
 	hero_stage.add_child(rim)
 
 func _ready() -> void:
@@ -1881,13 +1965,9 @@ func _ready() -> void:
 	add_child(ambient_player)
 	ambient_player.volume_db = -26.0
 	ambient_player.stream = ambient_loop()
-	ground = model(Landscape.surface(0),Color(GROUND_COLORS[0]),Vector3.ZERO)
-	terrain_meshes[0] = ground.mesh
+	ground = MeshInstance3D.new()
+	add_child(ground)
 	mark_on_map(ground)
-	update_ground_material()
-	build_forest_understory()
-	mark_on_map(forest_understory)
-	rebuild_scenery()
 	build_minimap_camera()
 	var sphere := SphereMesh.new()
 	hero = model(sphere,Color("#62f5c5"),Vector3(0,0.5,0))
@@ -1949,12 +2029,12 @@ func _ready() -> void:
 	menu = HangarMenu.new()
 	layer.add_child(menu)
 	menu.action_requested.connect(choose_menu_action)
-	menu.show_biome(biome,BIOME_NAMES[biome])
+	menu.show_biome(BIOME_NAMES[biome])
 	result_label = menu.summary
 	achievements = menu.badges
 	event_label = Label.new()
 	layer.add_child(event_label)
-	event_label.position = Vector2(248,194)
+	event_label.position = Vector2(248,107)
 	event_label.size = Vector2(229,48)
 	event_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	event_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -2101,6 +2181,7 @@ func start(populate := true) -> void:
 	hud_fusing = false
 	run_pickups = 0
 	hud_panel.reset_run()
+	prepare_arena()
 	refresh_minimap()
 	gate_panel.hide()
 	gate_cleared = false
@@ -2190,6 +2271,8 @@ func start(populate := true) -> void:
 	refresh_touch_stick()
 	menu_scrim.hide()
 	hero_stage.hide()
+	world_light.show()
+	biome_rim.show()
 	hero_shadow.show()
 	hud_panel.show()
 	fps_label.text = "%d FPS" % Engine.get_frames_per_second()
@@ -2236,7 +2319,7 @@ func refresh_touch_stick() -> void:
 	var radius := float(advanced["stick_size"])
 	stick_base.size = Vector2.ONE*radius*2.0
 	stick_guide.size = stick_base.size
-	var center := origin if finger != -1 else Vector2(120+ui_spare.x*0.5,883+ui_spare.y)
+	var center := origin if finger != -1 else Vector2(120+ui_spare.x*0.5,1011+ui_spare.y)
 	stick_base.position = center-Vector2.ONE*radius
 	stick_base.modulate.a = float(advanced["stick_opacity"])
 	stick_knob.size = Vector2.ONE*radius*0.7

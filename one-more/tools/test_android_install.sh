@@ -22,7 +22,7 @@ emulator="$ANDROID_HOME/emulator/emulator"
 df -h "$ANDROID_HOME" "$ANDROID_AVD_HOME"
 "$adb" start-server
 "$emulator" -avd "$avd" -no-window -noaudio -no-boot-anim -skip-adb-auth \
-  -no-snapshot -gpu swiftshader_indirect -partition-size 2048 -memory 3072 -cores 2 > "$log_dir/emulator.log" 2>&1 &
+  -no-snapshot -gpu swiftshader_indirect -partition-size 2048 -memory 5120 -cores 2 > "$log_dir/emulator.log" 2>&1 &
 emulator_pid=$!
 cleanup() {
   local status=$?
@@ -31,6 +31,9 @@ cleanup() {
     "$adb" devices -l
   fi
   timeout 15s "$adb" logcat -d -t 2000 > "$log_dir/android.log" 2>&1 || true
+  if ((status != 0)); then
+    grep -E 'Fatal signal|FATAL EXCEPTION|lowmemorykiller|Failed to extract native libraries' "$log_dir/android.log" | tail -35 || true
+  fi
   kill "$emulator_pid" 2>/dev/null || true
 }
 trap cleanup EXIT
@@ -50,6 +53,7 @@ done
   echo "Android API: $("$adb" shell getprop ro.build.version.sdk)"
   echo "Supported ABIs: $("$adb" shell getprop ro.product.cpu.abilist)"
   echo "Page size: $("$adb" shell getconf PAGE_SIZE)"
+  "$adb" shell head -1 /proc/meminfo
 } | tee "$log_dir/device.txt"
 [[ "$("$adb" shell getconf PAGE_SIZE)" == "$expected_page_size" ]]
 grep -Fq arm64-v8a "$log_dir/device.txt"

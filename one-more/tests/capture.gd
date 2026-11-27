@@ -240,12 +240,14 @@ func capture() -> void:
 	arena.set_physics_process(false)
 	if args.size() == 2 and args[1] == "phone":
 		var frame_size := root.get_visible_rect().size
-		check_animation(frame_size.y > 1280.0 and arena.menu.artwork.size == frame_size,"Phone menu must fill the expanded viewport")
+		check_animation(frame_size.y > 1280.0 and arena.menu.scrim.size == frame_size,"Phone menu must fill the expanded viewport")
 		await shot("phone-menu",arena.menu)
 		arena.start()
 		advance(90)
-		check_animation(is_equal_approx(arena.hud_panel.footer_art.get_global_rect().end.y,frame_size.y),"HUD artwork is not flush with the phone screen")
+		check_animation(is_equal_approx(frame_size.y-arena.hud_panel.loadout_frame.get_global_rect().end.y,7.0),"The combat loadout must stay at the bottom of the phone screen")
 		await shot("phone-fullscreen",arena.hud_panel)
+		arena.queue_free()
+		await process_frame
 		quit(int(failed))
 		return
 	await shot("menu",arena.menu)
