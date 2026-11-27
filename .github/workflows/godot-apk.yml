@@ -1,113 +1,143 @@
-name: Build Godot 4 Android APK
+name: Build Godot Android APK
 on:
   workflow_dispatch:
   push:
+    branches: ['**']
+    tags: ['android-verify-*']
     paths:
-      - ".github/workflows/godot-apk.yml"
-      - "godot/scripts/main.gd"
-      - "godot/assets/textures/**"
+      - '.github/workflows/godot-apk.yml'
+      - '.github/scripts/android-smoke.sh'
+      - 'godot/**'
+      - 'tests/patrol.gd'
+      - 'tests/story_wings.gd'
 permissions:
-  contents: write
+  contents: read
+
+env:
+  PACKAGE: org.otpusk.tactical.game
+  SIGNER_SHA256: d77e07cd1f65f7bf58a48c169716867f45c641ef88b0333bf002c6f9170b02a6
+  APK: Osobyi-Otdel.apk
 
 jobs:
   build:
+    if: "!startsWith(github.ref, 'refs/tags/')"
     runs-on: ubuntu-latest
-    container:
-      image: barichello/godot-ci:4.3
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
     steps:
       - uses: actions/checkout@v4
-      - name: Check Android build environment
-        run: |
-          godot --version
-          echo "ANDROID_HOME=${ANDROID_HOME:-unset}"
-          echo "JAVA_HOME=${JAVA_HOME:-unset}"
-          ls -la /root/.local/share/godot/export_templates/ || true
-      - name: Configure Android SDK, templates and debug signing
-        run: |
-          set -eu
-          export HOME=/root
-          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-          echo "HOME=/root" >> "$GITHUB_ENV"
-          echo "JAVA_HOME=$JAVA_HOME" >> "$GITHUB_ENV"
-          echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
-          apt-get update -qq && apt-get install -y -qq curl unzip strace openjdk-17-jdk-headless ca-certificates >/dev/null
-          mkdir -p /opt/android-sdk/cmdline-tools
-          curl -fsSL --retry 3 https://dl.google.com/android/repository/commandlinetools-linux-11076708_latest.zip -o /tmp/android-tools.zip
-          unzip -q /tmp/android-tools.zip -d /tmp/android-cli
-          mv /tmp/android-cli/cmdline-tools /opt/android-sdk/cmdline-tools/latest
-          export ANDROID_HOME=/opt/android-sdk
-          export ANDROID_SDK_ROOT=/opt/android-sdk
-          export PATH="/opt/android-sdk/cmdline-tools/latest/bin:$PATH"
-          yes | sdkmanager --sdk_root=/opt/android-sdk --licenses >/dev/null || true
-          sdkmanager --sdk_root=/opt/android-sdk "platform-tools" "platforms;android-33" "platforms;android-34" "build-tools;33.0.2" "build-tools;34.0.0" "platforms;android-35" "build-tools;35.0.0"
-          echo "ANDROID_HOME=/opt/android-sdk" >> "$GITHUB_ENV"
-          echo "ANDROID_SDK_ROOT=/opt/android-sdk" >> "$GITHUB_ENV"
-          mkdir -p /github/home/.local/share/godot/export_templates
-          cp -r /root/.local/share/godot/export_templates/4.3.stable /github/home/.local/share/godot/export_templates/
-          mkdir -p /github/home/.android
-          keytool -genkeypair -v -keystore /github/home/.android/debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          mkdir -p /root/.config/godot /github/home/.config/godot /root/.android
-          cp /github/home/.android/debug.keystore /root/.android/debug.keystore
-          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "/opt/android-sdk"\nexport/android/java_sdk_path = "/usr/lib/jvm/java-17-openjdk-amd64"\nexport/android/debug_keystore = "/root/.android/debug.keystore"\nexport/android/debug_keystore_user = "androiddebugkey"\nexport/android/debug_keystore_pass = "android"\n' > /root/.config/godot/editor_settings-4.3.tres
-          cp /root/.config/godot/editor_settings-4.3.tres /github/home/.config/godot/editor_settings-4.3.tres
-          ls -la /opt/android-sdk/build-tools /opt/android-sdk/platforms
-          ls -la /root/.config/godot
-          godot --headless --editor --path godot --quit >/tmp/godot-settings-check.log 2>&1 || true
-          cat /tmp/godot-settings-check.log | tail -30
-          echo "=== ACTUAL GODOT EDITOR SETTINGS ==="
-          grep -E "export/android|debug_keystore|java_sdk" /root/.config/godot/editor_settings-4.3.tres || true
-          echo "=== EXPORT TEMPLATES ==="
-          ls -lh /root/.local/share/godot/export_templates/4.3.stable | head -30
-      - name: Import project and check scripts
-        run: |
-          godot --headless --path godot --editor --quit 2>&1 | tee /tmp/godot-import.log
-          if grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' /tmp/godot-import.log; then exit 1; fi
-          godot --headless --path godot --quit-after 2
-      - name: Export debug Android APK
-        run: |
-          mkdir -p godot/build
-          echo "=== EXPORT PRESET ==="
-          cat godot/export_presets.cfg
-          echo "=== GODOT SETTINGS ==="
-          grep -E "export/android|debug_keystore|java_sdk" /root/.config/godot/editor_settings-4.3.tres || true
-          strace -f -e trace=file -o /tmp/godot-file-access.log godot --headless --verbose --path godot --export-debug "Android" build/Otpusk-Tactical-Godot.apk 2>&1 | tee /tmp/godot-export.log
-          echo "=== MISSING ANDROID FILES (diagnostic only; loader probes may be harmless) ==="
-          grep "ENOENT" /tmp/godot-file-access.log | grep -E "android|sdk|godot|keystore|java|build-tools|apk" | tail -70 || true
-          if grep -E "Cannot export|Project export.*failed|ERROR:" /tmp/godot-export.log; then exit 1; fi
-          test -s godot/build/Otpusk-Tactical-Godot.apk
-      - name: Verify APK integrity and Android signature
-        run: |
-          set -eu
-          APK="godot/build/Otpusk-Tactical-Godot.apk"
-          test -s "$APK"
-          unzip -t "$APK" | tail -2
-          APKSIGNER="/opt/android-sdk/build-tools/34.0.0/apksigner"
-          AAPT="/opt/android-sdk/build-tools/34.0.0/aapt"
-          test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK"
-          "$AAPT" dump badging "$APK" | head -12
-          sha256sum "$APK"
-      - name: Upload Godot APK
-        uses: actions/upload-artifact@v4
+      - uses: chickensoft-games/setup-godot@v2
         with:
-          name: Otpusk-Tactical-Godot-APK
-          path: godot/build/Otpusk-Tactical-Godot.apk
+          version: 4.5.1
+          include-templates: true
+          use-dotnet: false
+      - name: Export universal Android package
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.config/godot" dist
+          printf '[gd_resource type="EditorSettings" format=3]\n[resource]\nexport/android/android_sdk_path = "%s"\nexport/android/java_sdk_path = "%s"\n' "$ANDROID_HOME" "$JAVA_HOME_17_X64" > "$HOME/.config/godot/editor_settings-4.5.tres"
+          sed -i "s/^version\/code=.*/version\/code=$GITHUB_RUN_NUMBER/" godot/export_presets.cfg
+          godot --headless --editor --path godot --import
+          timeout 90s godot --headless --path godot --script "$PWD/tests/patrol.gd"
+          timeout 90s godot --headless --path godot --script "$PWD/tests/story_wings.gd"
+          godot --headless --path godot --export-release Android "$PWD/dist/unpacked.apk" 2>&1 | tee "$RUNNER_TEMP/export.log"
+          ! grep -E 'SCRIPT ERROR|Parse Error|Failed to load script' "$RUNNER_TEMP/export.log" || exit 1
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -P 16 -f 4 dist/unpacked.apk "dist/$APK"
+          rm dist/unpacked.apk
+      - name: Sign when the release key is configured
+        id: sign
+        env:
+          RELEASE_KEY: ${{ secrets.OTPUSK_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.OTPUSK_KEYSTORE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$RELEASE_KEY" ]]; then
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "Unsigned export ready for the offline release signer." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          umask 077
+          key="$RUNNER_TEMP/otpusk.p12"
+          trap 'rm -f "$key"' EXIT
+          printf '%s' "$RELEASE_KEY" | base64 -d > "$key"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" sign --ks "$key" --ks-key-alias otpusk --ks-pass env:STORE_PASSWORD "dist/$APK"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-export
+          path: dist/Osobyi-Otdel.apk
+          if-no-files-found: error
 
-  publish:
-    name: Publish direct APK download
+  install:
     needs: build
+    if: ${{ !cancelled() && (startsWith(github.ref, 'refs/tags/android-verify-') || needs.build.outputs.signed == 'true') }}
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: write
     steps:
-      - name: Download built APK
+      - uses: actions/checkout@v4
+      - if: github.ref_type != 'tag'
         uses: actions/download-artifact@v4
         with:
-          name: Otpusk-Tactical-Godot-APK
+          name: android-export
           path: dist
-      - name: Publish APK to GitHub Releases
+      - name: Resolve release and verify exact APK
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          test -s dist/Otpusk-Tactical-Godot.apk
-          gh release create "android-build-${{ github.run_number }}" dist/Otpusk-Tactical-Godot.apk --repo "${{ github.repository }}" --target "${{ github.sha }}" --title "ОТПУСК TACTICAL — Android build ${{ github.run_number }}" --notes "Native Godot 4.3 Android debug APK. Download the APK file below and install on Android." --latest
+          set -euo pipefail
+          mkdir -p dist
+          number=$GITHUB_RUN_NUMBER
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            number=${GITHUB_REF_NAME#android-verify-}
+            [[ "$number" =~ ^[0-9]+$ ]]
+            details=$(gh release view "android-build-$number" --json isDraft,targetCommitish)
+            jq -e --arg sha "$GITHUB_SHA" '.isDraft and .targetCommitish == $sha' <<< "$details"
+            gh release download "android-build-$number" --pattern "$APK" --dir dist
+          fi
+          echo "RELEASE_TAG=android-build-$number" >> "$GITHUB_ENV"
+          tools="$ANDROID_HOME/build-tools/35.0.0"
+          file="dist/$APK"
+          unzip -tq "$file"
+          "$tools/zipalign" -c -P 16 4 "$file"
+          "$tools/apksigner" verify --verbose --print-certs "$file" | tee "$RUNNER_TEMP/cert"
+          grep -Fx "Signer #1 certificate SHA-256 digest: $SIGNER_SHA256" "$RUNNER_TEMP/cert"
+          "$tools/aapt" dump badging "$file" > "$RUNNER_TEMP/manifest"
+          grep -F "name='$PACKAGE' versionCode='$number'" "$RUNNER_TEMP/manifest"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            unzip -p "$file" "lib/$abi/libgodot_android.so" > "$RUNNER_TEMP/library"
+            if [[ "$abi" == arm64-v8a ]]; then
+              readelf -lW "$RUNNER_TEMP/library" | awk '$1=="LOAD"{print $NF}' > "$RUNNER_TEMP/alignments"
+              while read -r alignment; do (( alignment >= 16384 )); done < "$RUNNER_TEMP/alignments"
+            fi
+          done
+      - name: Enable KVM
+        run: |
+          sudo chmod a+rw /dev/kvm
+          python3 -c "from PIL import Image" || python3 -m pip install Pillow
+      - name: Install, launch and update on Android 14
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          profile: pixel_2
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          emulator-options: -no-window -gpu swangle_indirect -noaudio -no-boot-anim -no-snapshot
+          script: bash .github/scripts/android-smoke.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-device-check
+          path: device-check/
+          if-no-files-found: ignore
+      - name: Publish tested APK
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [[ "$GITHUB_REF_TYPE" == tag ]]; then
+            gh release edit "$RELEASE_TAG" --draft=false --latest
+          else
+            gh release create "$RELEASE_TAG" "dist/$APK" --target "$GITHUB_SHA" --title "ОСОБЫЙ ОТДЕЛ — Android $GITHUB_RUN_NUMBER" --notes "Подписанный универсальный APK. Проверен на Android 14." --latest
+          fi

@@ -288,7 +288,7 @@ if(running3d)loading.remove();
 const mainMenu=document.createElement('div');mainMenu.id='mainMenu3d';
 mainMenu.style.cssText='position:fixed;inset:0;z-index:15;display:flex;flex-direction:column;background:linear-gradient(95deg,#101822f8 0%,#1b2b39e8 54%,#101720d9 100%);color:#f0e8dc;font:14px Arial;overflow:auto';
 const menuNav=document.createElement('div');menuNav.style.cssText='display:flex;align-items:center;gap:clamp(8px,2.5vw,26px);padding:12px clamp(18px,4vw,52px);background:#101923ee;border-bottom:1px solid #77899766;flex-wrap:wrap';
-const menuBrand=document.createElement('strong');menuBrand.textContent='ОТПУСК / TACTICAL';menuBrand.style.cssText='font-size:clamp(15px,2vw,22px);color:#e5ad5b;letter-spacing:2px;margin-right:clamp(5px,3vw,32px)';
+const menuBrand=document.createElement('strong');menuBrand.textContent='ОСОБЫЙ ОТДЕЛ';menuBrand.style.cssText='font-size:clamp(15px,2vw,22px);color:#e5ad5b;letter-spacing:2px;margin-right:clamp(5px,3vw,32px)';
 menuNav.append(menuBrand);
 const menuBody=document.createElement('div');menuBody.style.cssText='flex:1;display:flex;align-items:center;gap:clamp(20px,4vw,70px);padding:clamp(18px,4vw,52px);min-height:0';
 const menuPanel=document.createElement('div');menuPanel.style.cssText='width:min(100%,520px);display:flex;flex-direction:column;gap:12px;max-height:100%;overflow:auto';

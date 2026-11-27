@@ -190,7 +190,7 @@ function setLobby(enabled){
 function menu(tab='play'){setLobby(true);
  playing=false;overlay.hidden=false;panel.replaceChildren();
  const shell=document.createElement('div');shell.className='shell';panel.append(shell);
- const head=document.createElement('div');head.className='menu-head';head.innerHTML='<span class="brand">ОТПУСК <span style="color:#e6edf1">/ TACTICAL</span></span><span class="menu-meta">MOBILE OPERATIONS · BUILD ALPHA</span>';shell.append(head);
+ const head=document.createElement('div');head.className='menu-head';head.innerHTML='<span class="brand">ОСОБЫЙ <span style="color:#e6edf1">ОТДЕЛ</span></span><span class="menu-meta">MOBILE OPERATIONS · BUILD ALPHA</span>';shell.append(head);
  const body=document.createElement('div');body.className='menu-body';shell.append(body);
  const nav=document.createElement('nav');nav.className='nav';body.append(nav);
  const content=document.createElement('main');content.className='content';body.append(content);
